@@ -1,0 +1,105 @@
+{
+  "layout_id": "shree-dev-1076",
+  "name": "ShreeLipi Devanagari 1076",
+  "script": "Devanagari",
+  "encoding": "legacy",
+  "font_family": "SHREE-DEV-1076",
+  "layout_type": "standard",
+
+  "direct": {
+    "a": "v",
+    "A": "vk",
+    "i": "b",
+    "I": "B",
+    "u": "m",
+    "U": "M",
+    "e": ",",
+    "E": ".",
+    "o": "vks",
+    "O": "vkS",
+
+    "k": "d",
+    "K": "D",
+    "g": "x",
+    "G": "X",
+    "c": "p",
+    "C": "P",
+    "j": "t",
+    "J": "T",
+
+    "t": "r",
+    "T": "R",
+    "d": "l",
+    "D": "L",
+    "n": "u",
+    "p": "i",
+    "P": "I",
+    "b": "o",
+    "B": "O",
+    "m": ";",
+
+    "y": "y",
+    "r": "j",
+    "l": "n",
+    "v": "w",
+    "s": "s",
+    "h": "g"
+  },
+
+  "prebase": {
+    "f": {
+      "glyph": "Æ",
+      "type": "i-matra"
+    }
+  },
+
+  "postbase": {
+    "A": "k",
+    "i": "b",
+    "I": "B",
+    "u": "m",
+    "U": "M",
+    "e": ",",
+    "E": ".",
+    "o": "ks",
+    "O": "kS",
+    "H": "%"
+  },
+
+  "modifiers": {
+    "halant": {
+      "key": "\\",
+      "glyph": "~",
+      "behavior": "join_next"
+    },
+    "reph": {
+      "key": "Z",
+      "glyph": "©",
+      "behavior": "move_to_cluster_start"
+    },
+    "anusvara": {
+      "key": "M",
+      "glyph": "µ",
+      "behavior": "post"
+    },
+    "visarga": {
+      "key": "H",
+      "glyph": "Ÿ",
+      "behavior": "post"
+    }
+  },
+
+  "sequences": {
+    "k\\s": "Ì",
+    "k\\r": "Í",
+    "t\\r": "Î",
+    "d\\y": "Ï",
+
+    "f+k": "Æd",
+    "f+t": "Ær",
+    "f+d": "Æl",
+
+    "Zk": "©d",
+    "Zt": "©r"
+  }
+}

@@ -1,0 +1,87 @@
+{
+  "layout_id": "gujarati-remington",
+  "name": "Gujarati Remington",
+  "script": "Gujarati",
+  "encoding": "legacy",
+  "font_family": "Gopika",
+  "layout_type": "remington",
+
+  "direct": {
+    "a": "અ",
+    "A": "આ",
+    "i": "ઇ",
+    "I": "ઈ",
+    "u": "ઉ",
+    "U": "ઊ",
+    "e": "એ",
+    "o": "ઓ",
+
+    "k": "ક",
+    "K": "ખ",
+    "g": "ગ",
+    "G": "ઘ",
+    "c": "ચ",
+    "C": "છ",
+    "j": "જ",
+    "J": "ઝ",
+
+    "t": "ત",
+    "T": "થ",
+    "d": "દ",
+    "D": "ધ",
+    "n": "ન",
+    "p": "પ",
+    "P": "ફ",
+    "b": "બ",
+    "B": "ભ",
+    "m": "મ",
+
+    "y": "ય",
+    "r": "ર",
+    "l": "લ",
+    "v": "વ",
+    "s": "સ",
+    "h": "હ"
+  },
+
+  "prebase": {
+    "f": {
+      "glyph": "િ",
+      "type": "i-matra"
+    }
+  },
+
+  "postbase": {
+    "A": "ા",
+    "i": "િ",
+    "I": "ી",
+    "u": "ુ",
+    "U": "ૂ",
+    "e": "ે",
+    "o": "ો",
+    "H": "ઃ",
+    "M": "ં"
+  },
+
+  "modifiers": {
+    "halant": {
+      "key": "\\",
+      "glyph": "્",
+      "behavior": "join_next"
+    },
+    "reph": {
+      "key": "Z",
+      "glyph": "ર્",
+      "behavior": "move_to_cluster_start"
+    }
+  },
+
+  "sequences": {
+    "k\\s": "ક્ષ",
+    "t\\r": "ત્ર",
+    "j\\n": "જ્ઞ",
+
+    "Zk": "ર્ક",
+    "Zt": "ર્ત"
+  }
+}

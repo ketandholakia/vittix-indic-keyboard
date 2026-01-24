@@ -1,0 +1,108 @@
+{
+  "layout_id": "krutidev-010",
+  "name": "KrutiDev Devanagari 010",
+  "script": "Devanagari",
+  "encoding": "legacy",
+  "font_family": "Kruti Dev 010",
+  "layout_type": "standard",
+
+  "direct": {
+    "a": "v",
+    "A": "vk",
+    "i": "b",
+    "I": "B",
+    "u": "m",
+    "U": "M",
+    "e": ",",
+    "E": ".",
+    "o": "vks",
+    "O": "vkS",
+
+    "k": "d",
+    "K": "D",
+    "g": "x",
+    "G": "X",
+    "c": "p",
+    "C": "P",
+    "j": "t",
+    "J": "T",
+    "q": "Q",
+    "Q": "qq",
+
+    "t": "r",
+    "T": "R",
+    "d": "l",
+    "D": "L",
+    "n": "u",
+    "p": "i",
+    "P": "I",
+    "b": "o",
+    "B": "O",
+    "m": ";",
+
+    "y": "y",
+    "r": "j",
+    "l": "n",
+    "v": "w",
+    "s": "s",
+    "h": "g"
+  },
+
+  "prebase": {
+    "f": {
+      "glyph": "f",
+      "type": "i-matra"
+    }
+  },
+
+  "postbase": {
+    "A": "k",
+    "i": "b",
+    "I": "B",
+    "u": "m",
+    "U": "M",
+    "e": ",",
+    "E": ".",
+    "o": "ks",
+    "O": "kS",
+    "H": "%"
+  },
+
+  "modifiers": {
+    "halant": {
+      "key": "\\",
+      "glyph": "~",
+      "behavior": "join_next"
+    },
+    "reph": {
+      "key": "Z",
+      "glyph": "Z",
+      "behavior": "move_to_cluster_start"
+    },
+    "anusvara": {
+      "key": "M",
+      "glyph": "µ",
+      "behavior": "post"
+    },
+    "visarga": {
+      "key": "H",
+      "glyph": "Ÿ",
+      "behavior": "post"
+    }
+  },
+
+  "sequences": {
+    "k\\s": "Ì",
+    "k\\r": "Í",
+    "t\\r": "Î",
+    "d\\y": "Ï",
+    "s\\t": "Ð",
+
+    "f+k": "fd",
+    "f+t": "fr",
+    "f+d": "fl",
+
+    "Zk": "Zd",
+    "Zt": "Zr"
+  }
+}
