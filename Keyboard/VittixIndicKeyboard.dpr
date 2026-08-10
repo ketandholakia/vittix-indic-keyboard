@@ -21,6 +21,7 @@ uses
   WinStartup in 'Utils\WinStartup.pas',
   Logger in 'Utils\Logger.pas',
   frmOnScreenKeyboard in 'Forms\frmOnScreenKeyboard.pas' {frmOnScreenKeyboard},
+  frmSettings in 'Forms\frmSettings.pas' {frmSettings},
   AppSettings in 'Config\AppSettings.pas';
 
 {$R *.res}
@@ -39,6 +40,10 @@ begin
     SetCurrentProcessExplicitAppUserModelID(
       'com.vittix.indic.keyboard'
     );
+
+    // Enable Per-Monitor V2 DPI awareness for High-DPI displays
+    // This must be called before Application.Initialize
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
     Application.Initialize;
     Application.MainFormOnTaskbar := False;

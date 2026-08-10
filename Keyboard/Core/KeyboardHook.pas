@@ -5,6 +5,8 @@ interface
 uses
   Winapi.Windows,
   Winapi.Messages,
+  Winapi.PsAPI,
+  System.StrUtils,
   System.SysUtils,
   EngineState;
 
@@ -14,6 +16,8 @@ type
 procedure InstallKeyboardHook;
 procedure RemoveKeyboardHook;
 procedure SetKeyHandler(AHandler: TOnKeyChar);
+procedure SetTargetProcessName(const AProcessName: string);
+procedure SetAllowedProcessNames(const AProcessNames: string);
 
 implementation
 
@@ -34,6 +38,11 @@ type
 var
   KBHook: HHOOK = 0;
   KeyHandler: TOnKeyChar = nil;
+  TargetProcessName: string = 'CorelDRW.exe';
+  AllowedProcessNames: string = 'CorelDRW.exe';
+
+const
+  PROCESS_QUERY_LIMITED_INFORMATION = $1000;
 
 { --------------------------------------------------
   Convert Virtual Key to Unicode character
@@ -57,8 +66,77 @@ begin
     0
   );
 
-  if Len > 0 then
-    Result := WideBuf[0];
+  // Handle surrogate pairs (Len can be 2 for SMP characters)
+  if Len = 1 then
+    Result := WideBuf[0]
+  else if Len > 1 then
+    SetString(Result, PWideChar(@WideBuf[0]), Len);
+end;
+
+function GetForegroundProcessName: string;
+var
+  ForegroundWnd: HWND;
+  ProcessId: DWORD;
+  ProcessHandle: THandle;
+  Buffer: array[0..MAX_PATH - 1] of Char;
+  Len: DWORD;
+begin
+  Result := '';
+  ForegroundWnd := GetForegroundWindow;
+  if ForegroundWnd = 0 then
+    Exit;
+
+  GetWindowThreadProcessId(ForegroundWnd, ProcessId);
+  if ProcessId = 0 then
+    Exit;
+
+  ProcessHandle := OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, ProcessId);
+  if ProcessHandle = 0 then
+    Exit;
+
+  try
+    Len := GetModuleFileNameEx(ProcessHandle, 0, Buffer, Length(Buffer));
+    if Len > 0 then
+      Result := ExtractFileName(Buffer);
+  finally
+    CloseHandle(ProcessHandle);
+  end;
+end;
+
+function GetForegroundWindowTitle: string;
+var
+  ForegroundWnd: HWND;
+  Buffer: array[0..MAX_PATH - 1] of Char;
+begin
+  Result := '';
+  ForegroundWnd := GetForegroundWindow;
+  if ForegroundWnd = 0 then
+    Exit;
+  if GetWindowText(ForegroundWnd, Buffer, Length(Buffer)) > 0 then
+    Result := Buffer;
+end;
+
+function IsProcessAllowed(const ProcessName: string): Boolean;
+var
+  Names: TArray<string>;
+  Name: string;
+begin
+  Result := False;
+  if Trim(AllowedProcessNames) = '' then
+    Exit(True);
+  Names := AllowedProcessNames.Split([',', ';', #13, #10]);
+  for Name in Names do
+    if SameText(Trim(Name), ProcessName) then
+      Exit(True);
+end;
+
+function IsTargetAppActive: Boolean;
+var
+  ActiveProcessName: string;
+begin
+  ActiveProcessName := GetForegroundProcessName;
+  Result := IsProcessAllowed(ActiveProcessName) or
+    ((TargetProcessName <> '') and SameText(ActiveProcessName, TargetProcessName));
 end;
 
 { --------------------------------------------------
@@ -78,6 +156,9 @@ begin
     Exit(CallNextHookEx(KBHook, nCode, wParam, lParam));
 
   if not EngineEnabled then
+    Exit(CallNextHookEx(KBHook, nCode, wParam, lParam));
+
+  if not IsTargetAppActive then
     Exit(CallNextHookEx(KBHook, nCode, wParam, lParam));
 
   if (wParam <> WM_KEYDOWN) and (wParam <> WM_SYSKEYDOWN) then
@@ -130,6 +211,16 @@ end;
 procedure SetKeyHandler(AHandler: TOnKeyChar);
 begin
   KeyHandler := AHandler;
+end;
+
+procedure SetTargetProcessName(const AProcessName: string);
+begin
+  TargetProcessName := Trim(AProcessName);
+end;
+
+procedure SetAllowedProcessNames(const AProcessNames: string);
+begin
+  AllowedProcessNames := Trim(AProcessNames);
 end;
 
 procedure InstallKeyboardHook;

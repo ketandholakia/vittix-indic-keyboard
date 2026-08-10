@@ -87,7 +87,8 @@ end;
 procedure InitLogger(const ALogFile: string);
 begin
   gLogFile := ALogFile;
-  InitializeCriticalSection(gCS);
+  // NOTE: gCS is already initialized in the 'initialization' section below.
+  // Do NOT call InitializeCriticalSection here — double init is undefined behavior.
 end;
 
 procedure EnableLogger(AEnable: Boolean);

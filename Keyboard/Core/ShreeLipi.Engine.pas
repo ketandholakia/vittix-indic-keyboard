@@ -17,26 +17,37 @@ var
   ActiveLayout: TKeyboardLayout = nil;
 
 { --------------------------------------------------
-  Low-level SendInput helper (UNICODE safe)
+  Low-level SendInput helper (UNICODE safe, BATCHED)
+  Sends the entire grapheme cluster as a single batch
+  of INPUT structures to prevent cluster breakage.
 -------------------------------------------------- }
 procedure SendText(const S: string);
 var
-  I: Integer;
-  Inp: TInput;
+  I, Len: Integer;
+  Inputs: array of TInput;
 begin
-  for I := 1 to Length(S) do
-  begin
-    ZeroMemory(@Inp, SizeOf(Inp));
-    Inp.Itype := INPUT_KEYBOARD;
-    Inp.ki.wScan := Ord(S[I]);
-    Inp.ki.dwFlags := KEYEVENTF_UNICODE;
-    SendInput(1, Inp, SizeOf(Inp));
+  Len := Length(S);
+  if Len = 0 then
+    Exit;
 
-    Inp.ki.dwFlags := KEYEVENTF_UNICODE or KEYEVENTF_KEYUP;
-    SendInput(1, Inp, SizeOf(Inp));
+  // Build all key-down + key-up events in one array
+  SetLength(Inputs, Len * 2);
+  for I := 0 to Len - 1 do
+  begin
+    ZeroMemory(@Inputs[I * 2], SizeOf(TInput));
+    Inputs[I * 2].Itype := INPUT_KEYBOARD;
+    Inputs[I * 2].ki.wScan := Ord(S[I + 1]);
+    Inputs[I * 2].ki.dwFlags := KEYEVENTF_UNICODE;
+
+    ZeroMemory(@Inputs[I * 2 + 1], SizeOf(TInput));
+    Inputs[I * 2 + 1].Itype := INPUT_KEYBOARD;
+    Inputs[I * 2 + 1].ki.wScan := Ord(S[I + 1]);
+    Inputs[I * 2 + 1].ki.dwFlags := KEYEVENTF_UNICODE or KEYEVENTF_KEYUP;
   end;
 
-  // ✅ FIX: use gEngineState
+  // Send entire cluster atomically
+  SendInput(Len * 2, Inputs[0], SizeOf(TInput));
+
   gEngineState.LastOutput := S;
 end;
 
@@ -69,8 +80,8 @@ end;
 procedure ProcessKeyChar(const AKey: string);
 var
   OutGlyph: string;
-  Matra: TPrebaseMatra;
-  ModRule: TModifierRule;
+  Matra: TKeyMapping;
+  ModRule: TKeyMapping;
 begin
   // ---------------- BACKSPACE ----------------
   if AKey = #8 then

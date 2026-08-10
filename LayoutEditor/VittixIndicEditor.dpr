@@ -13,7 +13,7 @@ uses
   frmSequenceEditor in 'Forms\frmSequenceEditor.pas' {frmSequenceEditor},
 
   // ---- Model / IO ----
-  LayoutModel in '..\Keyboard\Layout\LayoutModel.pas',
+  LayoutModel in 'Model\LayoutModel.pas',
   LayoutLoader in '..\Keyboard\Layout\LayoutLoader.pas',
 
   // Editor-specific JSON save/load
@@ -30,6 +30,9 @@ uses
 
 begin
   try
+    // Enable Per-Monitor V2 DPI awareness for High-DPI displays
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+
     Application.Initialize;
     Application.MainFormOnTaskbar := True;
     Application.Title := 'Vittix Indic Keyboard – Layout Editor';
