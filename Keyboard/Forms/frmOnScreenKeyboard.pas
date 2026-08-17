@@ -1,4 +1,4 @@
-unit frmOnScreenKeyboard;
+﻿unit frmOnScreenKeyboard;
 
 interface
 
@@ -100,7 +100,8 @@ end;
 
 function TfrmOnScreenKeyboard.GetGlyphForKey(const AKey: string): string;
 var
-  Matra: TPrebaseMatra;
+  Matra: TKeyMapping;
+
 begin
   Result := '';
 

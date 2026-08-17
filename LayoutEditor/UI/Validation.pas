@@ -42,8 +42,8 @@ procedure ValidateLayout(
 var
   SeenKeys: TDictionary<string, string>;
   PairStr: TPair<string, string>;
-  PairMatra: TPair<string, TPrebaseMatra>;
-  PairMod: TPair<string, TModifierRule>;
+  PairMatra: TPair<string, TKeyMapping>;
+  PairMod: TPair<string, TKeyMapping>;
 begin
   Errors.Clear;
 

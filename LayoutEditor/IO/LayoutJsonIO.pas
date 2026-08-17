@@ -16,10 +16,10 @@ implementation
 
 procedure SaveLayoutToFile(ALayout: TKeyboardLayout; const FileName: string);
 var
-  Root, Obj, Item: TJSONObject;
+  Root, Obj, Item, MetaObj: TJSONObject;
   PairStr: TPair<string, string>;
-  PairMatra: TPair<string, TPrebaseMatra>;
-  PairMod: TPair<string, TModifierRule>;
+  PairMatra: TPair<string, TKeyMapping>;
+  PairMod: TPair<string, TKeyMapping>;
   JSONText: string;
 begin
   if ALayout = nil then
@@ -35,19 +35,31 @@ begin
     Root.AddPair('font_family', ALayout.FontFamily);
     Root.AddPair('layout_type', ALayout.LayoutType);
 
+    { ---------- PROPERTIES ---------- }
+    Obj := TJSONObject.Create;
+    for PairStr in ALayout.Properties do
+      Obj.AddPair(PairStr.Key, PairStr.Value);
+    Root.AddPair('properties', Obj);
+
     { ---------- DIRECT MAP ---------- }
     Obj := TJSONObject.Create;
     for PairStr in ALayout.DirectMap do
       Obj.AddPair(PairStr.Key, PairStr.Value);
     Root.AddPair('direct', Obj);
 
-    { ---------- PREBASE MATRAS ---------- }
+    { ---------- PREBASE MAP (generic) ---------- }
     Obj := TJSONObject.Create;
     for PairMatra in ALayout.PrebaseMap do
     begin
       Item := TJSONObject.Create;
+      Item.AddPair('key', PairMatra.Value.Key);
       Item.AddPair('glyph', PairMatra.Value.Glyph);
-      Item.AddPair('type', PairMatra.Value.MatraType);
+      Item.AddPair('map_type', PairMatra.Value.MapType);
+      MetaObj := TJSONObject.Create;
+      if Assigned(PairMatra.Value.Metadata) then
+        for var PairMeta in PairMatra.Value.Metadata do
+          MetaObj.AddPair(PairMeta.Key, PairMeta.Value);
+      Item.AddPair('metadata', MetaObj);
       Obj.AddPair(PairMatra.Key, Item);
     end;
     Root.AddPair('prebase', Obj);
@@ -58,14 +70,19 @@ begin
       Obj.AddPair(PairStr.Key, PairStr.Value);
     Root.AddPair('postbase', Obj);
 
-    { ---------- MODIFIERS ---------- }
+    { ---------- MODIFIERS (generic) ---------- }
     Obj := TJSONObject.Create;
     for PairMod in ALayout.Modifiers do
     begin
       Item := TJSONObject.Create;
       Item.AddPair('key', PairMod.Value.Key);
       Item.AddPair('glyph', PairMod.Value.Glyph);
-      Item.AddPair('behavior', PairMod.Value.Behavior);
+      Item.AddPair('map_type', PairMod.Value.MapType);
+      MetaObj := TJSONObject.Create;
+      if Assigned(PairMod.Value.Metadata) then
+        for var PairMeta2 in PairMod.Value.Metadata do
+          MetaObj.AddPair(PairMeta2.Key, PairMeta2.Value);
+      Item.AddPair('metadata', MetaObj);
       Obj.AddPair(PairMod.Key, Item);
     end;
     Root.AddPair('modifiers', Obj);
@@ -78,6 +95,7 @@ begin
 
     { ---------- WRITE FILE ---------- }
     JSONText := Root.Format(2);
+    TDirectory.CreateDirectory(ExtractFileDir(FileName));
     TFile.WriteAllText(FileName, JSONText, TEncoding.UTF8);
 
   finally

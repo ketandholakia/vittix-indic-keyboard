@@ -11,6 +11,19 @@ uses
   Winapi.Windows;
 
 type
+  TKeyboardAppSettingsData = record
+    EnableKeyboard: Boolean;
+    StartWithWindows: Boolean;
+    LayoutsPath: string;
+    DefaultLayoutID: string;
+    TargetProcessName: string;
+    AllowedProcessesText: string;
+    ToggleHotkeyText: string;
+    ActionHotkeyText: string;
+    FallbackFont: string;
+    PreviewFontSize: Integer;
+  end;
+
   TAppSettings = class
   private
     FIni: TIniFile;
@@ -18,9 +31,14 @@ type
   public
     // [General]
     EnableKeyboard: Boolean;
+    StartWithWindows: Boolean;
     // [Layouts]
     LayoutsPath: string;
     DefaultLayoutID: string;
+    TargetProcessName: string;
+    AllowedProcessesText: string;
+    ToggleHotkeyText: string;
+    ActionHotkeyText: string;
     // [Font]
     FallbackFont: string;
     PreviewFontSize: Integer;
@@ -29,6 +47,7 @@ type
     destructor Destroy; override;
 
     procedure Load;
+    procedure Save;
     procedure SaveDefaultLayoutID(const ALayoutID: string);
     function GetToggleHotkeyText: string;
     procedure ParseHotkey(const HotkeyText: string; out Modifiers: UINT;
@@ -56,10 +75,16 @@ procedure TAppSettings.Load;
 begin
   // [General]
   EnableKeyboard := FIni.ReadBool('General', 'EnableKeyboard', True);
+  StartWithWindows := FIni.ReadBool('General', 'StartWithWindows', False);
 
   // [Layouts]
   LayoutsPath := FIni.ReadString('Layouts', 'Path', 'layouts');
   DefaultLayoutID := FIni.ReadString('Layouts', 'DefaultLayout', '');
+  TargetProcessName := FIni.ReadString('General', 'TargetProcessName', 'CorelDRW.exe');
+  AllowedProcessesText := FIni.ReadString('General', 'AllowedProcesses',
+    'CorelDRW.exe');
+  ToggleHotkeyText := FIni.ReadString('Hotkey', 'Toggle', 'Ctrl+Alt+K');
+  ActionHotkeyText := FIni.ReadString('Hotkey', 'Action', '');
 
   // [Font]
   FallbackFont := FIni.ReadString('Font', 'FallbackFont', 'Segoe UI');
@@ -70,14 +95,41 @@ begin
     LayoutsPath := IncludeTrailingPathDelimiter(ExtractFilePath(Application.ExeName) + LayoutsPath);
 end;
 
+procedure TAppSettings.Save;
+var
+  StoredLayoutsPath: string;
+  AppDir: string;
+begin
+  // Store a relative path when it points inside the application folder.
+  StoredLayoutsPath := ExcludeTrailingPathDelimiter(LayoutsPath);
+  AppDir := ExcludeTrailingPathDelimiter(ExtractFilePath(Application.ExeName));
+  if SameText(Copy(StoredLayoutsPath, 1, Length(AppDir)), AppDir) then
+    StoredLayoutsPath := ExtractRelativePath(IncludeTrailingPathDelimiter(ExtractFilePath(Application.ExeName)), StoredLayoutsPath);
+
+  FIni.WriteBool('General', 'EnableKeyboard', EnableKeyboard);
+  FIni.WriteBool('General', 'StartWithWindows', StartWithWindows);
+  FIni.WriteString('General', 'TargetProcessName', Trim(TargetProcessName));
+  FIni.WriteString('General', 'AllowedProcesses', Trim(AllowedProcessesText));
+  FIni.WriteString('Layouts', 'Path', StoredLayoutsPath);
+  FIni.WriteString('Layouts', 'DefaultLayout', DefaultLayoutID);
+  FIni.WriteString('Hotkey', 'Toggle', ToggleHotkeyText);
+  FIni.WriteString('Hotkey', 'Action', ActionHotkeyText);
+  FIni.WriteString('Font', 'FallbackFont', FallbackFont);
+  FIni.WriteInteger('Font', 'PreviewSize', PreviewFontSize);
+  FIni.UpdateFile;
+end;
+
 procedure TAppSettings.SaveDefaultLayoutID(const ALayoutID: string);
 begin
+  DefaultLayoutID := ALayoutID;
   FIni.WriteString('Layouts', 'DefaultLayout', ALayoutID);
 end;
 
 function TAppSettings.GetToggleHotkeyText: string;
 begin
-  Result := FIni.ReadString('Hotkey', 'Toggle', 'Ctrl+Alt+K');
+  Result := ToggleHotkeyText;
+  if Result = '' then
+    Result := 'Ctrl+Alt+K';
 end;
 
 procedure TAppSettings.ParseHotkey(const HotkeyText: string; out Modifiers: UINT;

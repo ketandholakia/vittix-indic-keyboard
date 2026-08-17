@@ -12,6 +12,12 @@ uses
   LayoutModel;
 
 type
+  TKeyboardKeyHit = record
+    KeyName: string;
+    KeyRect: TRect;
+    Glyph: string;
+  end;
+
   { -------------------------------------------------
     Keyboard painter
     ------------------------------------------------- }
@@ -21,6 +27,7 @@ type
     FCanvas: TCanvas;
     FKeySize: TSize;
     FFont: TFont;
+    FHits: TArray<TKeyboardKeyHit>;
 
     procedure DrawKey(const Key: string; const R: TRect);
     function GetGlyphForKey(const Key: string): string;
@@ -33,6 +40,7 @@ type
       const Origin: TPoint;
       ALayout: TKeyboardLayout
     );
+    function HitTest(const P: TPoint): TKeyboardKeyHit;
   end;
 
 implementation
@@ -82,6 +90,7 @@ var
   var
     I, LeftPos: Integer;
     R: TRect;
+    Hit: TKeyboardKeyHit;
   begin
     LeftPos := Origin.X + OffsetX;
 
@@ -95,6 +104,10 @@ var
       );
 
       DrawKey(Keys[I], R);
+      Hit.KeyName := Keys[I];
+      Hit.KeyRect := R;
+      Hit.Glyph := GetGlyphForKey(Keys[I]);
+      FHits := FHits + [Hit];
       Inc(LeftPos, FKeySize.cx + 4);
     end;
   end;
@@ -104,6 +117,7 @@ begin
 
   FCanvas := ACanvas;
   FLayout := ALayout;
+  FHits := [];
 
   FCanvas.Font.Assign(FFont);
   FCanvas.Brush.Style := bsSolid;
@@ -120,6 +134,16 @@ begin
   Inc(TopPos, FKeySize.cy + 6);
 
   DrawRow(ROW_3, 50);
+end;
+
+function TKeyboardPainter.HitTest(const P: TPoint): TKeyboardKeyHit;
+var
+  Hit: TKeyboardKeyHit;
+begin
+  Result.KeyName := '';
+  for Hit in FHits do
+    if PtInRect(Hit.KeyRect, P) then
+      Exit(Hit);
 end;
 
 { -------------------------------------------------
@@ -159,7 +183,7 @@ end;
 
 function TKeyboardPainter.GetGlyphForKey(const Key: string): string;
 var
-  Matra: TPrebaseMatra;
+  Matra: TKeyMapping;
 begin
   Result := '';
 

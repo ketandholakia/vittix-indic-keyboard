@@ -1,0 +1,112 @@
+﻿{
+  "layout_id": "devanagari-unicode-phonetic",
+  "name": "Devanagari Unicode Ram-Guj",
+  "script": "Devanagari",
+  "encoding": "unicode",
+  "font_family": "Nirmala UI",
+  "layout_type": "phonetic",
+  "properties": {
+    "HotkeySwitch": "",
+    "HotkeyAction": ""
+  },
+  "direct": {
+    "b": "ब",
+    "E": "ए",
+    "w": "व",
+    "N": "ण",
+    "x": "ष",
+    "S": "श",
+    "d": "द",
+    "r": "र",
+    "U": "उ",
+    "1": "१",
+    "c": "च",
+    "t": "त",
+    "O": "ओ",
+    "y": "य",
+    "P": "फ",
+    "n": "न",
+    "A": "अ",
+    "s": "स",
+    "J": "झ",
+    "6": "६",
+    "L": "औ",
+    "Q": "ऋ",
+    "F": "ई",
+    "p": "प",
+    "K": "ख",
+    "7": "७",
+    "8": "८",
+    "j": "ज",
+    "V": "ऊ",
+    "2": "२",
+    "l": "ल",
+    "G": "घ",
+    "4": "४",
+    "9": "९",
+    "k": "क",
+    "B": "भ",
+    "W": "आ",
+    ".": "।",
+    "3": "३",
+    "m": "म",
+    "D": "ड",
+    "I": "इ",
+    "5": "५",
+    "g": "ग",
+    "h": "ह",
+    "C": "छ",
+    "T": "ट",
+    "Y": "ऐ",
+    "0": "०"
+  },
+  "prebase": {
+    "i": {
+      "key": "i",
+      "glyph": "ि",
+      "map_type": "vowel_sign",
+      "metadata": {
+      }
+    }
+  },
+  "postbase": {
+    "e": "े",
+    "a": "ा",
+    "M": "ं",
+    "v": "ू",
+    "u": "ु",
+    "q": "ृ",
+    "H": "ः",
+    "o": "ो",
+    "f": "ी"
+  },
+  "modifiers": {
+    "halant": {
+      "key": "\\",
+      "glyph": "्",
+      "map_type": "join_next",
+      "metadata": {
+      }
+    },
+    "reph": {
+      "key": "R",
+      "glyph": "र्",
+      "map_type": "move_to_cluster_start",
+      "metadata": {
+      }
+    }
+  },
+  "sequences": {
+    "tR": "त्र",
+    "gY": "ग्य",
+    "pR": "प्र",
+    "mR": "म्र",
+    "nY": "न्य",
+    "kR": "क्र",
+    "dY": "द्य",
+    "Sr": "श्र",
+    "kS": "क्ष",
+    "jJ": "ज्ञ",
+    "bR": "ब्र"
+  }
+}

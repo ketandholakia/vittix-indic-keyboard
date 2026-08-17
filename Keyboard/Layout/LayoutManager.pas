@@ -60,9 +60,11 @@ var
   Files: TArray<string>;   // ✅ FIX
   FileName: string;
   Layout: TKeyboardLayout;
+  FirstLoadError: string;
 begin
   FLayouts.Clear;
   FActiveLayout := nil;
+  FirstLoadError := '';
   FLayoutsPath := IncludeTrailingPathDelimiter(ALayoutsPath);
 
   if not DirectoryExists(FLayoutsPath) then
@@ -80,12 +82,22 @@ begin
       Layout := LoadLayoutFromFile(FileName);
       FLayouts.Add(Layout);
     except
-      // ignore broken layout files
+      on E: Exception do
+        if FirstLoadError = '' then
+          FirstLoadError := Format('%s: %s', [FileName, E.Message]);
     end;
   end;
 
   if FLayouts.Count > 0 then
     FActiveLayout := FLayouts[0];
+  
+  if FLayouts.Count = 0 then
+  begin
+    if FirstLoadError <> '' then
+      raise Exception.Create('No layouts could be loaded. First error: ' + FirstLoadError);
+
+    raise Exception.Create('No layout files were found in: ' + FLayoutsPath);
+  end;
 end;
 
 

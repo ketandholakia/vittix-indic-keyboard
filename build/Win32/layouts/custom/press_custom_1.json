@@ -1,0 +1,14 @@
+{
+  "layout_id": "press_custom_1",
+  "name": "Press Custom 1",
+  "script": "Devanagari",
+  "encoding": "legacy",
+  "font_family": "",
+  "layout_type": "custom",
+  "properties": {},
+  "direct": {},
+  "prebase": {},
+  "postbase": {},
+  "modifiers": {},
+  "sequences": {}
+}
