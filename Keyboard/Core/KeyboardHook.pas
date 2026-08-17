@@ -124,7 +124,7 @@ var
 begin
   Result := False;
   if Trim(AllowedProcessNames) = '' then
-    Exit(True);
+    Exit(False);
   Names := AllowedProcessNames.Split([',', ';', #13, #10]);
   for Name in Names do
     if SameText(Trim(Name), ProcessName) then

@@ -232,9 +232,10 @@ var
 begin
   Result := TKeyboardLayout.Create;
   JSON := TJSONObject.ParseJSONValue(JSONText) as TJSONObject;
-  if not Assigned(JSON) then
-    raise Exception.Create('Invalid layout JSON: root object could not be parsed');
   try
+    if not Assigned(JSON) then
+      raise Exception.Create('Invalid layout JSON: root object could not be parsed');
+
     try
       Result.LayoutID   := JSON.GetValue<string>('layout_id', '');
       Result.Name       := JSON.GetValue<string>('name', '');

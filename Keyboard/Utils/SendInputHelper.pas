@@ -51,14 +51,34 @@ end;
 
 { --------------------------------------------------
   Send Unicode string safely
+  Batch the full string into one SendInput call so multi-character
+  clusters cannot be interleaved between characters.
 -------------------------------------------------- }
 
 procedure SendUnicodeText(const S: string);
 var
-  I: Integer;
+  I, Len: Integer;
+  Inputs: array of TInput;
 begin
-  for I := 1 to Length(S) do
-    SendUnicodeChar(S[I]);
+  Len := Length(S);
+  if Len = 0 then
+    Exit;
+
+  SetLength(Inputs, Len * 2);
+  for I := 0 to Len - 1 do
+  begin
+    ZeroMemory(@Inputs[I * 2], SizeOf(TInput));
+    Inputs[I * 2].Itype := INPUT_KEYBOARD;
+    Inputs[I * 2].ki.wScan := Ord(S[I + 1]);
+    Inputs[I * 2].ki.dwFlags := KEYEVENTF_UNICODE;
+
+    ZeroMemory(@Inputs[I * 2 + 1], SizeOf(TInput));
+    Inputs[I * 2 + 1].Itype := INPUT_KEYBOARD;
+    Inputs[I * 2 + 1].ki.wScan := Ord(S[I + 1]);
+    Inputs[I * 2 + 1].ki.dwFlags := KEYEVENTF_UNICODE or KEYEVENTF_KEYUP;
+  end;
+
+  SendInput(Len * 2, Inputs[0], SizeOf(TInput));
 end;
 
 { --------------------------------------------------

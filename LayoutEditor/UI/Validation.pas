@@ -144,6 +144,13 @@ begin
           'Sequences',
           'Sequence "' + PairStr.Key + '" is too short'
         );
+      if PairStr.Key.Length > MAX_SEQUENCE_KEY_LEN then
+        AddError(
+          Errors,
+          'Sequences',
+          'Sequence "' + PairStr.Key + '" is longer than the maximum supported length (' +
+          IntToStr(MAX_SEQUENCE_KEY_LEN) + ')'
+        );
 
       if PairStr.Value = '' then
         AddError(
