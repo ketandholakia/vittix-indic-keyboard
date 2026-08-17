@@ -9,6 +9,7 @@ uses
   System.StrUtils,
   System.SysUtils,
   EngineState,
+  SendInputHelper,
   Logger;
 
 type
@@ -117,6 +118,15 @@ begin
     Result := Buffer;
 end;
 
+function IsModifierComboActive: Boolean;
+begin
+  Result :=
+    (GetKeyState(VK_CONTROL) < 0) or
+    (GetKeyState(VK_MENU) < 0) or
+    (GetKeyState(VK_LWIN) < 0) or
+    (GetKeyState(VK_RWIN) < 0);
+end;
+
 function IsProcessAllowed(const ProcessName: string): Boolean;
 var
   Names: TArray<string>;
@@ -174,6 +184,30 @@ begin
     VK_MENU, VK_LMENU, VK_RMENU,
     VK_CAPITAL, VK_ESCAPE:
       Exit(CallNextHookEx(KBHook, nCode, wParam, lParam));
+  end;
+
+  // Let Ctrl/Alt/Win combos (app shortcuts) pass through untouched.
+  // Shift alone must still reach the engine because layouts use it for shifted keys.
+  if IsModifierComboActive then
+    Exit(CallNextHookEx(KBHook, nCode, wParam, lParam));
+
+  if (KBD.vkCode = VK_TAB) or (KBD.vkCode = VK_RETURN) then
+  begin
+    if Assigned(KeyHandler) then
+    begin
+      if KBD.vkCode = VK_TAB then
+        KeyHandler(#9)
+      else
+        KeyHandler(#13);
+    end;
+
+    if KBD.vkCode = VK_TAB then
+      SendVirtualKey(VK_TAB)
+    else
+      SendVirtualKey(VK_RETURN);
+
+    Result := 1;
+    Exit;
   end;
 
   // Handle BACKSPACE explicitly

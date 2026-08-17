@@ -5,6 +5,7 @@
 - Added editor validation for overlong sequence keys so layouts cannot define sequences the runtime engine will never match.
 - Restored batched `SendInput` behavior for multi-character Unicode output so grapheme clusters stay atomic again.
 - Moved the `FromJSON` nil-check into the inner protected block so malformed layout JSON and field-population failures both free the partially constructed layout instead of leaking it.
+- Let Ctrl/Alt/Win shortcuts pass through the hook, and remapped Tab/Enter to native virtual-key sends while still resetting engine state.
 - Removed dead translator code, routed typing through the shared SendInput helper, and added basic logging around hook and layout initialization.
 - Tightened small robustness issues in engine state initialization and backup naming so repeated runs do not overwrite recent backups.
 - Manual repro for the key-buffer bug: type a direct consonant such as `k`, then type a sequence starter/prefix that previously left residue in `KeyBuffer`, and then type the matching conjunct trigger. Before the fix, the stale buffer could combine into the wrong sequence; after the fix, the direct mapping clears the buffer and the expected glyph path is preserved.

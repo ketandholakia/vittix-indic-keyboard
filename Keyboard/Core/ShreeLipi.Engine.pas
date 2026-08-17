@@ -60,6 +60,12 @@ begin
       Exit;
     end;
 
+    if (AKey = #9) or (AKey = #13) then
+    begin
+      ResetEngineState;
+      Exit;
+    end;
+
     if not EngineEnabled then
       Exit;
 
