@@ -6,7 +6,11 @@ uses
   System.SysUtils,
   System.Generics.Collections;
 
+const
+  MAX_SEQUENCE_KEY_LEN = 4;
+
 type
+
   // Generic key-value metadata for extensibility
   TLayoutProperty = record
     Name: string;
@@ -228,84 +232,91 @@ var
 begin
   Result := TKeyboardLayout.Create;
   JSON := TJSONObject.ParseJSONValue(JSONText) as TJSONObject;
+  if not Assigned(JSON) then
+    raise Exception.Create('Invalid layout JSON: root object could not be parsed');
   try
-    Result.LayoutID   := JSON.GetValue<string>('layout_id', '');
-    Result.Name       := JSON.GetValue<string>('name', '');
-    Result.Script     := JSON.GetValue<string>('script', '');
-    Result.Encoding   := JSON.GetValue<string>('encoding', '');
-    Result.FontFamily := JSON.GetValue<string>('font_family', '');
-    Result.LayoutType := JSON.GetValue<string>('layout_type', '');
+    try
+      Result.LayoutID   := JSON.GetValue<string>('layout_id', '');
+      Result.Name       := JSON.GetValue<string>('name', '');
+      Result.Script     := JSON.GetValue<string>('script', '');
+      Result.Encoding   := JSON.GetValue<string>('encoding', '');
+      Result.FontFamily := JSON.GetValue<string>('font_family', '');
+      Result.LayoutType := JSON.GetValue<string>('layout_type', '');
 
-    // Properties
-    Obj := JSON.GetValue<TJSONObject>('properties');
-    if Assigned(Obj) then
-      for PairProp in Obj do
-        Result.Properties.Add(PairProp.JsonString.Value, PairProp.JsonValue.Value);
+      // Properties
+      Obj := JSON.GetValue<TJSONObject>('properties');
+      if Assigned(Obj) then
+        for PairProp in Obj do
+          Result.Properties.Add(PairProp.JsonString.Value, PairProp.JsonValue.Value);
 
-    // DirectMap
-    Obj := JSON.GetValue<TJSONObject>('direct');
-    if Assigned(Obj) then
-      for Pair in Obj do
-        Result.DirectMap.Add(Pair.JsonString.Value, Pair.JsonValue.Value);
+      // DirectMap
+      Obj := JSON.GetValue<TJSONObject>('direct');
+      if Assigned(Obj) then
+        for Pair in Obj do
+          Result.DirectMap.Add(Pair.JsonString.Value, Pair.JsonValue.Value);
 
-    // PrebaseMap (generic)
-    Obj := JSON.GetValue<TJSONObject>('prebase');
-    if Assigned(Obj) then
-      for Pair in Obj do
-      begin
-        Item := Pair.JsonValue as TJSONObject;
-        KeyMap.Key := Item.GetValue<string>('key', '');
-        KeyMap.Glyph := Item.GetValue<string>('glyph', '');
-        KeyMap.MapType := Item.GetValue<string>('map_type', 'prebase');
-        KeyMap.InitMetadata;
-        MetaObj := Item.GetValue<TJSONObject>('metadata');
-        if Assigned(MetaObj) then
-          for PairProp in MetaObj do
-            KeyMap.Metadata.Add(PairProp.JsonString.Value, PairProp.JsonValue.Value);
-        Result.PrebaseMap.Add(Pair.JsonString.Value, KeyMap);
-      end;
+      // PrebaseMap (generic)
+      Obj := JSON.GetValue<TJSONObject>('prebase');
+      if Assigned(Obj) then
+        for Pair in Obj do
+        begin
+          Item := Pair.JsonValue as TJSONObject;
+          KeyMap.Key := Item.GetValue<string>('key', '');
+          KeyMap.Glyph := Item.GetValue<string>('glyph', '');
+          KeyMap.MapType := Item.GetValue<string>('map_type', 'prebase');
+          KeyMap.InitMetadata;
+          MetaObj := Item.GetValue<TJSONObject>('metadata');
+          if Assigned(MetaObj) then
+            for PairProp in MetaObj do
+              KeyMap.Metadata.Add(PairProp.JsonString.Value, PairProp.JsonValue.Value);
+          Result.PrebaseMap.Add(Pair.JsonString.Value, KeyMap);
+        end;
 
-    // PostbaseMap
-    Obj := JSON.GetValue<TJSONObject>('postbase');
-    if Assigned(Obj) then
-      for Pair in Obj do
-        Result.PostbaseMap.Add(Pair.JsonString.Value, Pair.JsonValue.Value);
+      // PostbaseMap
+      Obj := JSON.GetValue<TJSONObject>('postbase');
+      if Assigned(Obj) then
+        for Pair in Obj do
+          Result.PostbaseMap.Add(Pair.JsonString.Value, Pair.JsonValue.Value);
 
-    // Modifiers (generic)
-    Obj := JSON.GetValue<TJSONObject>('modifiers');
-    if Assigned(Obj) then
-      for Pair in Obj do
-      begin
-        Item := Pair.JsonValue as TJSONObject;
-        KeyMap.Key := Item.GetValue<string>('key', '');
-        KeyMap.Glyph := Item.GetValue<string>('glyph', '');
-        KeyMap.MapType := Item.GetValue<string>('map_type', 'modifier');
-        KeyMap.InitMetadata;
-        MetaObj := Item.GetValue<TJSONObject>('metadata');
-        if Assigned(MetaObj) then
-          for PairProp in MetaObj do
-            KeyMap.Metadata.Add(PairProp.JsonString.Value, PairProp.JsonValue.Value);
-        Result.Modifiers.Add(Pair.JsonString.Value, KeyMap);
-      end;
+      // Modifiers (generic)
+      Obj := JSON.GetValue<TJSONObject>('modifiers');
+      if Assigned(Obj) then
+        for Pair in Obj do
+        begin
+          Item := Pair.JsonValue as TJSONObject;
+          KeyMap.Key := Item.GetValue<string>('key', '');
+          KeyMap.Glyph := Item.GetValue<string>('glyph', '');
+          KeyMap.MapType := Item.GetValue<string>('map_type', 'modifier');
+          KeyMap.InitMetadata;
+          MetaObj := Item.GetValue<TJSONObject>('metadata');
+          if Assigned(MetaObj) then
+            for PairProp in MetaObj do
+              KeyMap.Metadata.Add(PairProp.JsonString.Value, PairProp.JsonValue.Value);
+          Result.Modifiers.Add(Pair.JsonString.Value, KeyMap);
+        end;
 
-    // Sequences
-    Obj := JSON.GetValue<TJSONObject>('sequences');
-    if Assigned(Obj) then
-      for Pair in Obj do
-        Result.Sequences.Add(Pair.JsonString.Value, Pair.JsonValue.Value);
+      // Sequences
+      Obj := JSON.GetValue<TJSONObject>('sequences');
+      if Assigned(Obj) then
+        for Pair in Obj do
+          Result.Sequences.Add(Pair.JsonString.Value, Pair.JsonValue.Value);
 
-    // ExtraMaps
-    Obj := JSON.GetValue<TJSONObject>('extra_maps');
-    if Assigned(Obj) then
-      for Pair in Obj do
-      begin
-        MapName := Pair.JsonString.Value;
-        MetaObj := Pair.JsonValue as TJSONObject;
-        ExtraMap := TDictionary<string, string>.Create;
-        for ExtraPair in MetaObj do
-          ExtraMap.Add(ExtraPair.JsonString.Value, ExtraPair.JsonValue.Value);
-        Result.ExtraMaps.Add(MapName, ExtraMap);
-      end;
+      // ExtraMaps
+      Obj := JSON.GetValue<TJSONObject>('extra_maps');
+      if Assigned(Obj) then
+        for Pair in Obj do
+        begin
+          MapName := Pair.JsonString.Value;
+          MetaObj := Pair.JsonValue as TJSONObject;
+          ExtraMap := TDictionary<string, string>.Create;
+          for ExtraPair in MetaObj do
+            ExtraMap.Add(ExtraPair.JsonString.Value, ExtraPair.JsonValue.Value);
+          Result.ExtraMaps.Add(MapName, ExtraMap);
+        end;
+    except
+      Result.Free;
+      raise;
+    end;
   finally
     JSON.Free;
   end;

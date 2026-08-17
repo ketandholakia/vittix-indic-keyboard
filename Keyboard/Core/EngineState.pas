@@ -28,7 +28,7 @@ implementation
 
 procedure InitEngineState;
 begin
-  FillChar(gEngineState, SizeOf(TEngineState), 0);
+  gEngineState := Default(TEngineState);
   gEngineState.Enabled := True;
 end;
 

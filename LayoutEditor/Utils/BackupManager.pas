@@ -33,8 +33,8 @@ end;
 
 function TimeStampStr: string;
 begin
-  // YYYYMMDD_HHMMSS
-  Result := FormatDateTime('yyyymmdd_hhnnss', Now);
+  // YYYYMMDD_HHMMSS_mmm
+  Result := FormatDateTime('yyyymmdd_hhnnss_zzz', Now);
 end;
 
 procedure CleanupOldBackups(const BackupDir: string; MaxBackups: Integer);

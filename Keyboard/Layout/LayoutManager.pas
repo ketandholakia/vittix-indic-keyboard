@@ -8,7 +8,8 @@ uses
   System.IOUtils,
   System.Generics.Collections,
   LayoutModel,
-  LayoutLoader;
+  LayoutLoader,
+  Logger;
 
 type
   TLayoutManager = class
@@ -61,11 +62,15 @@ var
   FileName: string;
   Layout: TKeyboardLayout;
   FirstLoadError: string;
+  SeenLayoutIDs: TDictionary<string, string>;
 begin
   FLayouts.Clear;
   FActiveLayout := nil;
   FirstLoadError := '';
   FLayoutsPath := IncludeTrailingPathDelimiter(ALayoutsPath);
+  SeenLayoutIDs := TDictionary<string, string>.Create;
+  try
+    LogInfo('Loading layouts from ' + FLayoutsPath);
 
   if not DirectoryExists(FLayoutsPath) then
     raise Exception.Create('Layouts folder not found: ' + FLayoutsPath);
@@ -80,6 +85,18 @@ begin
   begin
     try
       Layout := LoadLayoutFromFile(FileName);
+      if (Layout.LayoutID <> '') and SeenLayoutIDs.ContainsKey(Layout.LayoutID) then
+      begin
+        LogWarning(Format('Duplicate layout ID "%s" in %s; keeping %s', [
+          Layout.LayoutID,
+          FileName,
+          SeenLayoutIDs[Layout.LayoutID]
+        ]));
+        Layout.Free;
+        Continue;
+      end;
+      if Layout.LayoutID <> '' then
+        SeenLayoutIDs.Add(Layout.LayoutID, FileName);
       FLayouts.Add(Layout);
     except
       on E: Exception do
@@ -94,9 +111,17 @@ begin
   if FLayouts.Count = 0 then
   begin
     if FirstLoadError <> '' then
+    begin
+      LogError('Layout loading failed: ' + FirstLoadError);
       raise Exception.Create('No layouts could be loaded. First error: ' + FirstLoadError);
+    end;
 
+    LogError('No layout files found in ' + FLayoutsPath);
     raise Exception.Create('No layout files were found in: ' + FLayoutsPath);
+  end;
+    LogInfo(Format('Loaded %d layouts', [FLayouts.Count]));
+  finally
+    SeenLayoutIDs.Free;
   end;
 end;
 

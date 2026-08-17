@@ -19,7 +19,6 @@ uses
 
   EngineState,
   KeyboardHook,
-  KeyTranslator,
   ShreeLipi.Engine,
 
   LayoutManager,
@@ -27,6 +26,7 @@ uses
   LayoutModel,
   frmSettings,
   WinStartup,
+  Logger,
 
   frmOnScreenKeyboard, System.ImageList;
 
@@ -63,7 +63,6 @@ type
   private
     FOSK: TfrmOnScreenKeyboard;
 
-    procedure HandleTranslatedKey(const AKey: string);
     procedure HandleRawKey(const AChar: string);
 
     procedure BuildLayoutMenu;
@@ -106,14 +105,9 @@ const
   Keyboard handlers (FIX for E2009)
 -------------------------------------------------- }
 
-procedure TfrmTray.HandleTranslatedKey(const AKey: string);
-begin
-  ProcessKeyChar(AKey);
-end;
-
 procedure TfrmTray.HandleRawKey(const AChar: string);
 begin
-  TranslateKey(AChar);
+  ProcessKeyChar(AChar);
 end;
 
 { --------------------------------------------------
@@ -139,6 +133,10 @@ begin
     GetWindowLong(Handle, GWL_EXSTYLE) or WS_EX_TOOLWINDOW
   );
 
+  InitLogger(TPath.Combine(ExtractFilePath(Application.ExeName), 'logs\vittix-keyboard.log'));
+  EnableLogger(True);
+  LogInfo('Tray form starting');
+
   // 🔴 REQUIRED: initialize engine
   InitEngineState;
   SetEngineEnabled(GAppSettings.EnableKeyboard);
@@ -148,9 +146,15 @@ begin
 
   // 🔴 REQUIRED: keyboard pipeline
   SetKeyHandler(HandleRawKey);
-  SetTranslatorHandler(HandleTranslatedKey);
   SetTargetProcessName(GAppSettings.TargetProcessName);
   SetAllowedProcessNames(GAppSettings.AllowedProcessesText);
+  if Trim(GAppSettings.AllowedProcessesText) = '' then
+    MessageBox(
+      Handle,
+      'No allowed apps are configured. Interception will stay disabled except for the primary target process.',
+      'Vittix Indic Keyboard',
+      MB_ICONWARNING or MB_OK
+    );
   InstallKeyboardHook;
 
   // Load layouts
@@ -178,6 +182,7 @@ begin
   UnregisterConfiguredHotkeys;
   FreeAndNil(FOSK);
   RemoveKeyboardHook;
+  LogInfo('Tray form shutting down');
 end;
 
 { --------------------------------------------------
@@ -577,6 +582,13 @@ begin
   miEnable.Checked := EngineEnabled;
   SetTargetProcessName(GAppSettings.TargetProcessName);
   SetAllowedProcessNames(GAppSettings.AllowedProcessesText);
+  if Trim(GAppSettings.AllowedProcessesText) = '' then
+    MessageBox(
+      Handle,
+      'No allowed apps are configured. Interception will stay disabled except for the primary target process.',
+      'Vittix Indic Keyboard',
+      MB_ICONWARNING or MB_OK
+    );
   UpdateTrayIcon;
 
   if GAppSettings.StartWithWindows then
@@ -619,6 +631,13 @@ begin
       ProcessList.Add(Value);
 
     GAppSettings.AllowedProcessesText := Trim(StringReplace(ProcessList.DelimitedText, ',', sLineBreak, [rfReplaceAll]));
+    if Trim(GAppSettings.AllowedProcessesText) = '' then
+      MessageBox(
+        Handle,
+        'You are saving an empty allowed-app list. Interception will be disabled for all apps except the primary target process.',
+        'Vittix Indic Keyboard',
+        MB_ICONWARNING or MB_OK
+      );
     SetAllowedProcessNames(GAppSettings.AllowedProcessesText);
     GAppSettings.Save;
     BuildAppWhitelistMenu;

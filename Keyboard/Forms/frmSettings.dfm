@@ -39,7 +39,7 @@ object frmSettings: TfrmSettings
     Top = 192
     Width = 143
     Height = 15
-    Caption = 'Allowed apps/processes'
+    Caption = 'Allowed apps/processes (empty disables interception)'
   end
   object memAllowedApps: TMemo
     Left = 24
@@ -57,7 +57,8 @@ object frmSettings: TfrmSettings
     AutoSize = False
     Caption = 
       'Click a field, then press the shortcut you want to use. Press Backspace ' +
-      'or Delete to clear the optional action hotkey.'
+      'or Delete to clear the optional action hotkey. Leaving allowed apps empty ' +
+      'disables interception except for the primary target process.'
     WordWrap = True
   end
   object edtToggleHotkey: TEdit

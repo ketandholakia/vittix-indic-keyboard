@@ -8,7 +8,8 @@ uses
   Winapi.PsAPI,
   System.StrUtils,
   System.SysUtils,
-  EngineState;
+  EngineState,
+  Logger;
 
 type
   TOnKeyChar = procedure(const AChar: string) of object;
@@ -228,6 +229,7 @@ begin
   if KBHook <> 0 then
     Exit;
 
+  LogInfo('Installing keyboard hook');
   KBHook := SetWindowsHookEx(
     WH_KEYBOARD_LL,
     @LowLevelKeyboardProc,
@@ -236,13 +238,17 @@ begin
   );
 
   if KBHook = 0 then
+  begin
+    LogError('Keyboard hook installation failed');
     RaiseLastOSError;
+  end;
 end;
 
 procedure RemoveKeyboardHook;
 begin
   if KBHook <> 0 then
   begin
+    LogInfo('Removing keyboard hook');
     UnhookWindowsHookEx(KBHook);
     KBHook := 0;
   end;

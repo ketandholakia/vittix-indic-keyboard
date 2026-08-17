@@ -9,7 +9,6 @@ uses
   Vcl.Forms,
   frmTray in 'Forms\frmTray.pas' {frmTray},
   KeyboardHook in 'Core\KeyboardHook.pas',
-  KeyTranslator in 'Core\KeyTranslator.pas',
   ShreeLipi.Engine in 'Core\ShreeLipi.Engine.pas',
   EngineState in 'Core\EngineState.pas',
   LayoutLoader in 'Layout\LayoutLoader.pas',
