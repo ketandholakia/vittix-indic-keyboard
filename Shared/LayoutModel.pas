@@ -55,8 +55,6 @@ type
   end;
 
 implementation
-uses
-  System.JSON;
 
 { --------------------------------------------------
   TKeyMapping helpers

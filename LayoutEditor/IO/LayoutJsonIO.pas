@@ -3,11 +3,6 @@ unit LayoutJsonIO;
 interface
 
 uses
-  System.SysUtils,
-  System.Classes,
-  System.JSON,
-  System.IOUtils,
-  System.Generics.Collections,
   LayoutModel,
   LayoutJson;
 

@@ -144,7 +144,6 @@
         <DCCReference Include="..\Shared\LayoutJson.pas"/>
         <DCCReference Include="..\Shared\LayoutValidation.pas"/>
         <DCCReference Include="Layout\LayoutManager.pas"/>
-        <DCCReference Include="..\Shared\LayoutValidation.pas"/>
         <DCCReference Include="UI\TrayMenuBuilder.pas"/>
         <DCCReference Include="UI\FontReminder.pas"/>
         <DCCReference Include="Utils\SendInputHelper.pas"/>
