@@ -15,6 +15,7 @@ uses
   // ---- Model / IO ----
   LayoutModel in '..\Shared\LayoutModel.pas',
   LayoutJson in '..\Shared\LayoutJson.pas',
+  LayoutValidation in '..\Shared\LayoutValidation.pas',
   LayoutLoader in '..\Keyboard\Layout\LayoutLoader.pas',
 
   // Editor-specific JSON save/load
@@ -22,7 +23,6 @@ uses
 
   // ---- UI helpers ----
   KeyboardPainter in 'UI\KeyboardPainter.pas',
-  Validation in 'UI\Validation.pas',
 
   // ---- Utils ----
   BackupManager in 'Utils\BackupManager.pas';

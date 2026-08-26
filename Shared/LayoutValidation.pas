@@ -21,16 +21,20 @@ type
 
   TValidationErrors = TList<TValidationError>;
 
-  TLayoutValidationResult = record
-    IsValid: Boolean;
-    Errors: TValidationErrors;
+  TLayoutValidationResult = class
+  private
+    FIsValid: Boolean;
+    FErrors: TValidationErrors;
+  public
     constructor Create;
-    destructor Destroy;
+    destructor Destroy; override;
     procedure Clear;
     function HasErrors: Boolean;
     function ErrorCount: Integer;
     function WarningCount: Integer;
     function ToString: string;
+    property IsValid: Boolean read FIsValid write FIsValid;
+    property Errors: TValidationErrors read FErrors;
   end;
 
   TLayoutValidation = class
@@ -39,14 +43,14 @@ type
       const ALayout: TKeyboardLayout;
       const AErrors: TValidationErrors;
       const ACheckRequiredFields: Boolean = True;
-      const ACheckCrossMapDuplicates: Boolean = True;
+      const ACheckCrossMapDuplicates: Boolean = False;
       const ACheckSequenceContent: Boolean = False
     ); static;
 
     class function ValidateAndReport(
       const ALayout: TKeyboardLayout;
       const ACheckRequiredFields: Boolean = True;
-      const ACheckCrossMapDuplicates: Boolean = True;
+      const ACheckCrossMapDuplicates: Boolean = False;
       const ACheckSequenceContent: Boolean = False
     ): TLayoutValidationResult; static;
 
@@ -69,20 +73,21 @@ end;
 
 constructor TLayoutValidationResult.Create;
 begin
-  Errors := TValidationErrors.Create;
-  IsValid := True;
+  inherited Create;
+  FErrors := TValidationErrors.Create;
+  FIsValid := True;
 end;
 
 destructor TLayoutValidationResult.Destroy;
 begin
-  Errors.Free;
-  inherited;
+  FErrors.Free;
+  inherited Destroy;
 end;
 
 procedure TLayoutValidationResult.Clear;
 begin
-  Errors.Clear;
-  IsValid := True;
+  FErrors.Clear;
+  FIsValid := True;
 end;
 
 function TLayoutValidationResult.HasErrors: Boolean;
@@ -90,7 +95,7 @@ var
   E: TValidationError;
 begin
   Result := False;
-  for E in Errors do
+  for E in FErrors do
     if E.Severity = vsError then
       Exit(True);
 end;
@@ -100,7 +105,7 @@ var
   E: TValidationError;
 begin
   Result := 0;
-  for E in Errors do
+  for E in FErrors do
     if E.Severity = vsError then
       Inc(Result);
 end;
@@ -110,7 +115,7 @@ var
   E: TValidationError;
 begin
   Result := 0;
-  for E in Errors do
+  for E in FErrors do
     if E.Severity = vsWarning then
       Inc(Result);
 end;
@@ -120,7 +125,7 @@ var
   E: TValidationError;
 begin
   Result := '';
-  for E in Errors do
+  for E in FErrors do
   begin
     if Result <> '' then
       Result := Result + sLineBreak;
@@ -134,34 +139,10 @@ class procedure TLayoutValidation.ValidateLayout(
   const ALayout: TKeyboardLayout;
   const AErrors: TValidationErrors;
   const ACheckRequiredFields: Boolean = True;
-  const ACheckCrossMapDuplicates: Boolean = True;
+  const ACheckCrossMapDuplicates: Boolean = False;
   const ACheckSequenceContent: Boolean = False
 );
-var
-  SeenKeys: TDictionary<string, string>;
-  PairStr: TPair<string, string>;
-  PairMatra: TPair<string, TKeyMapping>;
-  PairMod: TPair<string, TKeyMapping;
-  Key: string;
-  Value: string;
-  MapName: string;
-  ExtraMap: TDictionary<string, string>;
-  ExtraPair: TPair<string, string>;
-  PairProp: TPair<string, string>;
-  Pair: TJSONPair; // Not used, but keep for consistency
-begin
-  if not Assigned(AErrors) then
-    Exit;
 
-  AErrors.Clear;
-
-  if not Assigned(ALayout) then
-  begin
-    AErrors.Add(TValidationError.Create(vsError, 'General', '', 'Layout is not assigned'));
-    Exit;
-  end;
-
-  // Helper to add error
   procedure AddError(const ASeverity: TValidationSeverity; const ASection, AKey, AMessage: string);
   var
     E: TValidationError;
@@ -173,7 +154,46 @@ begin
     AErrors.Add(E);
   end;
 
-  // Check required fields
+var
+  SeenKeys: TDictionary<string, string>;
+  PairStr: TPair<string, string>;
+  PairMatra: TPair<string, TKeyMapping>;
+  PairMod: TPair<string, TKeyMapping>;
+  MapName: string;
+  ExtraMap: TDictionary<string, string>;
+  ExtraPair: TPair<string, string>;
+  PairProp: TPair<string, string>;
+
+  procedure CheckAndRegisterKey(const AKey, ASection: string; const AKeyForSeen: string = '');
+  var
+    KeyToCheck: string;
+  begin
+    if AKeyForSeen <> '' then
+      KeyToCheck := AKeyForSeen
+    else
+      KeyToCheck := AKey;
+
+    if KeyToCheck = '' then
+      AddError(vsError, ASection, AKey, 'Empty key detected')
+    else if SeenKeys.ContainsKey(KeyToCheck) then
+      AddError(vsError, ASection, AKey,
+        Format('Duplicate key "%s" also used in %s', [KeyToCheck, SeenKeys[KeyToCheck]]))
+    else
+      SeenKeys.Add(KeyToCheck, ASection);
+  end;
+
+begin
+  if not Assigned(AErrors) then
+    Exit;
+
+  AErrors.Clear;
+
+  if not Assigned(ALayout) then
+  begin
+    AddError(vsError, 'General', '', 'Layout is not assigned');
+    Exit;
+  end;
+
   if ACheckRequiredFields then
   begin
     if ALayout.LayoutID = '' then
@@ -185,32 +205,13 @@ begin
     if ALayout.Encoding = '' then
       AddError(vsError, 'Layout', 'Encoding', 'Encoding is required');
     if ALayout.FontFamily = '' then
-      AddError(vsError, 'Layout', 'FontFamily', 'FontFamily is required');
+      AddError(vsWarning, 'Layout', 'FontFamily', 'FontFamily is empty');
     if ALayout.LayoutType = '' then
       AddError(vsError, 'Layout', 'LayoutType', 'LayoutType is required');
   end;
 
   SeenKeys := TDictionary<string, string>.Create;
   try
-    // Helper to check and register key
-    procedure CheckAndRegisterKey(const AKey, ASection: string; const AKeyForSeen: string = '');
-    var
-      KeyToCheck: string;
-    begin
-      if AKeyForSeen <> '' then
-        KeyToCheck := AKeyForSeen
-      else
-        KeyToCheck := AKey;
-
-      if KeyToCheck = '' then
-        AddError(vsError, ASection, AKey, 'Empty key detected')
-      else if SeenKeys.ContainsKey(KeyToCheck) then
-        AddError(vsError, ASection, AKey,
-          Format('Duplicate key "%s" also used in %s', [KeyToCheck, SeenKeys[KeyToCheck]]))
-      else
-        SeenKeys.Add(KeyToCheck, ASection);
-    end;
-
     // ---------------- DIRECT MAP ----------------
     for PairStr in ALayout.DirectMap do
     begin
@@ -218,7 +219,8 @@ begin
         AddError(vsError, 'Direct', PairStr.Key, 'Empty key detected');
       if PairStr.Value = '' then
         AddError(vsError, 'Direct', PairStr.Key, 'Empty glyph for key "' + PairStr.Key + '"');
-      CheckAndRegisterKey(PairStr.Key, 'Direct');
+      if ACheckCrossMapDuplicates then
+        CheckAndRegisterKey(PairStr.Key, 'Direct');
     end;
 
     // ---------------- PREBASE MAP ----------------
@@ -227,23 +229,22 @@ begin
       if PairMatra.Value.Glyph = '' then
         AddError(vsError, 'Prebase', PairMatra.Key, 'Empty glyph for key "' + PairMatra.Key + '"');
 
-      // Validate Key matches map key
       if PairMatra.Value.Key <> PairMatra.Key then
         AddError(vsWarning, 'Prebase', PairMatra.Key,
           Format('KeyMapping.Key ("%s") does not match map key ("%s")', [PairMatra.Value.Key, PairMatra.Key]));
 
-      // Validate MapType
       if PairMatra.Value.MapType = '' then
         AddError(vsWarning, 'Prebase', PairMatra.Key, 'MapType is empty');
 
-      // Validate Metadata keys
-      for PairProp in PairMatra.Value.Metadata do
-      begin
-        if PairProp.Key = '' then
-          AddError(vsWarning, 'Prebase.Metadata', PairMatra.Key, 'Empty metadata key');
-      end;
+      if Assigned(PairMatra.Value.Metadata) then
+        for PairProp in PairMatra.Value.Metadata do
+        begin
+          if PairProp.Key = '' then
+            AddError(vsWarning, 'Prebase.Metadata', PairMatra.Key, 'Empty metadata key');
+        end;
 
-      CheckAndRegisterKey(PairMatra.Key, 'Prebase');
+      if ACheckCrossMapDuplicates then
+        CheckAndRegisterKey(PairMatra.Key, 'Prebase');
     end;
 
     // ---------------- POSTBASE MAP ----------------
@@ -251,7 +252,8 @@ begin
     begin
       if PairStr.Value = '' then
         AddError(vsError, 'Postbase', PairStr.Key, 'Empty glyph for key "' + PairStr.Key + '"');
-      CheckAndRegisterKey(PairStr.Key, 'Postbase');
+      if ACheckCrossMapDuplicates then
+        CheckAndRegisterKey(PairStr.Key, 'Postbase');
     end;
 
     // ---------------- MODIFIERS ----------------
@@ -262,31 +264,22 @@ begin
       if PairMod.Value.Glyph = '' then
         AddError(vsError, 'Modifiers', PairMod.Key, 'Modifier "' + PairMod.Key + '" has empty glyph');
 
-      // Validate MapType
       if PairMod.Value.MapType = '' then
         AddError(vsWarning, 'Modifiers', PairMod.Key, 'MapType is empty');
 
-      // Validate Key matches map key
       if PairMod.Value.Key <> PairMod.Key then
         AddError(vsWarning, 'Modifiers', PairMod.Key,
           Format('KeyMapping.Key ("%s") does not match map key ("%s")', [PairMod.Value.Key, PairMod.Key]));
 
-      // Validate Metadata keys
-      for PairProp in PairMod.Value.Metadata do
-      begin
-        if PairProp.Key = '' then
-          AddError(vsWarning, 'Modifiers.Metadata', PairMod.Key, 'Empty metadata key');
-      end;
+      if Assigned(PairMod.Value.Metadata) then
+        for PairProp in PairMod.Value.Metadata do
+        begin
+          if PairProp.Key = '' then
+            AddError(vsWarning, 'Modifiers.Metadata', PairMod.Key, 'Empty metadata key');
+        end;
 
-      CheckAndRegisterKey(PairMod.Key, 'Modifiers');
-    end;
-
-    // ---------------- POSTBASE MAP ----------------
-    for PairStr in ALayout.PostbaseMap do
-    begin
-      if PairStr.Value = '' then
-        AddError(vsError, 'Postbase', PairStr.Key, 'Empty glyph for key "' + PairStr.Key + '"');
-      CheckAndRegisterKey(PairStr.Key, 'Postbase');
+      if ACheckCrossMapDuplicates then
+        CheckAndRegisterKey(PairMod.Key, 'Modifiers');
     end;
 
     // ---------------- SEQUENCES ----------------
@@ -302,7 +295,6 @@ begin
       if PairStr.Value = '' then
         AddError(vsError, 'Sequences', PairStr.Key, 'Sequence "' + PairStr.Key + '" has empty output');
 
-      // Cross-map duplicate check for sequence keys
       if ACheckCrossMapDuplicates then
         CheckAndRegisterKey(PairStr.Key, 'Sequences');
     end;
@@ -322,7 +314,6 @@ begin
           AddError(vsError, 'ExtraMaps.' + MapName, ExtraPair.Key, 'Empty value for key "' + ExtraPair.Key + '"');
       end;
 
-      // Cross-map duplicate check for ExtraMaps keys
       if ACheckCrossMapDuplicates then
       begin
         for ExtraPair in ExtraMap do
@@ -337,16 +328,11 @@ begin
         AddError(vsWarning, 'Properties', PairProp.Key, 'Empty property key');
     end;
 
-    // Cross-map duplicate check for Properties keys
     if ACheckCrossMapDuplicates then
     begin
       for PairProp in ALayout.Properties do
         CheckAndRegisterKey(PairProp.Key, 'Properties', PairProp.Key);
     end;
-
-    // ---------------- CROSS-MAP DUPLICATE CHECK ----------------
-    // This is already handled by CheckAndRegisterKey using SeenKeys dictionary
-    // which is shared across all map types
 
   finally
     SeenKeys.Free;
@@ -356,33 +342,29 @@ end;
 class function TLayoutValidation.ValidateAndReport(
   const ALayout: TKeyboardLayout;
   const ACheckRequiredFields: Boolean = True;
-  const ACheckCrossMapDuplicates: Boolean = True;
+  const ACheckCrossMapDuplicates: Boolean = False;
   const ACheckSequenceContent: Boolean = False
 ): TLayoutValidationResult;
-var
-  Errors: TValidationErrors;
 begin
   Result := TLayoutValidationResult.Create;
-  Errors := TValidationErrors.Create;
   try
-    ValidateLayout(ALayout, Errors, ACheckRequiredFields, ACheckCrossMapDuplicates, ACheckSequenceContent);
-    Result.Errors := Errors;
-    Result.IsValid := not Errors.HasErrors;
+    ValidateLayout(ALayout, Result.FErrors, ACheckRequiredFields, ACheckCrossMapDuplicates, ACheckSequenceContent);
+    Result.FIsValid := not Result.HasErrors;
   except
-    Errors.Free;
+    Result.Free;
     raise;
   end;
 end;
 
 class function TLayoutValidation.IsValidLayout(const ALayout: TKeyboardLayout): Boolean;
 var
-  ResultRecord: TLayoutValidationResult;
+  ResultObj: TLayoutValidationResult;
 begin
-  ResultRecord := ValidateAndReport(ALayout);
+  ResultObj := ValidateAndReport(ALayout);
   try
-    Result := ResultRecord.IsValid;
+    Result := ResultObj.IsValid;
   finally
-    ResultRecord.Free;
+    ResultObj.Free;
   end;
 end;
 

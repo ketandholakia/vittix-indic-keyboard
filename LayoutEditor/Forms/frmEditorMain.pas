@@ -23,7 +23,7 @@ uses
   LayoutLoader,
   LayoutJsonIO,
   LayoutJson,
-  Validation,
+  LayoutValidation,
   KeyboardPainter,
   Vcl.ToolWin;
 
@@ -188,7 +188,7 @@ type
     procedure miCopyClick(Sender: TObject);
     procedure miPasteClick(Sender: TObject);
     procedure miValidateClick(Sender: TObject);
-    procedure ShowValidationErrors(const Errors: TList<TValidationError>);
+    procedure ShowValidationErrors(const Errors: TValidationErrors);
     procedure SyncUIToModel;
     procedure SaveUIToLayout;
     procedure ClearLayout;
@@ -1098,18 +1098,18 @@ end;
 
 procedure TfrmEditorMain.miValidateClick(Sender: TObject);
 var
-  Errors: TList<TValidationError>;
+  Errors: TValidationErrors;
 begin
-  Errors := TList<TValidationError>.Create;
+  Errors := TValidationErrors.Create;
   try
-    Validation.ValidateLayout(FLayout, Errors);
+    TLayoutValidation.ValidateLayout(FLayout, Errors);
     ShowValidationErrors(Errors);
   finally
     Errors.Free;
   end;
 end;
 
-procedure TfrmEditorMain.ShowValidationErrors(const Errors: TList<TValidationError>);
+procedure TfrmEditorMain.ShowValidationErrors(const Errors: TValidationErrors);
 var
   Msg: string;
   E: TValidationError;
@@ -1120,9 +1120,9 @@ begin
   begin
     Msg := 'Validation errors:' + sLineBreak;
     for E in Errors do
-      Msg := Msg + '[' + E.Section + '] ' + E.Message + sLineBreak;
+      Msg := Msg + E.ToString + sLineBreak;
   end;
-  pnlDiagnostics.Color := $00FFF4E0; // warm tint on error
+  pnlDiagnostics.Color := $00FFF4E0;
   lblDiagInfo.Caption := Msg;
   MessageDlg(Msg, mtWarning, [mbOK], 0);
 end;
