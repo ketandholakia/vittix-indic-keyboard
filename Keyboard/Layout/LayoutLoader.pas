@@ -32,6 +32,8 @@ var
   Pair, PairProp, ExtraPair: TJSONPair;
   Matra, ModRule: TKeyMapping;
   JSONText: string;
+  MapName: string;
+  ExtraMap: TDictionary<string, string>;
 begin
   if not FileExists(FileName) then
     raise Exception.Create('Layout file not found: ' + FileName);
@@ -133,6 +135,19 @@ begin
           Pair.JsonString.Value,
           ReadScalarJsonValue(Pair.JsonValue)
         );
+
+    { ---------- EXTRA MAPS ---------- }
+    Obj := JSON.GetValue<TJSONObject>('extra_maps');
+    if Assigned(Obj) then
+      for Pair in Obj do
+      begin
+        MapName := Pair.JsonString.Value;
+        MetaObj := Pair.JsonValue as TJSONObject;
+        ExtraMap := TDictionary<string, string>.Create;
+        for ExtraPair in MetaObj do
+          ExtraMap.Add(ExtraPair.JsonString.Value, ReadScalarJsonValue(ExtraPair.JsonValue));
+        Result.ExtraMaps.Add(MapName, ExtraMap);
+      end;
 
   finally
     JSON.Free;

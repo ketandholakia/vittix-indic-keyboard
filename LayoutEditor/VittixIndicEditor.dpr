@@ -13,7 +13,7 @@ uses
   frmSequenceEditor in 'Forms\frmSequenceEditor.pas' {frmSequenceEditor},
 
   // ---- Model / IO ----
-  LayoutModel in 'Model\LayoutModel.pas',
+  LayoutModel in '..\Shared\LayoutModel.pas',
   LayoutLoader in '..\Keyboard\Layout\LayoutLoader.pas',
 
   // Editor-specific JSON save/load

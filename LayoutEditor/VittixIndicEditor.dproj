@@ -113,6 +113,7 @@
         <DCC_GenerateStackFrames>true</DCC_GenerateStackFrames>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2_Win32)'!=''">
+        <DCC_SearchPath>$(ProjectDir)\..\Shared;$(DCC_SearchPath)</DCC_SearchPath>
         <AppEnableRuntimeThemes>true</AppEnableRuntimeThemes>
         <AppDPIAwarenessMode>PerMonitorV2</AppDPIAwarenessMode>
     </PropertyGroup>
@@ -129,7 +130,6 @@
         <DCCReference Include="Forms\frmSequenceEditor.pas">
             <Form>frmSequenceEditor</Form>
         </DCCReference>
-        <DCCReference Include="..\Keyboard\Layout\LayoutModel.pas"/>
         <DCCReference Include="..\Keyboard\Layout\LayoutLoader.pas"/>
         <DCCReference Include="IO\LayoutJsonIO.pas"/>
         <DCCReference Include="UI\KeyboardPainter.pas"/>

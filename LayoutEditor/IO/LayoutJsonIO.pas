@@ -21,6 +21,9 @@ var
   PairMatra: TPair<string, TKeyMapping>;
   PairMod: TPair<string, TKeyMapping>;
   JSONText: string;
+  MapName: string;
+  ExtraMap: TDictionary<string, string>;
+  ExtraPair: TPair<string, string>;
 begin
   if ALayout = nil then
     raise Exception.Create('No layout to save');
@@ -92,6 +95,18 @@ begin
     for PairStr in ALayout.Sequences do
       Obj.AddPair(PairStr.Key, PairStr.Value);
     Root.AddPair('sequences', Obj);
+
+    { ---------- EXTRA MAPS ---------- }
+    Obj := TJSONObject.Create;
+    for MapName in ALayout.ExtraMaps.Keys do
+    begin
+      MetaObj := TJSONObject.Create;
+      ExtraMap := ALayout.ExtraMaps[MapName];
+      for ExtraPair in ExtraMap do
+        MetaObj.AddPair(ExtraPair.Key, ExtraPair.Value);
+      Obj.AddPair(MapName, MetaObj);
+    end;
+    Root.AddPair('extra_maps', Obj);
 
     { ---------- WRITE FILE ---------- }
     JSONText := Root.Format(2);

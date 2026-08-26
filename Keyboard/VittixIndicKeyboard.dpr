@@ -13,7 +13,7 @@ uses
   EngineState in 'Core\EngineState.pas',
   LayoutLoader in 'Layout\LayoutLoader.pas',
   LayoutManager in 'Layout\LayoutManager.pas',
-  LayoutModel in 'Layout\LayoutModel.pas',
+  LayoutModel in '..\Shared\LayoutModel.pas',
   TrayMenuBuilder in 'UI\TrayMenuBuilder.pas',
   FontReminder in 'UI\FontReminder.pas',
   SendInputHelper in 'Utils\SendInputHelper.pas',

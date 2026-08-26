@@ -113,7 +113,7 @@
         <DCC_GenerateStackFrames>true</DCC_GenerateStackFrames>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2_Win32)'!=''">
-        <DCC_SearchPath>$(ProjectDir)\Layout;$(DCC_SearchPath)</DCC_SearchPath>
+        <DCC_SearchPath>$(ProjectDir)\..\Shared;$(DCC_SearchPath)</DCC_SearchPath>
         <AppEnableRuntimeThemes>true</AppEnableRuntimeThemes>
         <AppDPIAwarenessMode>PerMonitorV2</AppDPIAwarenessMode>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
@@ -138,7 +138,6 @@
         <DCCReference Include="Core\EngineState.pas"/>
         <DCCReference Include="Layout\LayoutLoader.pas"/>
         <DCCReference Include="Layout\LayoutManager.pas"/>
-        <DCCReference Include="Layout\LayoutModel.pas"/>
         <DCCReference Include="UI\TrayMenuBuilder.pas"/>
         <DCCReference Include="UI\FontReminder.pas"/>
         <DCCReference Include="Utils\SendInputHelper.pas"/>

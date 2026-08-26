@@ -188,6 +188,7 @@ type
     procedure miPasteClick(Sender: TObject);
     procedure miValidateClick(Sender: TObject);
     procedure ShowValidationErrors(const Errors: TList<TValidationError>);
+    procedure SyncUIToModel;
     procedure SaveUIToLayout;
     procedure ClearLayout;
     procedure UpdateMappingInspector(const Grid: TStringGrid; ARow: Integer);
@@ -1046,6 +1047,7 @@ begin
   Grid.RowCount := Row + 1;
   Grid.Cells[0,Row] := 'NewKey';
   Grid.Cells[1,Row] := '';
+  SaveUIToLayout;
 end;
 
 procedure TfrmEditorMain.miRemoveKeyClick(Sender: TObject);
@@ -1056,7 +1058,10 @@ begin
   Grid := Screen.ActiveControl as TStringGrid;
   Row := Grid.Row;
   if Row > 0 then
+  begin
     Grid.Rows[Row].Clear;
+    SaveUIToLayout;
+  end;
 end;
 
 procedure TfrmEditorMain.miCopyClick(Sender: TObject);
@@ -1085,6 +1090,7 @@ begin
     begin
       Grid.Cells[0,Row] := Parts[0];
       Grid.Cells[1,Row] := Parts[1];
+      SaveUIToLayout;
     end;
   end;
 end;
@@ -1311,7 +1317,10 @@ begin
     else if Pos('modifiers', ParentName) > 0 then Grid := grdModifiers;
   end;
   if Grid <> nil then
+  begin
     AddRowToGrid(Grid);
+    SaveUIToLayout;
+  end;
 end;
 
 procedure TfrmEditorMain.GridDrawCell(Sender: TObject; ACol, ARow: Integer;
@@ -1423,15 +1432,124 @@ begin
   );
 end;
 
-procedure TfrmEditorMain.SaveUIToLayout;
+procedure TfrmEditorMain.SyncUIToModel;
+var
+  R: Integer;
+  Key, Glyph, Name: string;
+  KeyMap: TKeyMapping;
+  Grid: TStringGrid;
+  Tab: TTabSheet;
+  MapName: string;
+  ExtraMap: TDictionary<string, string>;
+  ExtraGrid: TStringGrid;
+  I: Integer;
 begin
+  if FLayout = nil then Exit;
+
   PushUndo;
+
   FLayout.Name := edtLayoutName.Text;
   FLayout.FontFamily := ComboBoxFonts.Text;
+  FLayout.Script := ComboBoxScript.Text;
 
-  // Save hotkey settings to layout properties
   FLayout.Properties.AddOrSetValue('HotkeySwitch', edtHotkeySwitch.Text);
   FLayout.Properties.AddOrSetValue('HotkeyAction', edtHotkeyAction.Text);
+
+  FLayout.DirectMap.Clear;
+  for R := grdDirect.FixedRows to grdDirect.RowCount - 1 do
+  begin
+    Key := Trim(grdDirect.Cells[0, R]);
+    Glyph := Trim(grdDirect.Cells[1, R]);
+    if (Key <> '') and (Glyph <> '') then
+      FLayout.DirectMap.Add(Key, Glyph);
+  end;
+
+  FLayout.PrebaseMap.Clear;
+  for R := grdPrebase.FixedRows to grdPrebase.RowCount - 1 do
+  begin
+    Key := Trim(grdPrebase.Cells[0, R]);
+    Glyph := Trim(grdPrebase.Cells[1, R]);
+    if (Key <> '') and (Glyph <> '') then
+    begin
+      KeyMap.Key := Key;
+      KeyMap.Glyph := Glyph;
+      KeyMap.MapType := 'prebase';
+      KeyMap.InitMetadata;
+      FLayout.PrebaseMap.Add(Key, KeyMap);
+    end;
+  end;
+
+  FLayout.PostbaseMap.Clear;
+  for R := grdPostbase.FixedRows to grdPostbase.RowCount - 1 do
+  begin
+    Key := Trim(grdPostbase.Cells[0, R]);
+    Glyph := Trim(grdPostbase.Cells[1, R]);
+    if (Key <> '') and (Glyph <> '') then
+      FLayout.PostbaseMap.Add(Key, Glyph);
+  end;
+
+  FLayout.Sequences.Clear;
+  for R := grdSequences.FixedRows to grdSequences.RowCount - 1 do
+  begin
+    Key := Trim(grdSequences.Cells[0, R]);
+    Glyph := Trim(grdSequences.Cells[1, R]);
+    if (Key <> '') and (Glyph <> '') then
+      FLayout.Sequences.Add(Key, Glyph);
+  end;
+
+  FLayout.Modifiers.Clear;
+  for R := grdModifiers.FixedRows to grdModifiers.RowCount - 1 do
+  begin
+    Name := Trim(grdModifiers.Cells[0, R]);
+    Key := Trim(grdModifiers.Cells[1, R]);
+    Glyph := Trim(grdModifiers.Cells[2, R]);
+    if (Name <> '') and (Key <> '') and (Glyph <> '') then
+    begin
+      KeyMap.Key := Key;
+      KeyMap.Glyph := Glyph;
+      KeyMap.MapType := 'modifier';
+      KeyMap.InitMetadata;
+      FLayout.Modifiers.Add(Name, KeyMap);
+    end;
+  end;
+
+  for I := PageControl.PageCount - 1 downto 0 do
+  begin
+    Tab := PageControl.Pages[I];
+    if Tab.Tag = 999 then
+    begin
+      MapName := Tab.Caption;
+      if FLayout.ExtraMaps.ContainsKey(MapName) then
+        FLayout.ExtraMaps[MapName].Clear
+      else
+      begin
+        ExtraMap := TDictionary<string, string>.Create;
+        FLayout.ExtraMaps.Add(MapName, ExtraMap);
+      end;
+
+      ExtraGrid := nil;
+      if Tab.ControlCount > 0 then
+        if Tab.Controls[0] is TStringGrid then
+          ExtraGrid := Tab.Controls[0] as TStringGrid;
+
+      if Assigned(ExtraGrid) then
+      begin
+        ExtraMap := FLayout.ExtraMaps[MapName];
+        for R := ExtraGrid.FixedRows to ExtraGrid.RowCount - 1 do
+        begin
+          Key := Trim(ExtraGrid.Cells[0, R]);
+          Glyph := Trim(ExtraGrid.Cells[1, R]);
+          if (Key <> '') and (Glyph <> '') then
+            ExtraMap.Add(Key, Glyph);
+        end;
+      end;
+    end;
+  end;
+end;
+
+procedure TfrmEditorMain.SaveUIToLayout;
+begin
+  SyncUIToModel;
 end;
 
 procedure TfrmEditorMain.ComboBox1Change(Sender: TObject);

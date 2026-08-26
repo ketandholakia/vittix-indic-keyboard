@@ -1,0 +1,15 @@
+[2026-08-17 14:16:19.407] [INFO] Tray form starting
+[2026-08-17 14:16:19.471] [INFO] Installing keyboard hook
+[2026-08-17 14:16:19.471] [INFO] Loading layouts from D:\ketan\github\vittix-indic-keyboard\build\Win32\layouts\
+[2026-08-17 14:16:19.471] [WARN] Duplicate layout ID "devanagari-unicode-phonetic" in D:\ketan\github\vittix-indic-keyboard\build\Win32\layouts\devnagari\devanagari_unicode_phonetic.json; keeping D:\ketan\github\vittix-indic-keyboard\build\Win32\layouts\devnagari\devanagari_unicode_gj.json
+[2026-08-17 14:16:19.472] [INFO] Loaded 4 layouts
+[2026-08-18 14:18:23.184] [INFO] Tray form starting
+[2026-08-18 14:18:23.205] [INFO] Installing keyboard hook
+[2026-08-18 14:18:23.205] [INFO] Loading layouts from D:\ketan\github\vittix-indic-keyboard\build\Win32\layouts\
+[2026-08-18 14:18:23.288] [WARN] Duplicate layout ID "devanagari-unicode-phonetic" in D:\ketan\github\vittix-indic-keyboard\build\Win32\layouts\devnagari\devanagari_unicode_phonetic.json; keeping D:\ketan\github\vittix-indic-keyboard\build\Win32\layouts\devnagari\devanagari_unicode_gj.json
+[2026-08-18 14:18:23.444] [INFO] Loaded 4 layouts
+[2026-08-24 18:31:25.327] [INFO] Tray form starting
+[2026-08-24 18:31:25.372] [INFO] Installing keyboard hook
+[2026-08-24 18:31:25.372] [INFO] Loading layouts from D:\ketan\github\vittix-indic-keyboard\build\Win32\layouts\
+[2026-08-24 18:31:25.468] [WARN] Duplicate layout ID "devanagari-unicode-phonetic" in D:\ketan\github\vittix-indic-keyboard\build\Win32\layouts\devnagari\devanagari_unicode_phonetic.json; keeping D:\ketan\github\vittix-indic-keyboard\build\Win32\layouts\devnagari\devanagari_unicode_gj.json
+[2026-08-24 18:31:25.626] [INFO] Loaded 4 layouts
