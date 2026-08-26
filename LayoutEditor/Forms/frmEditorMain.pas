@@ -22,6 +22,7 @@ uses
   LayoutModel,
   LayoutLoader,
   LayoutJsonIO,
+  LayoutJson,
   Validation,
   KeyboardPainter,
   Vcl.ToolWin;
@@ -417,7 +418,7 @@ procedure TfrmEditorMain.PushUndo;
 begin
   if FLayout <> nil then
   begin
-    FUndoStack.Push(FLayout.ToJSON);
+    FUndoStack.Push(LayoutToJson(FLayout));
     FRedoStack.Clear;
   end;
 end;
@@ -428,10 +429,10 @@ var
 begin
   if FUndoStack.Count = 0 then Exit;
   if FLayout <> nil then
-    FRedoStack.Push(FLayout.ToJSON);
+    FRedoStack.Push(LayoutToJson(FLayout));
   PrevState := FUndoStack.Pop;
   FreeAndNil(FLayout);
-  FLayout := TKeyboardLayout.FromJSON(PrevState); // You may need to implement FromJSON
+  FLayout := LayoutFromJson(PrevState);
   LoadLayoutToUI;
   UpdateLayoutPreview;
 end;
@@ -442,10 +443,10 @@ var
 begin
   if FRedoStack.Count = 0 then Exit;
   if FLayout <> nil then
-    FUndoStack.Push(FLayout.ToJSON);
+    FUndoStack.Push(LayoutToJson(FLayout));
   NextState := FRedoStack.Pop;
   FreeAndNil(FLayout);
-  FLayout := TKeyboardLayout.FromJSON(NextState); // You may need to implement FromJSON
+  FLayout := LayoutFromJson(NextState);
   LoadLayoutToUI;
   UpdateLayoutPreview;
 end;

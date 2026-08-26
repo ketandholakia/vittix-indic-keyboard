@@ -14,6 +14,7 @@ uses
   LayoutLoader in 'Layout\LayoutLoader.pas',
   LayoutManager in 'Layout\LayoutManager.pas',
   LayoutModel in '..\Shared\LayoutModel.pas',
+  LayoutJson in '..\Shared\LayoutJson.pas',
   TrayMenuBuilder in 'UI\TrayMenuBuilder.pas',
   FontReminder in 'UI\FontReminder.pas',
   SendInputHelper in 'Utils\SendInputHelper.pas',

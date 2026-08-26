@@ -14,6 +14,7 @@ uses
 
   // ---- Model / IO ----
   LayoutModel in '..\Shared\LayoutModel.pas',
+  LayoutJson in '..\Shared\LayoutJson.pas',
   LayoutLoader in '..\Keyboard\Layout\LayoutLoader.pas',
 
   // Editor-specific JSON save/load

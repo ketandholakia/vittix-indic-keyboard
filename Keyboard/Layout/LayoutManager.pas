@@ -175,4 +175,3 @@ finalization
   gLayoutManager.Free;
 
 end.
-
