@@ -25,6 +25,7 @@ var
 procedure SetActiveLayout(ALayout: TKeyboardLayout);
 begin
   ActiveLayout := ALayout;
+  SetEngineHasActiveLayout(ALayout <> nil);
   ResetEngineState;
 end;
 

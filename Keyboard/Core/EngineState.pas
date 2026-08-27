@@ -8,6 +8,7 @@ uses
 type
   TEngineState = record
     Enabled: Boolean;
+    HasActiveLayout: Boolean;
     KeyBuffer: string;
     PendingPrebase: string;
     PendingPostbase: string;
@@ -20,6 +21,8 @@ procedure InitEngineState;
 procedure ResetEngineState;
 function EngineEnabled: Boolean;
 procedure SetEngineEnabled(AValue: Boolean);
+function EngineHasActiveLayout: Boolean;
+procedure SetEngineHasActiveLayout(AValue: Boolean);
 
 var
   gEngineState: TEngineState;
@@ -52,6 +55,16 @@ begin
   gEngineState.Enabled := AValue;
   if not AValue then
     ResetEngineState;
+end;
+
+function EngineHasActiveLayout: Boolean;
+begin
+  Result := gEngineState.HasActiveLayout;
+end;
+
+procedure SetEngineHasActiveLayout(AValue: Boolean);
+begin
+  gEngineState.HasActiveLayout := AValue;
 end;
 
 end.
