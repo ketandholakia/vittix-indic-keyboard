@@ -16,7 +16,6 @@ uses
   LayoutModel in '..\Shared\LayoutModel.pas',
   LayoutJson in '..\Shared\LayoutJson.pas',
   LayoutValidation in '..\Shared\LayoutValidation.pas',
-  TrayMenuBuilder in 'UI\TrayMenuBuilder.pas',
   FontReminder in 'UI\FontReminder.pas',
   SendInputHelper in 'Utils\SendInputHelper.pas',
   WinStartup in 'Utils\WinStartup.pas',

@@ -152,8 +152,8 @@ begin
       Result.FontFamily := JSON.GetValue<string>('font_family', '');
       Result.LayoutType := JSON.GetValue<string>('layout_type', '');
 
-      // Properties
-      Obj := JSON.GetValue<TJSONObject>('properties');
+      // Properties (optional)
+      Obj := JSON.GetValue('properties') as TJSONObject;
       if Assigned(Obj) then
         for PairProp in Obj do
           Result.Properties.AddOrSetValue(
@@ -162,7 +162,7 @@ begin
           );
 
       // DirectMap
-      Obj := JSON.GetValue<TJSONObject>('direct');
+      Obj := JSON.GetValue('direct') as TJSONObject;
       if Assigned(Obj) then
         for Pair in Obj do
           Result.DirectMap.Add(
@@ -171,7 +171,7 @@ begin
           );
 
       // PrebaseMap (generic)
-      Obj := JSON.GetValue<TJSONObject>('prebase');
+      Obj := JSON.GetValue('prebase') as TJSONObject;
       if Assigned(Obj) then
         for Pair in Obj do
         begin
@@ -183,7 +183,7 @@ begin
           if KeyMap.MapType = 'prebase' then
             KeyMap.MapType := Item.GetValue<string>('type', 'prebase');
           KeyMap.InitMetadata;
-          MetaObj := Item.GetValue<TJSONObject>('metadata');
+          MetaObj := Item.GetValue('metadata') as TJSONObject;
           if Assigned(MetaObj) then
             for PairProp in MetaObj do
               KeyMap.Metadata.Add(PairProp.JsonString.Value, ReadScalarJsonValue(PairProp.JsonValue));
@@ -191,7 +191,7 @@ begin
         end;
 
       // PostbaseMap
-      Obj := JSON.GetValue<TJSONObject>('postbase');
+      Obj := JSON.GetValue('postbase') as TJSONObject;
       if Assigned(Obj) then
         for Pair in Obj do
           Result.PostbaseMap.Add(
@@ -200,7 +200,7 @@ begin
           );
 
       // Modifiers (generic)
-      Obj := JSON.GetValue<TJSONObject>('modifiers');
+      Obj := JSON.GetValue('modifiers') as TJSONObject;
       if Assigned(Obj) then
         for Pair in Obj do
         begin
@@ -212,7 +212,7 @@ begin
           if KeyMap.MapType = 'modifier' then
             KeyMap.MapType := Item.GetValue<string>('behavior', 'modifier');
           KeyMap.InitMetadata;
-          MetaObj := Item.GetValue<TJSONObject>('metadata');
+          MetaObj := Item.GetValue('metadata') as TJSONObject;
           if Assigned(MetaObj) then
             for PairProp in MetaObj do
               KeyMap.Metadata.Add(PairProp.JsonString.Value, ReadScalarJsonValue(PairProp.JsonValue));
@@ -220,7 +220,7 @@ begin
         end;
 
       // Sequences
-      Obj := JSON.GetValue<TJSONObject>('sequences');
+      Obj := JSON.GetValue('sequences') as TJSONObject;
       if Assigned(Obj) then
         for Pair in Obj do
           Result.Sequences.Add(
@@ -228,8 +228,8 @@ begin
             ReadScalarJsonValue(Pair.JsonValue)
           );
 
-      // ExtraMaps
-      Obj := JSON.GetValue<TJSONObject>('extra_maps');
+      // ExtraMaps (optional)
+      Obj := JSON.GetValue('extra_maps') as TJSONObject;
       if Assigned(Obj) then
         for Pair in Obj do
         begin

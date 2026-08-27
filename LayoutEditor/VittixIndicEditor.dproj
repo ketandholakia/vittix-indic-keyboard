@@ -135,7 +135,6 @@
         <DCCReference Include="..\Keyboard\Layout\LayoutLoader.pas"/>
         <DCCReference Include="..\Shared\LayoutJson.pas"/>
         <DCCReference Include="..\Shared\LayoutValidation.pas"/>
-        <DCCReference Include="IO\LayoutJsonIO.pas"/>
         <DCCReference Include="UI\KeyboardPainter.pas"/>
         <DCCReference Include="Utils\BackupManager.pas"/>
         <BuildConfiguration Include="Base">

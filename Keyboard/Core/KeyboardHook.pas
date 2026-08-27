@@ -40,8 +40,8 @@ type
 var
   KBHook: HHOOK = 0;
   KeyHandler: TOnKeyChar = nil;
-  TargetProcessName: string = 'CorelDRW.exe';
-  AllowedProcessNames: string = 'CorelDRW.exe';
+  TargetProcessName: string = '';
+  AllowedProcessNames: string = '';
 
 const
   PROCESS_QUERY_LIMITED_INFORMATION = $1000;

@@ -18,9 +18,6 @@ uses
   LayoutValidation in '..\Shared\LayoutValidation.pas',
   LayoutLoader in '..\Keyboard\Layout\LayoutLoader.pas',
 
-  // Editor-specific JSON save/load
-  LayoutJsonIO in 'IO\LayoutJsonIO.pas',
-
   // ---- UI helpers ----
   KeyboardPainter in 'UI\KeyboardPainter.pas',
 

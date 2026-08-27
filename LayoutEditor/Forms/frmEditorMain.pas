@@ -21,7 +21,6 @@ uses
 
   LayoutModel,
   LayoutLoader,
-  LayoutJsonIO,
   LayoutJson,
   LayoutValidation,
   KeyboardPainter,

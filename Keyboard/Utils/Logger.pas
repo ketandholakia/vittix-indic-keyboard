@@ -27,9 +27,13 @@ procedure Log(const Msg: string; Level: TLogLevel = llInfo);
 
 implementation
 
+uses
+  System.IOUtils;
+
 var
   gLogFile: string = '';
   gEnabled: Boolean = False;
+  gInitialized: Boolean = False;
   gCS: TRTLCriticalSection;
 
 { --------------------------------------------------
@@ -48,6 +52,18 @@ begin
   end;
 end;
 
+procedure EnsureInitialized;
+begin
+  if gInitialized then
+    Exit;
+
+  // Initialize to default log file if not explicitly initialized
+  if gLogFile = '' then
+    gLogFile := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'logs\vittix-keyboard.log');
+
+  gInitialized := True;
+end;
+
 procedure WriteLine(const Line: string);
 var
   FS: TFileStream;
@@ -56,8 +72,8 @@ begin
   if not gEnabled then
     Exit;
 
-  if gLogFile = '' then
-    Exit;
+  // Lazy initialization before first write
+  EnsureInitialized;
 
   EnterCriticalSection(gCS);
   try
@@ -87,6 +103,7 @@ end;
 procedure InitLogger(const ALogFile: string);
 begin
   gLogFile := ALogFile;
+  gInitialized := True;
   // NOTE: gCS is already initialized in the 'initialization' section below.
   // Do NOT call InitializeCriticalSection here — double init is undefined behavior.
 end;

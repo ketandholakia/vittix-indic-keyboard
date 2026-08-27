@@ -582,13 +582,6 @@ begin
   miEnable.Checked := EngineEnabled;
   SetTargetProcessName(GAppSettings.TargetProcessName);
   SetAllowedProcessNames(GAppSettings.AllowedProcessesText);
-  if Trim(GAppSettings.AllowedProcessesText) = '' then
-    MessageBox(
-      Handle,
-      'No allowed apps are configured. Interception will stay disabled except for the primary target process.',
-      'Vittix Indic Keyboard',
-      MB_ICONWARNING or MB_OK
-    );
   UpdateTrayIcon;
 
   if GAppSettings.StartWithWindows then
