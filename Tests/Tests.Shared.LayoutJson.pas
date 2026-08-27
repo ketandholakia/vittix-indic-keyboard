@@ -24,6 +24,15 @@ type
 
     [Test]
     procedure SaveAndLoadLayoutFile_Works;
+
+    [Test]
+    procedure LoadLayoutFromFile_UTF16LE_WithBOM_Works;
+
+    [Test]
+    procedure LoadLayoutFromFile_UTF8_WithBOM_Works;
+
+    [Test]
+    procedure LoadLayoutFromFile_UTF8_NoBOM_Works;
   end;
 
 implementation
@@ -132,6 +141,117 @@ begin
         Assert.AreEqual(Layout.LayoutID, LoadedLayout.LayoutID);
         Assert.AreEqual(Layout.Name, LoadedLayout.Name);
         Assert.AreEqual(Layout.DirectMap.Count, LoadedLayout.DirectMap.Count);
+      finally
+        LoadedLayout.Free;
+      end;
+    finally
+      if TFile.Exists(TempFile) then
+        TFile.Delete(TempFile);
+    end;
+  finally
+    Layout.Free;
+  end;
+end;
+
+procedure TLayoutJsonTests.LoadLayoutFromFile_UTF16LE_WithBOM_Works;
+var
+  TempFile: string;
+  Layout: TKeyboardLayout;
+  LoadedLayout: TKeyboardLayout;
+  UTF16Bytes: TBytes;
+  Preamble: TBytes;
+  AllBytes: TBytes;
+begin
+  // Create a minimal valid layout JSON with Unicode content
+  Layout := CreateTestLayout;
+  try
+    // Save as UTF-16LE with BOM (simulating legacy layout files)
+    TempFile := TPath.Combine(TPath.GetTempPath, 'vittix_test_utf16le_' + TPath.GetRandomFileName + '.json');
+    try
+      // Use LayoutToJson to get valid JSON, then write as UTF-16LE with BOM
+      UTF16Bytes := TEncoding.Unicode.GetBytes(LayoutToJson(Layout));
+      Preamble := TEncoding.Unicode.GetPreamble; // FF FE
+      SetLength(AllBytes, Length(Preamble) + Length(UTF16Bytes));
+      Move(Preamble[0], AllBytes[0], Length(Preamble));
+      Move(UTF16Bytes[0], AllBytes[Length(Preamble)], Length(UTF16Bytes));
+      
+      TFile.WriteAllBytes(TempFile, AllBytes);
+      Assert.IsTrue(TFile.Exists(TempFile), 'UTF-16LE layout file should be created');
+
+      // This should not raise "No mapping for Unicode character" error
+      LoadedLayout := LoadLayoutFromFile(TempFile);
+      try
+        Assert.AreEqual(Layout.LayoutID, LoadedLayout.LayoutID);
+        Assert.AreEqual(Layout.Name, LoadedLayout.Name);
+        Assert.AreEqual(Layout.DirectMap.Count, LoadedLayout.DirectMap.Count);
+        Assert.AreEqual('क', LoadedLayout.DirectMap['k']);
+        Assert.AreEqual('ग', LoadedLayout.DirectMap['g']);
+      finally
+        LoadedLayout.Free;
+      end;
+    finally
+      if TFile.Exists(TempFile) then
+        TFile.Delete(TempFile);
+    end;
+  finally
+    Layout.Free;
+  end;
+end;
+
+procedure TLayoutJsonTests.LoadLayoutFromFile_UTF8_WithBOM_Works;
+var
+  TempFile: string;
+  Layout: TKeyboardLayout;
+  LoadedLayout: TKeyboardLayout;
+begin
+  Layout := CreateTestLayout;
+  try
+    TempFile := TPath.Combine(TPath.GetTempPath, 'vittix_test_utf8bom_' + TPath.GetRandomFileName + '.json');
+    try
+      // Write as UTF-8 with BOM
+      TFile.WriteAllText(TempFile, LayoutToJson(Layout), TEncoding.UTF8);
+      Assert.IsTrue(TFile.Exists(TempFile), 'UTF-8+BOM layout file should be created');
+
+      LoadedLayout := LoadLayoutFromFile(TempFile);
+      try
+        Assert.AreEqual(Layout.LayoutID, LoadedLayout.LayoutID);
+        Assert.AreEqual('क', LoadedLayout.DirectMap['k']);
+      finally
+        LoadedLayout.Free;
+      end;
+    finally
+      if TFile.Exists(TempFile) then
+        TFile.Delete(TempFile);
+    end;
+  finally
+    Layout.Free;
+  end;
+end;
+
+procedure TLayoutJsonTests.LoadLayoutFromFile_UTF8_NoBOM_Works;
+var
+  TempFile: string;
+  Layout: TKeyboardLayout;
+  LoadedLayout: TKeyboardLayout;
+  Utf8NoBOM: TUTF8Encoding;
+begin
+  Layout := CreateTestLayout;
+  try
+    TempFile := TPath.Combine(TPath.GetTempPath, 'vittix_test_utf8nobom_' + TPath.GetRandomFileName + '.json');
+    try
+      // Write as UTF-8 without BOM
+      Utf8NoBOM := TUTF8Encoding.Create(False);
+      try
+        TFile.WriteAllText(TempFile, LayoutToJson(Layout), Utf8NoBOM);
+      finally
+        Utf8NoBOM.Free;
+      end;
+      Assert.IsTrue(TFile.Exists(TempFile), 'UTF-8 no-BOM layout file should be created');
+
+      LoadedLayout := LoadLayoutFromFile(TempFile);
+      try
+        Assert.AreEqual(Layout.LayoutID, LoadedLayout.LayoutID);
+        Assert.AreEqual('क', LoadedLayout.DirectMap['k']);
       finally
         LoadedLayout.Free;
       end;

@@ -261,11 +261,54 @@ end;
 function LoadLayoutFromFile(const FileName: string): TKeyboardLayout;
 var
   JSONText: string;
+  Stream: TFileStream;
+  Bytes: TBytes;
+  Encoding: TEncoding;
+  Preamble: TBytes;
 begin
   if not FileExists(FileName) then
     raise Exception.Create('Layout file not found: ' + FileName);
 
-  JSONText := Trim(TFile.ReadAllText(FileName, TEncoding.UTF8));
+  Stream := TFileStream.Create(FileName, fmOpenRead or fmShareDenyWrite);
+  try
+    SetLength(Bytes, Stream.Size);
+    if Stream.Size > 0 then
+      Stream.ReadBuffer(Bytes[0], Stream.Size);
+  finally
+    Stream.Free;
+  end;
+
+  if Length(Bytes) = 0 then
+    raise Exception.Create('Layout file is empty');
+
+  Encoding := TEncoding.UTF8;
+  Preamble := Encoding.GetPreamble;
+  if (Length(Bytes) >= Length(Preamble)) and
+     (CompareMem(@Bytes[0], @Preamble[0], Length(Preamble))) then
+  begin
+    // UTF-8 BOM present
+    Encoding := TEncoding.UTF8;
+  end
+  else
+  begin
+    Preamble := TEncoding.Unicode.GetPreamble; // UTF-16LE = FF FE
+    if (Length(Bytes) >= Length(Preamble)) and
+       (CompareMem(@Bytes[0], @Preamble[0], Length(Preamble))) then
+    begin
+      Encoding := TEncoding.Unicode; // UTF-16LE
+    end
+    else
+    begin
+      Preamble := TEncoding.BigEndianUnicode.GetPreamble; // UTF-16BE = FE FF
+      if (Length(Bytes) >= Length(Preamble)) and
+         (CompareMem(@Bytes[0], @Preamble[0], Length(Preamble))) then
+      begin
+        Encoding := TEncoding.BigEndianUnicode; // UTF-16BE
+      end;
+    end;
+  end;
+
+  JSONText := Trim(Encoding.GetString(Bytes));
   if JSONText = '' then
     raise Exception.Create('Layout file is empty');
 
