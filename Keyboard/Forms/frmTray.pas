@@ -520,8 +520,14 @@ begin
   ToggleHotkey := Trim(GAppSettings.GetToggleHotkeyText);
   if ToggleHotkey <> '' then
   begin
-    GAppSettings.ParseHotkey(ToggleHotkey, Mods, VK);
-    if not RegisterHotKey(Handle, HOTKEY_ID_TOGGLE, Mods, VK) then
+    if not GAppSettings.ParseHotkey(ToggleHotkey, Mods, VK) then
+      MessageBox(
+        Handle,
+        PChar('Invalid hotkey configuration: ' + ToggleHotkey),
+        'Vittix Indic Keyboard',
+        MB_ICONWARNING or MB_OK
+      )
+    else if not RegisterHotKey(Handle, HOTKEY_ID_TOGGLE, Mods, VK) then
       MessageBox(
         Handle,
         PChar('Hotkey already in use: ' + ToggleHotkey),
@@ -536,8 +542,14 @@ begin
 
   if ActionHotkey <> '' then
   begin
-    GAppSettings.ParseHotkey(ActionHotkey, Mods, VK);
-    if not RegisterHotKey(Handle, HOTKEY_ID_ACTION, Mods, VK) then
+    if not GAppSettings.ParseHotkey(ActionHotkey, Mods, VK) then
+      MessageBox(
+        Handle,
+        PChar('Invalid hotkey configuration: ' + ActionHotkey),
+        'Vittix Indic Keyboard',
+        MB_ICONWARNING or MB_OK
+      )
+    else if not RegisterHotKey(Handle, HOTKEY_ID_ACTION, Mods, VK) then
       MessageBox(
         Handle,
         PChar('Action hotkey already in use: ' + ActionHotkey),

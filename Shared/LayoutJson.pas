@@ -175,6 +175,8 @@ begin
       if Assigned(Obj) then
         for Pair in Obj do
         begin
+          if Result.PrebaseMap.ContainsKey(Pair.JsonString.Value) then
+            raise Exception.CreateFmt('Duplicate key in layout JSON prebase map: %s', [Pair.JsonString.Value]);
           Item := Pair.JsonValue as TJSONObject;
           KeyMap.Key := Item.GetValue<string>('key', '');
           KeyMap.Glyph := Item.GetValue<string>('glyph', '');
@@ -204,6 +206,8 @@ begin
       if Assigned(Obj) then
         for Pair in Obj do
         begin
+          if Result.Modifiers.ContainsKey(Pair.JsonString.Value) then
+            raise Exception.CreateFmt('Duplicate key in layout JSON modifiers map: %s', [Pair.JsonString.Value]);
           Item := Pair.JsonValue as TJSONObject;
           KeyMap.Key := Item.GetValue<string>('key', '');
           KeyMap.Glyph := Item.GetValue<string>('glyph', '');

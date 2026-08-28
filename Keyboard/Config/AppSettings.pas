@@ -50,8 +50,8 @@ type
     procedure Save;
     procedure SaveDefaultLayoutID(const ALayoutID: string);
     function GetToggleHotkeyText: string;
-    procedure ParseHotkey(const HotkeyText: string; out Modifiers: UINT;
-      out VirtualKey: UINT);
+     function ParseHotkey(const HotkeyText: string; out Modifiers: UINT;
+       out VirtualKey: UINT): Boolean;
   end;
 
 var
@@ -132,8 +132,8 @@ begin
     Result := 'Ctrl+Alt+K';
 end;
 
-procedure TAppSettings.ParseHotkey(const HotkeyText: string; out Modifiers: UINT;
-  out VirtualKey: UINT);
+function TAppSettings.ParseHotkey(const HotkeyText: string; out Modifiers: UINT;
+  out VirtualKey: UINT): Boolean;
 var
   Parts: TArray<string>;
   P, Part: string;
@@ -167,9 +167,7 @@ begin
     end;
   end;
 
-  // SAFETY FALLBACK
-  if VirtualKey = 0 then
-    VirtualKey := Ord('K');
+  Result := VirtualKey <> 0;
 end;
 
 initialization

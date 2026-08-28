@@ -61,7 +61,28 @@ var
 begin
   Result := '';
 
-  GetKeyboardState(KeyboardState);
+  FillChar(KeyboardState, SizeOf(KeyboardState), 0);
+
+  if GetAsyncKeyState(VK_SHIFT) < 0 then
+    KeyboardState[VK_SHIFT] := $80;
+  if GetAsyncKeyState(VK_LSHIFT) < 0 then
+    KeyboardState[VK_LSHIFT] := $80;
+  if GetAsyncKeyState(VK_RSHIFT) < 0 then
+    KeyboardState[VK_RSHIFT] := $80;
+  if GetAsyncKeyState(VK_CONTROL) < 0 then
+    KeyboardState[VK_CONTROL] := $80;
+  if GetAsyncKeyState(VK_LCONTROL) < 0 then
+    KeyboardState[VK_LCONTROL] := $80;
+  if GetAsyncKeyState(VK_RCONTROL) < 0 then
+    KeyboardState[VK_RCONTROL] := $80;
+  if GetAsyncKeyState(VK_MENU) < 0 then
+    KeyboardState[VK_MENU] := $80;
+  if GetAsyncKeyState(VK_LMENU) < 0 then
+    KeyboardState[VK_LMENU] := $80;
+  if GetAsyncKeyState(VK_RMENU) < 0 then
+    KeyboardState[VK_RMENU] := $80;
+  if GetKeyState(VK_CAPITAL) > 0 then
+    KeyboardState[VK_CAPITAL] := 1;
 
   Len := ToUnicode(
     vkCode,

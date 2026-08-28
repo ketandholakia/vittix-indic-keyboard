@@ -6,6 +6,7 @@ uses
   DUnitX.TestFramework,
   System.SysUtils,
   System.IOUtils,
+  System.JSON,
   LayoutModel,
   LayoutJson;
 
@@ -33,6 +34,12 @@ type
 
     [Test]
     procedure LoadLayoutFromFile_UTF8_NoBOM_Works;
+
+    [Test]
+    procedure LayoutFromJson_DuplicatePrebaseKey_RaisesException;
+
+    [Test]
+    procedure LayoutFromJson_DuplicateModifierKey_RaisesException;
   end;
 
 implementation
@@ -262,6 +269,104 @@ begin
   finally
     Layout.Free;
   end;
+end;
+
+procedure TLayoutJsonTests.LayoutFromJson_DuplicatePrebaseKey_RaisesException;
+var
+  Root, PrebaseObj, KeyMapObj, KeyMapObj2: TJSONObject;
+  JsonText: string;
+begin
+  Root := TJSONObject.Create;
+  try
+    Root.AddPair('layout_id', 'dup-test');
+    Root.AddPair('name', 'Dup Test');
+    Root.AddPair('script', 'Devanagari');
+    Root.AddPair('encoding', 'unicode');
+    Root.AddPair('font_family', 'Nirmala UI');
+    Root.AddPair('layout_type', 'phonetic');
+    Root.AddPair('direct', TJSONObject.Create);
+    Root.AddPair('postbase', TJSONObject.Create);
+    Root.AddPair('modifiers', TJSONObject.Create);
+    Root.AddPair('sequences', TJSONObject.Create);
+    Root.AddPair('extra_maps', TJSONObject.Create);
+
+    PrebaseObj := TJSONObject.Create;
+    KeyMapObj := TJSONObject.Create;
+    KeyMapObj.AddPair('key', 'k');
+    KeyMapObj.AddPair('glyph', '\u0915');
+    KeyMapObj.AddPair('map_type', 'prebase');
+    PrebaseObj.AddPair('dup', KeyMapObj);
+
+    KeyMapObj2 := TJSONObject.Create;
+    KeyMapObj2.AddPair('key', 'k');
+    KeyMapObj2.AddPair('glyph', '\u0915');
+    KeyMapObj2.AddPair('map_type', 'prebase');
+    PrebaseObj.AddPair('dup', KeyMapObj2);
+
+    Root.AddPair('prebase', PrebaseObj);
+
+    JsonText := Root.ToJSON;
+  finally
+    Root.Free;
+  end;
+
+  Assert.WillRaise(
+    procedure
+    begin
+      LayoutFromJson(JsonText);
+    end,
+    Exception,
+    'Duplicate prebase key should raise exception'
+  );
+end;
+
+procedure TLayoutJsonTests.LayoutFromJson_DuplicateModifierKey_RaisesException;
+var
+  Root, ModifiersObj, KeyMapObj, KeyMapObj2: TJSONObject;
+  JsonText: string;
+begin
+  Root := TJSONObject.Create;
+  try
+    Root.AddPair('layout_id', 'dup-mod');
+    Root.AddPair('name', 'Dup Mod');
+    Root.AddPair('script', 'Devanagari');
+    Root.AddPair('encoding', 'unicode');
+    Root.AddPair('font_family', 'Nirmala UI');
+    Root.AddPair('layout_type', 'phonetic');
+    Root.AddPair('direct', TJSONObject.Create);
+    Root.AddPair('prebase', TJSONObject.Create);
+    Root.AddPair('postbase', TJSONObject.Create);
+    Root.AddPair('sequences', TJSONObject.Create);
+    Root.AddPair('extra_maps', TJSONObject.Create);
+
+    ModifiersObj := TJSONObject.Create;
+    KeyMapObj := TJSONObject.Create;
+    KeyMapObj.AddPair('key', 'h');
+    KeyMapObj.AddPair('glyph', '\u0942');
+    KeyMapObj.AddPair('map_type', 'modifier');
+    ModifiersObj.AddPair('dup', KeyMapObj);
+
+    KeyMapObj2 := TJSONObject.Create;
+    KeyMapObj2.AddPair('key', 'h');
+    KeyMapObj2.AddPair('glyph', '\u0942');
+    KeyMapObj2.AddPair('map_type', 'modifier');
+    ModifiersObj.AddPair('dup', KeyMapObj2);
+
+    Root.AddPair('modifiers', ModifiersObj);
+
+    JsonText := Root.ToJSON;
+  finally
+    Root.Free;
+  end;
+
+  Assert.WillRaise(
+    procedure
+    begin
+      LayoutFromJson(JsonText);
+    end,
+    Exception,
+    'Duplicate modifier key should raise exception'
+  );
 end;
 
 initialization

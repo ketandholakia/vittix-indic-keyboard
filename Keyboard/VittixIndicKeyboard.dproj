@@ -138,7 +138,6 @@
             <Form>frmTray</Form>
         </DCCReference>
         <DCCReference Include="Core\KeyboardHook.pas"/>
-        <DCCReference Include="Core\KeyTranslator.pas"/>
         <DCCReference Include="Core\ShreeLipi.Engine.pas"/>
         <DCCReference Include="Core\EngineState.pas"/>
 <DCCReference Include="Layout\LayoutLoader.pas"/>
