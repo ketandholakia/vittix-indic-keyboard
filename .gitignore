@@ -38,6 +38,12 @@
 #iOSDevice64/
 #Linux64/
 
+# Build output
+build/Win32/
+
+# Test build logs
+Tests/*.log
+
 # Delphi compiler-generated binaries (safe to delete)
 *.exe
 *.dll
