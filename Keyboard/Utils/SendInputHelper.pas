@@ -4,7 +4,8 @@ interface
 
 uses
   Winapi.Windows,
-  System.SysUtils;
+  System.SysUtils,
+  Logger;
 
 { --------------------------------------------------
   Low-level keyboard output helpers
@@ -16,16 +17,44 @@ procedure SendUnicodeChar(AChar: WideChar);
 procedure SendBackspace(Count: Integer = 1);
 procedure SendVirtualKey(VK: Word);
 
+{ --------------------------------------------------
+  Injection status
+  SendInput calls can fail (most notably UIPI blocks a target
+  running at a higher integrity level than us). Consumers use
+  this to fail open rather than eat the user's keystrokes.
+-------------------------------------------------- }
+function InjectionOK: Boolean;
+procedure ResetInjectionStatus;
+
 implementation
+
+var
+  gInjectionOK: Boolean = True;
+
+function InjectionOK: Boolean;
+begin
+  Result := gInjectionOK;
+end;
+
+procedure ResetInjectionStatus;
+begin
+  gInjectionOK := True;
+end;
+
+procedure MarkInjectionFailure(const What: string);
+begin
+  gInjectionOK := False;
+  LogError(What + ': SendInput reported 0 (blocked?); interception will pass keys through');
+end;
 
 { --------------------------------------------------
   Internal helper
 -------------------------------------------------- }
 
-procedure SendKeyInput(
+function SendKeyInput(
   AScanCode: Word;
   AFlags: DWORD
-);
+): Cardinal;
 var
   Inp: TInput;
 begin
@@ -33,7 +62,7 @@ begin
   Inp.Itype := INPUT_KEYBOARD;
   Inp.ki.wScan := AScanCode;
   Inp.ki.dwFlags := AFlags or KEYEVENTF_UNICODE;
-  SendInput(1, Inp, SizeOf(Inp));
+  Result := SendInput(1, Inp, SizeOf(Inp));
 end;
 
 { --------------------------------------------------
@@ -43,10 +72,16 @@ end;
 procedure SendUnicodeChar(AChar: WideChar);
 begin
   // key down
-  SendKeyInput(Ord(AChar), 0);
+  if SendKeyInput(Ord(AChar), 0) = 0 then
+    MarkInjectionFailure('SendUnicodeChar (down)')
+  else
+    gInjectionOK := True;
 
   // key up
-  SendKeyInput(Ord(AChar), KEYEVENTF_KEYUP);
+  if SendKeyInput(Ord(AChar), KEYEVENTF_KEYUP) = 0 then
+    MarkInjectionFailure('SendUnicodeChar (up)')
+  else
+    gInjectionOK := True;
 end;
 
 { --------------------------------------------------
@@ -78,7 +113,10 @@ begin
     Inputs[I * 2 + 1].ki.dwFlags := KEYEVENTF_UNICODE or KEYEVENTF_KEYUP;
   end;
 
-  SendInput(Len * 2, Inputs[0], SizeOf(TInput));
+  if SendInput(Len * 2, Inputs[0], SizeOf(TInput)) = 0 then
+    MarkInjectionFailure('SendUnicodeText')
+  else
+    gInjectionOK := True;
 end;
 
 { --------------------------------------------------
@@ -89,17 +127,24 @@ procedure SendBackspace(Count: Integer);
 var
   I: Integer;
   Inp: TInput;
+  Ok: Boolean;
 begin
+  Ok := True;
   for I := 1 to Count do
   begin
     ZeroMemory(@Inp, SizeOf(Inp));
     Inp.Itype := INPUT_KEYBOARD;
     Inp.ki.wVk := VK_BACK;
-    SendInput(1, Inp, SizeOf(Inp));
+    Ok := (SendInput(1, Inp, SizeOf(Inp)) <> 0) and Ok;
 
     Inp.ki.dwFlags := KEYEVENTF_KEYUP;
-    SendInput(1, Inp, SizeOf(Inp));
+    Ok := (SendInput(1, Inp, SizeOf(Inp)) <> 0) and Ok;
   end;
+
+  if Ok then
+    gInjectionOK := True
+  else
+    MarkInjectionFailure('SendBackspace');
 end;
 
 { --------------------------------------------------
@@ -113,10 +158,16 @@ begin
   ZeroMemory(@Inp, SizeOf(Inp));
   Inp.Itype := INPUT_KEYBOARD;
   Inp.ki.wVk := VK;
-  SendInput(1, Inp, SizeOf(Inp));
+  if SendInput(1, Inp, SizeOf(Inp)) = 0 then
+    MarkInjectionFailure('SendVirtualKey (down)')
+  else
+    gInjectionOK := True;
 
   Inp.ki.dwFlags := KEYEVENTF_KEYUP;
-  SendInput(1, Inp, SizeOf(Inp));
+  if SendInput(1, Inp, SizeOf(Inp)) = 0 then
+    MarkInjectionFailure('SendVirtualKey (up)')
+  else
+    gInjectionOK := True;
 end;
 
 end.

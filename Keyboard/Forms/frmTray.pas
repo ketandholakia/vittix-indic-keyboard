@@ -28,7 +28,9 @@ uses
   WinStartup,
   Logger,
 
-  frmOnScreenKeyboard, System.ImageList;
+  frmOnScreenKeyboard,
+  SendInputHelper,
+  System.ImageList;
 
 type
   TfrmTray = class(TForm)
@@ -210,6 +212,9 @@ end;
 procedure TfrmTray.miEnableClick(Sender: TObject);
 begin
   SetEngineEnabled(not EngineEnabled);
+  // If injection was failing (e.g. targeting an elevated app), re-enabling the
+  // engine gives it a fresh chance instead of staying stuck in fail-open.
+  ResetInjectionStatus;
   miEnable.Checked := EngineEnabled;
   GAppSettings.EnableKeyboard := EngineEnabled;
   GAppSettings.Save;

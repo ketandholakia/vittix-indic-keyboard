@@ -27,6 +27,34 @@ begin
   ActiveLayout := ALayout;
   SetEngineHasActiveLayout(ALayout <> nil);
   ResetEngineState;
+  ResetInjectionStatus;
+end;
+
+{ --------------------------------------------------
+  Emit any pending pre-base matra / reph ra-glyph that was
+  consumed but not yet placed, BEFORE we commit a real glyph or
+  fall back. Without this the hook has already swallowed the trigger
+  key, so dropping this state loses the matra/ra entirely.
+-------------------------------------------------- }
+procedure FlushPendingPreludes;
+var
+  ModRule: TKeyMapping;
+begin
+  if ActiveLayout = nil then
+    Exit;
+
+  if gEngineState.PendingReph then
+  begin
+    if ActiveLayout.Modifiers.TryGetValue('reph', ModRule) then
+      SendUnicodeText(ModRule.Glyph);
+    gEngineState.PendingReph := False;
+  end;
+
+  if gEngineState.PendingPrebase <> '' then
+  begin
+    SendUnicodeText(gEngineState.PendingPrebase);
+    gEngineState.PendingPrebase := '';
+  end;
 end;
 
 { --------------------------------------------------
@@ -90,40 +118,10 @@ begin
       Exit;
     end;
 
-    { ---------------- SEQUENCES / CONJUNCTS ---------------- }
-    gEngineState.KeyBuffer := gEngineState.KeyBuffer + AKey;
-
-    if ActiveLayout.Sequences.TryGetValue(gEngineState.KeyBuffer, OutGlyph) then
-    begin
-      SendUnicodeText(OutGlyph);
-      gEngineState.KeyBuffer := '';
-      gEngineState.CurrentCluster := OutGlyph;
-      Exit;
-    end
-    else if Length(gEngineState.KeyBuffer) > MAX_SEQUENCE_KEY_LEN - 1 then
-      gEngineState.KeyBuffer := AKey;
-
     { ---------------- DIRECT CONSONANT ---------------- }
     if ActiveLayout.DirectMap.TryGetValue(AKey, OutGlyph) then
     begin
-      // Reph must come first
-      if gEngineState.PendingReph then
-      begin
-        if ActiveLayout.Modifiers.TryGetValue('reph', ModRule) then
-          SendUnicodeText(ModRule.Glyph);
-
-        gEngineState.PendingReph := False;
-      end;
-
-      // Pre-base matra before consonant
-      if gEngineState.PendingPrebase <> '' then
-      begin
-        SendUnicodeText(gEngineState.PendingPrebase);
-        gEngineState.PendingPrebase := '';
-      end;
-
-      // This key has already resolved; do not let it leak into a later sequence match.
-      gEngineState.KeyBuffer := '';
+      FlushPendingPreludes;
       SendUnicodeText(OutGlyph);
       gEngineState.CurrentCluster := OutGlyph;
       Exit;
@@ -132,8 +130,7 @@ begin
     { ---------------- POSTBASE MATRA ---------------- }
     if ActiveLayout.PostbaseMap.TryGetValue(AKey, OutGlyph) then
     begin
-      // This key has already resolved; do not let it leak into a later sequence match.
-      gEngineState.KeyBuffer := '';
+      FlushPendingPreludes;
       SendUnicodeText(OutGlyph);
       Exit;
     end;
@@ -143,14 +140,16 @@ begin
     begin
       if AKey = ModRule.Key then
       begin
-        // This key has already resolved; do not let it leak into a later sequence match.
-        gEngineState.KeyBuffer := '';
+        FlushPendingPreludes;
         SendUnicodeText(ModRule.Glyph);
         Exit;
       end;
     end;
 
     { ---------------- FALLBACK (English / Symbols) ---------------- }
+    // Place any consumed prebase/reph before sending the literal key; the hook
+    // has already eaten the trigger key, so dropping it here would lose input.
+    FlushPendingPreludes;
     ResetEngineState;
     SendUnicodeText(AKey);
   except

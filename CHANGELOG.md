@@ -1,5 +1,10 @@
 ## Unreleased
 
+- Removed the dead multi-key `sequences` runtime path. It never fired (DirectMap resolved and cleared the buffer before a sequence could accumulate) and fundamentally conflicted with the reph mechanism (both key off `R`), so a documented sequence like `kS` silently produced two glyphs instead of the conjunct. Conjunct input now flows exclusively through the DirectMap/reph/halant path. `MAX_SEQUENCE_KEY_LEN` is retained so the editor/validator still reject overlong sequence keys.
+- Fixed keystroke loss on the fallback path: a pending pre-base matra or reph that the hook had already consumed is now flushed before the engine sends the literal key (and before postbase/halant commits), instead of being silently discarded by `ResetEngineState`.
+- Fixed modifier lag in `IsModifierComboActive` by reading physical state via `GetAsyncKeyState` (the same fix previously applied to `VKToChar`), so Ctrl/Alt/Win app shortcuts are no longer intermittently eaten by the hook under fast typing.
+- Wrapped the low-level keyboard hook callback in a try/except so an exception cannot return an uninitialized `LRESULT` to Windows (which previously risked doubled or eaten keystrokes).
+- Added injection-status tracking to `SendInput`: when a `SendInput` call reports 0 (e.g. UIPI blocks a target at a higher integrity level), the hook fails open and passes keys through instead of silently eating them; the status resets on engine toggle or layout change so interception recovers once injection succeeds again.
 - Fixed stale engine key buffers, shared the sequence-length limit with the editor, and hardened layout JSON parsing so malformed input fails cleanly.
 - Changed the app whitelist to fail closed when empty, so an empty whitelist no longer allows every foreground app; added warnings in the settings and tray UI before saving an empty allowed-process list.
 - Added editor validation for overlong sequence keys so layouts cannot define sequences the runtime engine will never match.

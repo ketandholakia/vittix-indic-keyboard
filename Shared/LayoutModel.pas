@@ -7,6 +7,10 @@ uses
   System.Generics.Collections;
 
 const
+  // Maximum permitted length of a multi-key sequence key. The runtime engine no
+  // longer matches multi-key sequences (legacy feature that never fired and
+  // conflicted with the reph mechanism); the constant is retained so the editor
+  // and validator keep authoring overlong sequence keys out of layout files.
   MAX_SEQUENCE_KEY_LEN = 4;
 
 type

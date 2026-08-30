@@ -145,11 +145,15 @@ end;
 
 function IsModifierComboActive: Boolean;
 begin
+  // Use GetAsyncKeyState (physical state), matching VKToChar. GetKeyState reads
+  // this thread's message queue, which an LL hook does not receive in step with
+  // the current keystroke, so modifier state can lag and a Ctrl/Alt/Win shortcut
+  // can be eaten by the hook (wrong-glyph injection instead of the shortcut).
   Result :=
-    (GetKeyState(VK_CONTROL) < 0) or
-    (GetKeyState(VK_MENU) < 0) or
-    (GetKeyState(VK_LWIN) < 0) or
-    (GetKeyState(VK_RWIN) < 0);
+    (GetAsyncKeyState(VK_CONTROL) < 0) or
+    (GetAsyncKeyState(VK_MENU) < 0) or
+    (GetAsyncKeyState(VK_LWIN) < 0) or
+    (GetAsyncKeyState(VK_RWIN) < 0);
 end;
 
 function IsProcessAllowed(const ProcessName: string): Boolean;
@@ -193,6 +197,8 @@ begin
 
   KBD := PKBDLLHookStruct(lParam);
 
+  try
+
   // Never reprocess our own (or anyone else's) synthetic key events. Every
   // key we inject below (SendVirtualKey/SendBackspace/SendUnicodeText) comes
   // back through this same global hook; without this check, injecting a
@@ -210,6 +216,12 @@ begin
     Exit(CallNextHookEx(KBHook, nCode, wParam, lParam));
 
   if not IsTargetAppActive then
+    Exit(CallNextHookEx(KBHook, nCode, wParam, lParam));
+
+  // Fail open: if our own injection is failing (e.g. UIPI blocks targeting a
+  // window at a higher integrity level), stop consuming keys so the user's
+  // typing is not silently eaten.
+  if not InjectionOK then
     Exit(CallNextHookEx(KBHook, nCode, wParam, lParam));
 
   if (wParam <> WM_KEYDOWN) and (wParam <> WM_SYSKEYDOWN) then
@@ -275,6 +287,13 @@ begin
   end;
 
   Result := CallNextHookEx(KBHook, nCode, wParam, lParam);
+  except
+    on E: Exception do
+    begin
+      LogError('LowLevelKeyboardProc failed: ' + E.Message);
+      Result := CallNextHookEx(KBHook, nCode, wParam, lParam);
+    end;
+  end;
 end;
 
 { --------------------------------------------------
