@@ -137,14 +137,25 @@ var
   MapName: string;
   ExtraMap: TDictionary<string, string>;
   ExtraPair: TJSONPair;
+  Parsed: TJSONValue;
 begin
+  // Parse BEFORE allocating Result so a malformed/empty root never leaks a
+  // partially built layout. "ParseJSONValue(...) as TJSONObject" would raise
+  // EInvalidCast when parse returns nil, defeating the friendly error below.
+  Parsed := TJSONObject.ParseJSONValue(JSONText);
+  if not Assigned(Parsed) then
+    raise Exception.Create('Invalid layout JSON: root object could not be parsed');
+
+  if not (Parsed is TJSONObject) then
+  begin
+    Parsed.Free;
+    raise Exception.Create('Invalid layout JSON: root must be a JSON object');
+  end;
+
+  JSON := TJSONObject(Parsed);
   Result := TKeyboardLayout.Create;
-  JSON := TJSONObject.ParseJSONValue(JSONText) as TJSONObject;
   try
     try
-      if not Assigned(JSON) then
-        raise Exception.Create('Invalid layout JSON: root object could not be parsed');
-
       Result.LayoutID   := JSON.GetValue<string>('layout_id', '');
       Result.Name       := JSON.GetValue<string>('name', '');
       Result.Script     := JSON.GetValue<string>('script', '');
@@ -165,10 +176,14 @@ begin
       Obj := JSON.GetValue('direct') as TJSONObject;
       if Assigned(Obj) then
         for Pair in Obj do
+        begin
+          if Result.DirectMap.ContainsKey(Pair.JsonString.Value) then
+            raise Exception.CreateFmt('Duplicate key in layout JSON direct map: %s', [Pair.JsonString.Value]);
           Result.DirectMap.Add(
             Pair.JsonString.Value,
             ReadScalarJsonValue(Pair.JsonValue)
           );
+        end;
 
       // PrebaseMap (generic)
       Obj := JSON.GetValue('prebase') as TJSONObject;
@@ -196,10 +211,14 @@ begin
       Obj := JSON.GetValue('postbase') as TJSONObject;
       if Assigned(Obj) then
         for Pair in Obj do
+        begin
+          if Result.PostbaseMap.ContainsKey(Pair.JsonString.Value) then
+            raise Exception.CreateFmt('Duplicate key in layout JSON postbase map: %s', [Pair.JsonString.Value]);
           Result.PostbaseMap.Add(
             Pair.JsonString.Value,
             ReadScalarJsonValue(Pair.JsonValue)
           );
+        end;
 
       // Modifiers (generic)
       Obj := JSON.GetValue('modifiers') as TJSONObject;
@@ -227,10 +246,14 @@ begin
       Obj := JSON.GetValue('sequences') as TJSONObject;
       if Assigned(Obj) then
         for Pair in Obj do
+        begin
+          if Result.Sequences.ContainsKey(Pair.JsonString.Value) then
+            raise Exception.CreateFmt('Duplicate key in layout JSON sequences map: %s', [Pair.JsonString.Value]);
           Result.Sequences.Add(
             Pair.JsonString.Value,
             ReadScalarJsonValue(Pair.JsonValue)
           );
+        end;
 
       // ExtraMaps (optional)
       Obj := JSON.GetValue('extra_maps') as TJSONObject;
@@ -241,7 +264,15 @@ begin
           MetaObj := Pair.JsonValue as TJSONObject;
           ExtraMap := TDictionary<string, string>.Create;
           for ExtraPair in MetaObj do
+          begin
+            if ExtraMap.ContainsKey(ExtraPair.JsonString.Value) then
+            begin
+              ExtraMap.Free;
+              raise Exception.CreateFmt('Duplicate key in layout JSON extra_maps.%s map: %s',
+                [MapName, ExtraPair.JsonString.Value]);
+            end;
             ExtraMap.Add(ExtraPair.JsonString.Value, ReadScalarJsonValue(ExtraPair.JsonValue));
+          end;
           Result.ExtraMaps.Add(MapName, ExtraMap);
         end;
     except

@@ -60,8 +60,28 @@ var
 implementation
 
 constructor TAppSettings.Create;
+var
+  AppDataDir: string;
+  LegacyPath: string;
 begin
-  FIniPath := ExtractFilePath(Application.ExeName) + 'settings.ini';
+  // Store settings under the per-user application-data folder so they are
+  // always writable. The previous exe-relative path silently fails (and gets
+  // virtualization-redirected) when the app is installed to Program Files.
+  AppDataDir := TPath.Combine(TPath.GetHomePath, 'Vittix');
+  ForceDirectories(AppDataDir);
+  FIniPath := TPath.Combine(AppDataDir, 'settings.ini');
+
+  // Migrate an existing exe-relative settings.ini created by older builds.
+  LegacyPath := ExtractFilePath(Application.ExeName) + 'settings.ini';
+  if (not TFile.Exists(FIniPath)) and TFile.Exists(LegacyPath) then
+  begin
+    try
+      TFile.Copy(LegacyPath, FIniPath, False);
+    except
+      // Ignore migration failures; just start fresh.
+    end;
+  end;
+
   FIni := TIniFile.Create(FIniPath);
 end;
 
@@ -137,6 +157,7 @@ function TAppSettings.ParseHotkey(const HotkeyText: string; out Modifiers: UINT;
 var
   Parts: TArray<string>;
   P, Part: string;
+  FNum: Integer;
 begin
   Modifiers := 0;
   VirtualKey := 0;
@@ -160,14 +181,24 @@ begin
       // ---- MAIN KEY ----
       if Part = 'SPACE' then
         VirtualKey := VK_SPACE
-      else if Part.StartsWith('F') then
-        VirtualKey := VK_F1 + StrToIntDef(Copy(Part, 2), 1) - 1
+      else if (Length(Part) >= 2) and (Part[1] = 'F') then
+      begin
+        // Strict F-key parsing: 'F' must be followed by 1..24. Legacies such as
+        // 'Ctrl+F' or 'Ctrl+Foo' must NOT silently bind to F1.
+        if (not TryStrToInt(Copy(Part, 2), FNum)) or (FNum < 1) or (FNum > 24) then
+          Exit(False);
+        VirtualKey := VK_F1 + FNum - 1;
+      end
       else if Length(Part) = 1 then
-        VirtualKey := Ord(Part[1]);
+        VirtualKey := Ord(Part[1])
+      else
+        Exit(False); // unrecognized token
     end;
   end;
 
-  Result := VirtualKey <> 0;
+  // Refuse unmodified hotkeys: a global register of a bare letter (e.g. 'K')
+  // would steal that key system-wide and break typing everywhere.
+  Result := (VirtualKey <> 0) and (Modifiers <> 0);
 end;
 
 initialization

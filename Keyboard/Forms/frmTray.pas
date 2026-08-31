@@ -157,8 +157,6 @@ begin
       'Vittix Indic Keyboard',
       MB_ICONWARNING or MB_OK
     );
-  InstallKeyboardHook;
-
   // Load layouts
   gLayoutManager.Initialize(GAppSettings.LayoutsPath);
 
@@ -172,6 +170,8 @@ begin
   end;
 
   BuildLayoutMenu;
+
+  InstallKeyboardHook;
 
   RegisterConfiguredHotkeys;
 
@@ -532,7 +532,7 @@ begin
         'Vittix Indic Keyboard',
         MB_ICONWARNING or MB_OK
       )
-    else if not RegisterHotKey(Handle, HOTKEY_ID_TOGGLE, Mods, VK) then
+    else if not RegisterHotKey(Handle, HOTKEY_ID_TOGGLE, Mods or MOD_NOREPEAT, VK) then
       MessageBox(
         Handle,
         PChar('Hotkey already in use: ' + ToggleHotkey),
@@ -554,7 +554,7 @@ begin
         'Vittix Indic Keyboard',
         MB_ICONWARNING or MB_OK
       )
-    else if not RegisterHotKey(Handle, HOTKEY_ID_ACTION, Mods, VK) then
+    else if not RegisterHotKey(Handle, HOTKEY_ID_ACTION, Mods or MOD_NOREPEAT, VK) then
       MessageBox(
         Handle,
         PChar('Action hotkey already in use: ' + ActionHotkey),

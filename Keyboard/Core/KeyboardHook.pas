@@ -97,7 +97,22 @@ begin
   if Len = 1 then
     Result := WideBuf[0]
   else if Len > 1 then
-    SetString(Result, PWideChar(@WideBuf[0]), Len);
+    SetString(Result, PWideChar(@WideBuf[0]), Len)
+  else if Len < 0 then
+  begin
+    // This key is a dead key. ToUnicode mutated this thread's dead-key residue,
+    // which would corrupt the NEXT unrelated key's translation (composed
+    // accented char instead of the real mapping). Issue one throwaway call to
+    // clear the residue. The dead key itself is passed through (Result = '').
+    ToUnicode(
+      vkCode,
+      scanCode,
+      KeyboardState,
+      WideBuf,
+      Length(WideBuf),
+      0
+    );
+  end;
 end;
 
 function GetForegroundProcessName: string;
