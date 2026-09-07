@@ -19,10 +19,14 @@ type
     class function GetLayoutFiles: TArray<string>; static;
   public
     [Test]
-    [TestCase('devanagari_unicode_phonetic','D:\ketan\github\vittix-indic-keyboard\build\Win32\layouts\devnagari\devanagari_unicode_phonetic.json')]
-    [TestCase('krutidev_010','D:\ketan\github\vittix-indic-keyboard\build\Win32\layouts\devnagari\krutidev_010.json')]
-    [TestCase('gujarati_typewriter','D:\ketan\github\vittix-indic-keyboard\build\Win32\layouts\gujarati\gujarati_typewriter.json')]
-    [TestCase('press_custom_1','D:\ketan\github\vittix-indic-keyboard\layouts\custom\press_custom_1.json')]
+    [TestCase('krutidev_010','layouts\devnagari\krutidev_010.json')]
+    [TestCase('shreelipi_0708','layouts\devnagari\shreelipi_0708.json')]
+    [TestCase('remington','layouts\gujarati\remington.json')]
+    [TestCase('press_custom_1','layouts\custom\press_custom_1.json')]
+    [TestCase('hindi_phonetic','layouts\hindi\hindi_phonetic.json')]
+    [TestCase('hindi_inscript','layouts\hindi\hindi_inscript.json')]
+    [TestCase('gujarati_phonetic','layouts\gujarati\gujarati_phonetic.json')]
+    [TestCase('gujarati_inscript','layouts\gujarati\gujarati_inscript.json')]
     procedure LoadAndValidateLayout(const ALayoutFile: string);
 
     [Test]
@@ -52,10 +56,14 @@ implementation
 class function TRealLayoutTests.GetLayoutFiles: TArray<string>;
 begin
   Result := [
-    'D:\ketan\github\vittix-indic-keyboard\build\Win32\layouts\devnagari\devanagari_unicode_phonetic.json',
-    'D:\ketan\github\vittix-indic-keyboard\build\Win32\layouts\devnagari\krutidev_010.json',
-    'D:\ketan\github\vittix-indic-keyboard\build\Win32\layouts\gujarati\gujarati_typewriter.json',
-    'D:\ketan\github\vittix-indic-keyboard\layouts\custom\press_custom_1.json'
+    'layouts\devnagari\krutidev_010.json',
+    'layouts\devnagari\shreelipi_0708.json',
+    'layouts\gujarati\remington.json',
+    'layouts\custom\press_custom_1.json',
+    'layouts\hindi\hindi_phonetic.json',
+    'layouts\hindi\hindi_inscript.json',
+    'layouts\gujarati\gujarati_phonetic.json',
+    'layouts\gujarati\gujarati_inscript.json'
   ];
 end;
 
@@ -119,7 +127,7 @@ var
   KM: TKeyMapping;
 begin
   // Test that the devanagari layout has cross-map overlaps that should be allowed
-  Layout := LayoutJson.LoadLayoutFromFile('D:\ketan\github\vittix-indic-keyboard\build\Win32\layouts\devnagari\devanagari_unicode_phonetic.json');
+  Layout := LayoutJson.LoadLayoutFromFile('layouts\devnagari\krutidev_010.json');
   try
     // The layout has 'i' in prebase and potentially overlapping keys
     // With ACheckCrossMapDuplicates = False (default), this should pass

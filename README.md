@@ -40,6 +40,18 @@ Target applications are filtered via an internal whitelist, which can be modifie
 Layouts dictate the behavior of keys and sequence mappings.
 **Note on Sequences**: Multi-key sequences (e.g., legacy combinations) are currently deprecated and retained only for backward compatibility. Users are encouraged to utilize halant-based conjunct entry, which the runtime explicitly supports.
 
+## Example Unicode Layouts
+
+### Gujarati
+- Gujarati Phonetic Example: An English-key phonetic typing layout for users who are familiar with Latin keys. Output uses real Unicode characters. Example mappings: `a -> અ`, `k -> ક`.
+- Gujarati InScript: A positional standard layout producing real Unicode Gujarati characters.
+
+### Hindi
+- Hindi Phonetic Example: An English-key-to-Devanagari phonetic layout, using real Devanagari Unicode characters. Example mappings: `a -> अ`, `k -> क`.
+- Hindi InScript: A positional layout producing Unicode Devanagari characters.
+
+*Note: The InScript layouts are examples of positional mappings and should not be considered verified official government standards.*
+
 ## Known Limitations
 - Elevated targets (Run As Administrator) might reject keyboard injection if the keyboard is running as a standard user. In these cases, the engine correctly fails open and passes native keystrokes through.
 - Multi-key sequences are not executed by the runtime.

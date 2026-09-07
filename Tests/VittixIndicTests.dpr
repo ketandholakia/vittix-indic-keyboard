@@ -26,6 +26,7 @@ uses
   Tests.Shared.LayoutJson in 'Tests.Shared.LayoutJson.pas',
   Tests.Shared.LayoutModel in 'Tests.Shared.LayoutModel.pas',
   Tests.Layouts.RealLayouts in 'Tests.Layouts.RealLayouts.pas',
+  Tests.Layouts.Examples in 'Tests.Layouts.Examples.pas',
   Tests.Utils.Logger in 'Tests.Utils.Logger.pas',
   Tests.Engine.PendingState in 'Tests.Engine.PendingState.pas',
   Tests.Engine.OutputBoundary in 'Tests.Engine.OutputBoundary.pas',
