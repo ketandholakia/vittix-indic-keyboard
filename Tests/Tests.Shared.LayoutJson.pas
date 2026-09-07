@@ -71,6 +71,7 @@ begin
     JsonText := LayoutToJson(Layout);
     Assert.IsTrue(JsonText.Contains('test-roundtrip'), 'JSON should contain layout_id');
     Assert.IsTrue(JsonText.Contains('Roundtrip Test'), 'JSON should contain name');
+    Assert.IsTrue(JsonText.Contains('"version": "1.0"'), 'JSON should contain version');
 
     LoadedLayout := LayoutFromJson(JsonText);
     try
@@ -105,6 +106,7 @@ begin
   Layout := LayoutFromJson(ValidJson);
   try
     Assert.IsNotNull(Layout);
+    Assert.AreEqual('1.0', Layout.Version);
     Assert.AreEqual('json-test', Layout.LayoutID);
     Assert.AreEqual('JSON Test', Layout.Name);
     Assert.AreEqual('Gujarati', Layout.Script);

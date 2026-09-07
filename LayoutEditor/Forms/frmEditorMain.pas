@@ -1,4 +1,4 @@
-﻿unit frmEditorMain;
+unit frmEditorMain;
 
 interface
 
@@ -259,13 +259,13 @@ begin
   EnableGridEditing(grdDirect);
   EnableGridEditing(grdPrebase);
   EnableGridEditing(grdPostbase);
-  EnableGridEditing(grdSequences);
+  // Sequences are read-only and deprecated
   EnableGridEditing(grdModifiers);
 
   grdDirect.OnSetEditText := GridSetEditText;
   grdPrebase.OnSetEditText := GridSetEditText;
   grdPostbase.OnSetEditText := GridSetEditText;
-  grdSequences.OnSetEditText := GridSetEditText;
+  // grdSequences.OnSetEditText := GridSetEditText;
   grdModifiers.OnSetEditText := GridSetEditText;
 
   ComboBoxFonts.OnChange := ComboBoxFontsChange;
@@ -285,7 +285,7 @@ begin
   AddToolbarButton(pnlSearchDirect, '+ Add', 500, btnInspectorAddClick);
   AddToolbarButton(pnlSearchPrebase, '+ Add', 500, btnInspectorAddClick);
   AddToolbarButton(pnlSearchPostbase, '+ Add', 500, btnInspectorAddClick);
-  AddToolbarButton(pnlSearchSequences, '+ Add', 500, btnInspectorAddClick);
+  // Sequences do not get an Add button since they are deprecated
   AddToolbarButton(pnlSearchModifiers, '+ Add', 500, btnInspectorAddClick);
   // Populate script/language options
   ComboBoxScript.Items.Clear;

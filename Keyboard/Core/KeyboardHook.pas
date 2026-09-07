@@ -15,17 +15,64 @@ uses
 type
   TOnKeyChar = procedure(const AChar: string) of object;
 
+  // M2.2: hook-policy dependencies. Every field is a narrow replaceable seam;
+  // a nil field selects the production (Win32-backed) implementation. Tests
+  // install deterministic fakes so the consume/pass-through policy can be
+  // verified without a live foreground application, real keyboard state, or
+  // actual input injection (working rule #4).
+
+  // Snapshot of the physical modifier state needed by the policy and by the
+  // Unicode key conversion.
+  TKeyModifierState = record
+    ShiftDown: Boolean;    // VK_SHIFT / VK_LSHIFT / VK_RSHIFT
+    CtrlDown: Boolean;     // VK_CONTROL / VK_LCONTROL / VK_RCONTROL
+    AltDown: Boolean;      // VK_MENU / VK_LMENU / VK_RMENU
+    WinDown: Boolean;      // VK_LWIN / VK_RWIN
+    CapsLockOn: Boolean;   // VK_CAPITAL toggle state
+  end;
+
+  TGetForegroundProcessName = function: string;
+  TGetModifierState = function: TKeyModifierState;
+
+  // Unicode key conversion (where practical): production feeds ToUnicode from
+  // the modifier snapshot; tests substitute a deterministic mapping.
+  TVKToUnicode = function(VKCode: DWORD; ScanCode: DWORD;
+    const Modifiers: TKeyModifierState): string;
+
+  // Injection status: production reuses the M1.2 SendInputHelper status.
+  TIsInjectionHealthy = function: Boolean;
+
+  THookPolicyDependencies = record
+    GetForegroundProcessName: TGetForegroundProcessName;
+    GetModifierState: TGetModifierState;
+    VKToUnicode: TVKToUnicode;
+    IsInjectionHealthy: TIsInjectionHealthy;
+  end;
+
+  // One key event decoded from KBDLLHOOKSTRUCT + wParam, so the policy never
+  // needs the raw hook parameters.
+  TKeyContext = record
+    VKCode: DWORD;
+    ScanCode: DWORD;
+    IsKeyDown: Boolean;    // WM_KEYDOWN or WM_SYSKEYDOWN
+    IsInjected: Boolean;   // LLKHF_INJECTED
+  end;
+
 procedure InstallKeyboardHook;
 procedure RemoveKeyboardHook;
 procedure SetKeyHandler(AHandler: TOnKeyChar);
 procedure SetTargetProcessName(const AProcessName: string);
 procedure SetAllowedProcessNames(const AProcessNames: string);
+procedure SetHookPolicyDependencies(
+  const ADependencies: THookPolicyDependencies);
+
+// The consume/pass-through decision for one key event, kept separate from
+// CallNextHookEx so it can be unit tested (M2.2). Returns True when the event
+// has been consumed (the hook reports it handled); False when it must be
+// passed through.
+function HandleKeyEvent(const AKey: TKeyContext): Boolean;
 
 implementation
-
-{ ==================================================
-  EXPLICIT WinAPI STRUCT (BULLETPROOF)
-  ================================================== }
 
 type
   PKBDLLHookStruct = ^TKBDLLHookStruct;
@@ -42,6 +89,7 @@ var
   KeyHandler: TOnKeyChar = nil;
   TargetProcessName: string = '';
   AllowedProcessNames: string = '';
+  Policy: THookPolicyDependencies;
 
 const
   PROCESS_QUERY_LIMITED_INFORMATION = $1000;
@@ -51,71 +99,10 @@ const
   LLKHF_INJECTED = $10;
 
 { --------------------------------------------------
-  Convert Virtual Key to Unicode character
+  Production dependency implementations (Win32-backed)
 -------------------------------------------------- }
-function VKToChar(vkCode: DWORD; scanCode: DWORD): string;
-var
-  KeyboardState: TKeyboardState;
-  WideBuf: array[0..3] of WideChar;
-  Len: Integer;
-begin
-  Result := '';
 
-  FillChar(KeyboardState, SizeOf(KeyboardState), 0);
-
-  if GetAsyncKeyState(VK_SHIFT) < 0 then
-    KeyboardState[VK_SHIFT] := $80;
-  if GetAsyncKeyState(VK_LSHIFT) < 0 then
-    KeyboardState[VK_LSHIFT] := $80;
-  if GetAsyncKeyState(VK_RSHIFT) < 0 then
-    KeyboardState[VK_RSHIFT] := $80;
-  if GetAsyncKeyState(VK_CONTROL) < 0 then
-    KeyboardState[VK_CONTROL] := $80;
-  if GetAsyncKeyState(VK_LCONTROL) < 0 then
-    KeyboardState[VK_LCONTROL] := $80;
-  if GetAsyncKeyState(VK_RCONTROL) < 0 then
-    KeyboardState[VK_RCONTROL] := $80;
-  if GetAsyncKeyState(VK_MENU) < 0 then
-    KeyboardState[VK_MENU] := $80;
-  if GetAsyncKeyState(VK_LMENU) < 0 then
-    KeyboardState[VK_LMENU] := $80;
-  if GetAsyncKeyState(VK_RMENU) < 0 then
-    KeyboardState[VK_RMENU] := $80;
-  if GetKeyState(VK_CAPITAL) > 0 then
-    KeyboardState[VK_CAPITAL] := 1;
-
-  Len := ToUnicode(
-    vkCode,
-    scanCode,
-    KeyboardState,
-    WideBuf,
-    Length(WideBuf),
-    0
-  );
-
-  // Handle surrogate pairs (Len can be 2 for SMP characters)
-  if Len = 1 then
-    Result := WideBuf[0]
-  else if Len > 1 then
-    SetString(Result, PWideChar(@WideBuf[0]), Len)
-  else if Len < 0 then
-  begin
-    // This key is a dead key. ToUnicode mutated this thread's dead-key residue,
-    // which would corrupt the NEXT unrelated key's translation (composed
-    // accented char instead of the real mapping). Issue one throwaway call to
-    // clear the residue. The dead key itself is passed through (Result = '').
-    ToUnicode(
-      vkCode,
-      scanCode,
-      KeyboardState,
-      WideBuf,
-      Length(WideBuf),
-      0
-    );
-  end;
-end;
-
-function GetForegroundProcessName: string;
+function ProductionForegroundProcessName: string;
 var
   ForegroundWnd: HWND;
   ProcessId: DWORD;
@@ -158,17 +145,104 @@ begin
     Result := Buffer;
 end;
 
-function IsModifierComboActive: Boolean;
+function ProductionModifierState: TKeyModifierState;
+  function Down(VK: Integer): Boolean;
+  begin
+    Result := GetAsyncKeyState(VK) < 0;
+  end;
 begin
-  // Use GetAsyncKeyState (physical state), matching VKToChar. GetKeyState reads
-  // this thread's message queue, which an LL hook does not receive in step with
-  // the current keystroke, so modifier state can lag and a Ctrl/Alt/Win shortcut
-  // can be eaten by the hook (wrong-glyph injection instead of the shortcut).
-  Result :=
-    (GetAsyncKeyState(VK_CONTROL) < 0) or
-    (GetAsyncKeyState(VK_MENU) < 0) or
-    (GetAsyncKeyState(VK_LWIN) < 0) or
-    (GetAsyncKeyState(VK_RWIN) < 0);
+  // Use GetAsyncKeyState (physical state), matching the key conversion.
+  // GetKeyState reads this thread message queue, which an LL hook does not
+  // receive in step with the current keystroke, so modifier state can lag and
+  // a Ctrl/Alt/Win shortcut can be eaten by the hook (wrong-glyph injection
+  // instead of the shortcut). Caps Lock uses the toggle bit via GetKeyState.
+  Result.ShiftDown := Down(VK_SHIFT) or Down(VK_LSHIFT) or Down(VK_RSHIFT);
+  Result.CtrlDown := Down(VK_CONTROL) or Down(VK_LCONTROL) or Down(VK_RCONTROL);
+  Result.AltDown := Down(VK_MENU) or Down(VK_LMENU) or Down(VK_RMENU);
+  Result.WinDown := Down(VK_LWIN) or Down(VK_RWIN);
+  Result.CapsLockOn := GetKeyState(VK_CAPITAL) > 0;
+end;
+
+function ProductionVKToUnicode(VKCode: DWORD; ScanCode: DWORD;
+  const Modifiers: TKeyModifierState): string;
+var
+  KeyboardState: TKeyboardState;
+  WideBuf: array[0..3] of WideChar;
+  Len: Integer;
+begin
+  Result := '';
+
+  FillChar(KeyboardState, SizeOf(KeyboardState), 0);
+
+  // ToUnicode consults the base modifier bytes; the snapshot is already the
+  // normalized left/right-independent state.
+  if Modifiers.ShiftDown then
+    KeyboardState[VK_SHIFT] := $80;
+  if Modifiers.CtrlDown then
+    KeyboardState[VK_CONTROL] := $80;
+  if Modifiers.AltDown then
+    KeyboardState[VK_MENU] := $80;
+  if Modifiers.CapsLockOn then
+    KeyboardState[VK_CAPITAL] := 1;
+
+  Len := ToUnicode(VKCode, ScanCode, KeyboardState, WideBuf, Length(WideBuf), 0);
+
+  // Handle surrogate pairs (Len can be 2 for SMP characters)
+  if Len = 1 then
+    Result := WideBuf[0]
+  else if Len > 1 then
+    SetString(Result, PWideChar(@WideBuf[0]), Len)
+  else if Len < 0 then
+  begin
+    // This key is a dead key. ToUnicode mutated this thread dead-key residue,
+    // which would corrupt the NEXT unrelated key translation. Issue one
+    // throwaway call to clear the residue. The dead key itself is passed
+    // through (Result = '').
+    ToUnicode(VKCode, ScanCode, KeyboardState, WideBuf, Length(WideBuf), 0);
+  end;
+end;
+
+function ProductionInjectionHealthy: Boolean;
+begin
+  // M1.2 injection status is the single source of truth; never re-implement it.
+  Result := InjectionOK;
+end;
+
+{ --------------------------------------------------
+  Dependency dispatch (nil = production implementation)
+-------------------------------------------------- }
+
+function ForegroundProcessName: string;
+begin
+  if Assigned(Policy.GetForegroundProcessName) then
+    Result := Policy.GetForegroundProcessName()
+  else
+    Result := ProductionForegroundProcessName;
+end;
+
+function CurrentModifierState: TKeyModifierState;
+begin
+  if Assigned(Policy.GetModifierState) then
+    Result := Policy.GetModifierState()
+  else
+    Result := ProductionModifierState;
+end;
+
+function VKToChar(VKCode: DWORD; ScanCode: DWORD;
+  const Modifiers: TKeyModifierState): string;
+begin
+  if Assigned(Policy.VKToUnicode) then
+    Result := Policy.VKToUnicode(VKCode, ScanCode, Modifiers)
+  else
+    Result := ProductionVKToUnicode(VKCode, ScanCode, Modifiers);
+end;
+
+function InjectionHealthy: Boolean;
+begin
+  if Assigned(Policy.IsInjectionHealthy) then
+    Result := Policy.IsInjectionHealthy()
+  else
+    Result := ProductionInjectionHealthy;
 end;
 
 function IsProcessAllowed(const ProcessName: string): Boolean;
@@ -189,13 +263,122 @@ function IsTargetAppActive: Boolean;
 var
   ActiveProcessName: string;
 begin
-  ActiveProcessName := GetForegroundProcessName;
+  ActiveProcessName := ForegroundProcessName;
   Result := IsProcessAllowed(ActiveProcessName) or
     ((TargetProcessName <> '') and SameText(ActiveProcessName, TargetProcessName));
 end;
 
+function IsModifierComboActive(const Modifiers: TKeyModifierState): Boolean;
+begin
+  // Ctrl/Alt/Win combos are application shortcuts and pass through untouched.
+  // Shift alone must still reach the engine because layouts use it for
+  // shifted keys.
+  Result := Modifiers.CtrlDown or Modifiers.AltDown or Modifiers.WinDown;
+end;
+
 { --------------------------------------------------
-  Low-level keyboard hook procedure
+  Consume/pass-through policy (M2.2)
+  Pure decision + engine dispatch, independent of CallNextHookEx.
+  Returns True when the event is consumed, False to pass through.
+  The pipeline order below is the original hook order, preserved.
+-------------------------------------------------- }
+function HandleKeyEvent(const AKey: TKeyContext): Boolean;
+var
+  Modifiers: TKeyModifierState;
+  Ch: string;
+begin
+  Result := False;   // default: pass through
+
+  // Never reprocess our own (or anyone else's) synthetic key events. Every key
+  // injected below comes back through this same global hook; without this
+  // check, injecting a real VK_TAB/VK_RETURN/VK_BACK to pass a key through
+  // feeds it straight back into the handler that injected it, forever.
+  if AKey.IsInjected then
+    Exit;
+
+  if not EngineEnabled then
+    Exit;
+
+  // Fail open: if no layout is active (e.g. loading failed at startup),
+  // do not intercept and discard keystrokes; let them through untouched.
+  if not EngineHasActiveLayout then
+    Exit;
+
+  if not IsTargetAppActive then
+    Exit;
+
+  // Fail open: if our own injection is failing (e.g. UIPI blocks targeting a
+  // window at a higher integrity level), stop consuming keys so the user's
+  // typing is not silently eaten.
+  if not InjectionHealthy then
+    Exit;
+
+  if not AKey.IsKeyDown then
+    Exit;
+
+  // Ignore modifier & control keys
+  case AKey.VKCode of
+    VK_SHIFT, VK_LSHIFT, VK_RSHIFT,
+    VK_CONTROL, VK_LCONTROL, VK_RCONTROL,
+    VK_MENU, VK_LMENU, VK_RMENU,
+    VK_CAPITAL, VK_ESCAPE:
+      Exit;
+  end;
+
+  Modifiers := CurrentModifierState;
+
+  // Let Ctrl/Alt/Win combos (app shortcuts) pass through untouched.
+  if IsModifierComboActive(Modifiers) then
+    Exit;
+
+  if (AKey.VKCode = VK_TAB) or (AKey.VKCode = VK_RETURN) then
+  begin
+    if Assigned(KeyHandler) then
+    begin
+      if AKey.VKCode = VK_TAB then
+        KeyHandler(#9)
+      else
+        KeyHandler(#13);
+    end;
+
+    if AKey.VKCode = VK_TAB then
+      SendVirtualKey(VK_TAB)
+    else
+      SendVirtualKey(VK_RETURN);
+
+    Result := True;   // consumed
+    Exit;
+  end;
+
+  // Handle BACKSPACE explicitly
+  if AKey.VKCode = VK_BACK then
+  begin
+    if Assigned(KeyHandler) then
+    begin
+      KeyHandler(#8);  // ASCII Backspace
+      Result := True;  // BLOCK original
+      Exit;
+    end;
+  end;
+
+  // Convert VK to Unicode character
+  Ch := VKToChar(AKey.VKCode, AKey.ScanCode, Modifiers);
+  if Ch = '' then
+    Exit;
+
+  // Pass to engine
+  if Assigned(KeyHandler) then
+  begin
+    KeyHandler(Ch);
+    Result := True;  // BLOCK original keystroke
+    Exit;
+  end;
+
+  Result := False;   // no handler: pass through
+end;
+
+{ --------------------------------------------------
+  Low-level keyboard hook procedure (thin Win32 adapter)
 -------------------------------------------------- }
 function LowLevelKeyboardProc(
   nCode: Integer;
@@ -204,7 +387,7 @@ function LowLevelKeyboardProc(
 ): LRESULT; stdcall;
 var
   KBD: PKBDLLHookStruct;
-  Ch: string;
+  Key: TKeyContext;
 begin
   // If Windows says ignore, pass it on
   if nCode <> HC_ACTION then
@@ -213,95 +396,15 @@ begin
   KBD := PKBDLLHookStruct(lParam);
 
   try
+    Key.VKCode := KBD^.vkCode;
+    Key.ScanCode := KBD^.scanCode;
+    Key.IsKeyDown := (wParam = WM_KEYDOWN) or (wParam = WM_SYSKEYDOWN);
+    Key.IsInjected := (KBD^.flags and LLKHF_INJECTED) <> 0;
 
-  // Never reprocess our own (or anyone else's) synthetic key events. Every
-  // key we inject below (SendVirtualKey/SendBackspace/SendUnicodeText) comes
-  // back through this same global hook; without this check, injecting a
-  // real VK_TAB/VK_RETURN/VK_BACK to "pass a key through" feeds it straight
-  // back into the handler that injected it, forever.
-  if (KBD.flags and LLKHF_INJECTED) <> 0 then
-    Exit(CallNextHookEx(KBHook, nCode, wParam, lParam));
-
-  if not EngineEnabled then
-    Exit(CallNextHookEx(KBHook, nCode, wParam, lParam));
-
-  // Fail open: if no layout is active (e.g. loading failed at startup),
-  // don't intercept and discard keystrokes — let them through untouched.
-  if not EngineHasActiveLayout then
-    Exit(CallNextHookEx(KBHook, nCode, wParam, lParam));
-
-  if not IsTargetAppActive then
-    Exit(CallNextHookEx(KBHook, nCode, wParam, lParam));
-
-  // Fail open: if our own injection is failing (e.g. UIPI blocks targeting a
-  // window at a higher integrity level), stop consuming keys so the user's
-  // typing is not silently eaten.
-  if not InjectionOK then
-    Exit(CallNextHookEx(KBHook, nCode, wParam, lParam));
-
-  if (wParam <> WM_KEYDOWN) and (wParam <> WM_SYSKEYDOWN) then
-    Exit(CallNextHookEx(KBHook, nCode, wParam, lParam));
-
-  // Ignore modifier & control keys
-  case KBD.vkCode of
-    VK_SHIFT, VK_LSHIFT, VK_RSHIFT,
-    VK_CONTROL, VK_LCONTROL, VK_RCONTROL,
-    VK_MENU, VK_LMENU, VK_RMENU,
-    VK_CAPITAL, VK_ESCAPE:
-      Exit(CallNextHookEx(KBHook, nCode, wParam, lParam));
-  end;
-
-  // Let Ctrl/Alt/Win combos (app shortcuts) pass through untouched.
-  // Shift alone must still reach the engine because layouts use it for shifted keys.
-  if IsModifierComboActive then
-    Exit(CallNextHookEx(KBHook, nCode, wParam, lParam));
-
-  if (KBD.vkCode = VK_TAB) or (KBD.vkCode = VK_RETURN) then
-  begin
-    if Assigned(KeyHandler) then
-    begin
-      if KBD.vkCode = VK_TAB then
-        KeyHandler(#9)
-      else
-        KeyHandler(#13);
-    end;
-
-    if KBD.vkCode = VK_TAB then
-      SendVirtualKey(VK_TAB)
+    if HandleKeyEvent(Key) then
+      Result := 1   // consumed: do NOT call CallNextHookEx
     else
-      SendVirtualKey(VK_RETURN);
-
-    Result := 1;
-    Exit;
-  end;
-
-  // Handle BACKSPACE explicitly
-  if KBD.vkCode = VK_BACK then
-  begin
-    if Assigned(KeyHandler) then
-    begin
-      KeyHandler(#8);  // ASCII Backspace
-      Result := 1;     // BLOCK original
-      Exit;
-    end;
-  end;
-
-  // Convert VK → Unicode char
-  Ch := VKToChar(KBD.vkCode, KBD.scanCode);
-  if Ch = '' then
-    Exit(CallNextHookEx(KBHook, nCode, wParam, lParam));
-
-  // Pass to engine
-  if Assigned(KeyHandler) then
-  begin
-    KeyHandler(Ch);
-
-    // 🔴 BLOCK original keystroke
-    Result := 1;
-    Exit;
-  end;
-
-  Result := CallNextHookEx(KBHook, nCode, wParam, lParam);
+      Result := CallNextHookEx(KBHook, nCode, wParam, lParam);
   except
     on E: Exception do
     begin
@@ -328,6 +431,13 @@ end;
 procedure SetAllowedProcessNames(const AProcessNames: string);
 begin
   AllowedProcessNames := Trim(AProcessNames);
+end;
+
+procedure SetHookPolicyDependencies(
+  const ADependencies: THookPolicyDependencies);
+begin
+  // nil fields restore the production implementations.
+  Policy := ADependencies;
 end;
 
 procedure InstallKeyboardHook;

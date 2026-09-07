@@ -36,6 +36,7 @@ type
     // --- Metadata ---
     SourceFileName: string;
     LayoutID: string;
+    Version: string;       // Schema/format version (e.g., "1.0")
     Name: string;
     Script: string;        // Devanagari, Gujarati, etc.
     Encoding: string;      // legacy / unicode
@@ -83,6 +84,7 @@ end;
 constructor TKeyboardLayout.Create;
 begin
   inherited Create;
+  Version := '1.0';
   DirectMap   := TDictionary<string, string>.Create;
   PrebaseMap  := TDictionary<string, TKeyMapping>.Create;
   PostbaseMap := TDictionary<string, string>.Create;

@@ -36,8 +36,7 @@ Use this as a starting template:
   "direct": {},
   "prebase": {},
   "postbase": {},
-  "modifiers": {},
-  "sequences": {}
+  "modifiers": {}
 }
 ```
 
@@ -233,25 +232,13 @@ Notes:
 - Existing layouts often use `behavior` instead of `map_type`.
 - If both are missing, the loader defaults to `modifier`.
 
-### `sequences`
+### `sequences` (Deprecated)
 
 Defines multi-key combinations.
 
-Format:
+**Note:** Multi-key sequences are currently not executed by the runtime to avoid delayed prefix matching on the critical input path. This section is temporarily tolerated in existing JSON files for backward compatibility, but the editor and validator will display a deprecation warning.
 
-```json
-"sequences": {
-  "k\\s": "ક્ષ",
-  "t\\r": "ત્ર",
-  "Zk": "ર્ક"
-}
-```
-
-Notes:
-
-- Keys are sequence strings, not arrays.
-- Backslash in JSON must be escaped as `\\`.
-- Use this for conjuncts, ligatures, or special combinations.
+Do not use sequences for new layouts. Instead, use halant-based conjunct entry (e.g., typing the first consonant, the halant key, and the second consonant).
 
 ## Complete example
 
@@ -298,10 +285,6 @@ Notes:
       "map_type": "move_to_cluster_start",
       "metadata": {}
     }
-  },
-  "sequences": {
-    "k\\s": "ક્ષ",
-    "t\\r": "ત્ર"
   }
 }
 ```
@@ -312,9 +295,8 @@ Notes:
 2. Change `layout_id`, `name`, `font_family`, and `layout_type`.
 3. Update the `direct` map first so basic typing works.
 4. Add `prebase` and `postbase` mappings for vowel signs and matras.
-5. Add `modifiers` for halant, reph, or other script-specific behaviors.
-6. Add `sequences` for conjuncts or ligatures.
-7. Save the file as UTF-8 JSON.
+5. Add `modifiers` for halant, reph, or other script-specific behaviors. (Use halant keys to produce conjuncts.)
+6. Save the file as UTF-8 JSON.
 8. Place it under the correct `layouts\<group>\` folder.
 9. Restart the keyboard app or rebuild/copy the layout into the output folder if you are testing from `build\Win32`.
 
@@ -332,7 +314,7 @@ Editor fields map roughly as follows:
 - Prebase grid -> `prebase`
 - Postbase grid -> `postbase`
 - Modifiers grid -> `modifiers`
-- Sequences grid -> `sequences`
+- Sequences grid -> `sequences` (Read-only, deprecated)
 - Hotkey fields -> `properties.HotkeySwitch` and `properties.HotkeyAction`
 
 ## Rules and limitations
@@ -383,7 +365,6 @@ For fastest results:
 2. Edit only a few keys at a time.
 3. Keep the file in UTF-8.
 4. Test after each small change.
-5. Add sequences last, after base mappings work.
 
 ## Reference files in this repo
 

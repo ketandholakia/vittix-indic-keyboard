@@ -17,6 +17,7 @@ type
     FLayouts: TObjectList<TKeyboardLayout>;
     FActiveLayout: TKeyboardLayout;
     FLayoutsPath: string;
+    FLoadErrors: TStrings;
   public
     constructor Create;
     destructor Destroy; override;
@@ -30,6 +31,7 @@ type
     procedure SetActiveLayoutByID(const LayoutID: string);
 
     property ActiveLayout: TKeyboardLayout read FActiveLayout;
+    property LoadErrors: TStrings read FLoadErrors;
   end;
 
 var
@@ -44,12 +46,14 @@ implementation
 constructor TLayoutManager.Create;
 begin
   FLayouts := TObjectList<TKeyboardLayout>.Create(True); // owns objects
+  FLoadErrors := TStringList.Create;
 end;
 
 destructor TLayoutManager.Destroy;
 begin
   FLayouts.Free;
-  inherited;
+  FLoadErrors.Free;
+  inherited Destroy;
 end;
 
 { --------------------------------------------------
@@ -61,12 +65,12 @@ var
   Files: TArray<string>;   // ✅ FIX
   FileName: string;
   Layout: TKeyboardLayout;
-  FirstLoadError: string;
   SeenLayoutIDs: TDictionary<string, string>;
 begin
   FLayouts.Clear;
   FActiveLayout := nil;
-  FirstLoadError := '';
+  // Clear prior load errors so a reload does not accumulate stale entries.
+  FLoadErrors.Clear;
   FLayoutsPath := IncludeTrailingPathDelimiter(ALayoutsPath);
   SeenLayoutIDs := TDictionary<string, string>.Create;
   try
@@ -100,8 +104,10 @@ begin
       FLayouts.Add(Layout);
     except
       on E: Exception do
-        if FirstLoadError = '' then
-          FirstLoadError := Format('%s: %s', [FileName, E.Message]);
+      begin
+        FLoadErrors.Add(Format('%s: %s', [FileName, E.Message]));
+        LogWarning(Format('Failed to load layout %s: %s', [FileName, E.Message]));
+      end;
     end;
   end;
 
@@ -110,10 +116,12 @@ begin
   
   if FLayouts.Count = 0 then
   begin
-    if FirstLoadError <> '' then
+    if FLoadErrors.Count > 0 then
     begin
-      LogError('Layout loading failed: ' + FirstLoadError);
-      raise Exception.Create('No layouts could be loaded. First error: ' + FirstLoadError);
+      // Files existed but none parsed: report this as an all-invalid directory,
+      // not as an empty one.
+      LogError('Layout loading failed: ' + FLoadErrors[0]);
+      raise Exception.Create('No layouts could be loaded. First error: ' + FLoadErrors[0]);
     end;
 
     LogError('No layout files found in ' + FLayoutsPath);

@@ -1,4 +1,4 @@
-﻿unit frmTray;
+unit frmTray;
 
 interface
 
@@ -13,6 +13,7 @@ uses
   Vcl.Forms,
   Vcl.Controls,
   Vcl.ImgList,
+  Winapi.ShlObj,
    
   Vcl.Menus,
   Vcl.ExtCtrls,
@@ -135,7 +136,14 @@ begin
     GetWindowLong(Handle, GWL_EXSTYLE) or WS_EX_TOOLWINDOW
   );
 
-  InitLogger(TPath.Combine(ExtractFilePath(Application.ExeName), 'logs\vittix-keyboard.log'));
+  var LocalAppDataPath: array[0..MAX_PATH] of Char;
+  var LogDir: string;
+  if SHGetFolderPath(0, CSIDL_LOCAL_APPDATA, 0, 0, LocalAppDataPath) = S_OK then
+    LogDir := TPath.Combine(string(LocalAppDataPath), 'Vittix\Logs')
+  else
+    LogDir := TPath.Combine(ExtractFilePath(Application.ExeName), 'logs');
+
+  InitLogger(TPath.Combine(LogDir, 'vittix-keyboard.log'));
   EnableLogger(True);
   LogInfo('Tray form starting');
 
@@ -159,6 +167,30 @@ begin
     );
   // Load layouts
   gLayoutManager.Initialize(GAppSettings.LayoutsPath);
+
+  // Notify user if some layouts failed to load. Show only a bounded preview so
+  // a directory with many invalid files cannot produce an unusable dialog; the
+  // full set is available in the application log.
+  if gLayoutManager.LoadErrors.Count > 0 then
+  begin
+    var LoadSuccessCount := gLayoutManager.LayoutCount;
+    var ErrorMsg: string;
+    var ShownErrors: Integer;
+    ErrorMsg := Format('Warning: %d layout(s) failed to load:%s',
+      [gLayoutManager.LoadErrors.Count, sLineBreak]);
+    ShownErrors := gLayoutManager.LoadErrors.Count;
+    if ShownErrors > 5 then
+      ShownErrors := 5;
+    for var I := 0 to ShownErrors - 1 do
+      ErrorMsg := ErrorMsg + '  - ' + gLayoutManager.LoadErrors[I] + sLineBreak;
+    if gLayoutManager.LoadErrors.Count > ShownErrors then
+      ErrorMsg := ErrorMsg + Format('  ... and %d more (see the application log).%s',
+        [gLayoutManager.LoadErrors.Count - ShownErrors, sLineBreak]);
+    ErrorMsg := ErrorMsg + Format('%s layouts loaded successfully.',
+      [LoadSuccessCount]);
+    MessageBox(Handle, PChar(ErrorMsg), 'Layout Load Warnings',
+      MB_ICONWARNING or MB_OK);
+  end;
 
   if GAppSettings.DefaultLayoutID <> '' then
     gLayoutManager.SetActiveLayoutByID(GAppSettings.DefaultLayoutID);
@@ -337,20 +369,66 @@ var
   I: Integer;
   Item: TMenuItem;
   Allowed: string;
+  CustomList: TStringList;
+  CustomApp: string;
+  TagCounter: Integer;
 begin
   while miAppWhitelist.Count > 0 do
     miAppWhitelist.Delete(0);
   Allowed := ',' + LowerCase(GAppSettings.AllowedProcessesText) + ',';
 
+  TagCounter := APP_WHITELIST_ITEM_BASE;
   for I := Low(APP_CANDIDATES) to High(APP_CANDIDATES) do
   begin
     Item := TMenuItem.Create(miAppWhitelist);
     Item.Caption := APP_CANDIDATES[I];
     Item.AutoCheck := False;
     Item.Checked := Pos(',' + LowerCase(APP_CANDIDATES[I]) + ',', Allowed) > 0;
-    Item.Tag := APP_WHITELIST_ITEM_BASE + I;
+    Item.Tag := TagCounter;
+    Inc(TagCounter);
     Item.OnClick := miAppWhitelistClick;
     miAppWhitelist.Add(Item);
+  end;
+
+  CustomList := TStringList.Create;
+  try
+    CustomList.StrictDelimiter := True;
+    CustomList.Delimiter := ',';
+    CustomList.DelimitedText := StringReplace(
+      StringReplace(GAppSettings.AllowedProcessesText, sLineBreak, ',', [rfReplaceAll]),
+      ';', ',', [rfReplaceAll]
+    );
+
+    for I := 0 to CustomList.Count - 1 do
+    begin
+      CustomApp := Trim(CustomList[I]);
+      if CustomApp = '' then Continue;
+
+      // If it's not already in APP_CANDIDATES, add it
+      var Found := False;
+      for var J := Low(APP_CANDIDATES) to High(APP_CANDIDATES) do
+      begin
+        if SameText(CustomApp, APP_CANDIDATES[J]) then
+        begin
+          Found := True;
+          Break;
+        end;
+      end;
+
+      if not Found then
+      begin
+        Item := TMenuItem.Create(miAppWhitelist);
+        Item.Caption := CustomApp;
+        Item.AutoCheck := False;
+        Item.Checked := True; // Custom items in this list are always checked because they are in the allowed text
+        Item.Tag := TagCounter;
+        Inc(TagCounter);
+        Item.OnClick := miAppWhitelistClick;
+        miAppWhitelist.Add(Item);
+      end;
+    end;
+  finally
+    CustomList.Free;
   end;
 end;
 
@@ -429,8 +507,9 @@ begin
   // 2. Update the core typing engine to use the new layout.
   SetActiveLayout(gLayoutManager.ActiveLayout);
 
-  // 3. Reset any intermediate state in the engine.
+  // 3. Reset any intermediate state in the engine and injection failures.
   ResetEngineState;
+  ResetInjectionStatus;
 
   // 4. Persist the user's choice for the next application start.
   if Assigned(gLayoutManager.ActiveLayout) then
@@ -594,6 +673,7 @@ begin
 
   SetActiveLayout(gLayoutManager.ActiveLayout);
   ResetEngineState;
+  ResetInjectionStatus;
 
   SetEngineEnabled(GAppSettings.EnableKeyboard);
   miEnable.Checked := EngineEnabled;

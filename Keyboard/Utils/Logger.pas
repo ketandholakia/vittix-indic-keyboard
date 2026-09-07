@@ -16,6 +16,7 @@ type
   );
 
 procedure InitLogger(const ALogFile: string);
+procedure CloseLogger;
 procedure EnableLogger(AEnable: Boolean);
 
 procedure LogDebug(const Msg: string);
@@ -35,6 +36,11 @@ var
   gEnabled: Boolean = False;
   gInitialized: Boolean = False;
   gCS: TRTLCriticalSection;
+  gLogStream: TFileStream = nil;
+
+const
+  MAX_LOG_SIZE = 1 * 1024 * 1024; // 1 MB
+  MAX_LOG_FILES = 3;
 
 { --------------------------------------------------
   Internal helpers
@@ -64,9 +70,35 @@ begin
   gInitialized := True;
 end;
 
+procedure RotateLogs;
+var
+  I: Integer;
+  OldFile, NewFile: string;
+begin
+  if Assigned(gLogStream) then
+  begin
+    gLogStream.Free;
+    gLogStream := nil;
+  end;
+
+  for I := MAX_LOG_FILES - 1 downto 1 do
+  begin
+    OldFile := gLogFile + '.' + IntToStr(I);
+    NewFile := gLogFile + '.' + IntToStr(I + 1);
+    if FileExists(OldFile) then
+    begin
+      if FileExists(NewFile) then
+        System.SysUtils.DeleteFile(NewFile);
+      System.SysUtils.RenameFile(OldFile, NewFile);
+    end;
+  end;
+
+  if FileExists(gLogFile) then
+    System.SysUtils.RenameFile(gLogFile, gLogFile + '.1');
+end;
+
 procedure WriteLine(const Line: string);
 var
-  FS: TFileStream;
   S: UTF8String;
 begin
   if not gEnabled then
@@ -77,19 +109,29 @@ begin
 
   EnterCriticalSection(gCS);
   try
-    ForceDirectories(ExtractFilePath(gLogFile));
-
-    if FileExists(gLogFile) then
-      FS := TFileStream.Create(gLogFile, fmOpenWrite or fmShareDenyNone)
-    else
-      FS := TFileStream.Create(gLogFile, fmCreate or fmShareDenyNone);
-
     try
-      FS.Seek(0, soEnd);
+      if not Assigned(gLogStream) then
+      begin
+        ForceDirectories(ExtractFilePath(gLogFile));
+        if FileExists(gLogFile) then
+        begin
+          gLogStream := TFileStream.Create(gLogFile, fmOpenWrite or fmShareDenyWrite);
+          gLogStream.Seek(0, soEnd);
+        end
+        else
+          gLogStream := TFileStream.Create(gLogFile, fmCreate or fmShareDenyWrite);
+      end;
+
+      if gLogStream.Size > MAX_LOG_SIZE then
+      begin
+        RotateLogs;
+        gLogStream := TFileStream.Create(gLogFile, fmCreate or fmShareDenyWrite);
+      end;
+
       S := UTF8String(Line + sLineBreak);
-      FS.WriteBuffer(Pointer(S)^, Length(S));
-    finally
-      FS.Free;
+      gLogStream.WriteBuffer(Pointer(S)^, Length(S));
+    except
+      // Keep logger failure nonfatal
     end;
   finally
     LeaveCriticalSection(gCS);
@@ -102,10 +144,32 @@ end;
 
 procedure InitLogger(const ALogFile: string);
 begin
-  gLogFile := ALogFile;
-  gInitialized := True;
-  // NOTE: gCS is already initialized in the 'initialization' section below.
-  // Do NOT call InitializeCriticalSection here — double init is undefined behavior.
+  EnterCriticalSection(gCS);
+  try
+    if Assigned(gLogStream) then
+    begin
+      gLogStream.Free;
+      gLogStream := nil;
+    end;
+    gLogFile := ALogFile;
+    gInitialized := True;
+  finally
+    LeaveCriticalSection(gCS);
+  end;
+end;
+
+procedure CloseLogger;
+begin
+  EnterCriticalSection(gCS);
+  try
+    if Assigned(gLogStream) then
+    begin
+      gLogStream.Free;
+      gLogStream := nil;
+    end;
+  finally
+    LeaveCriticalSection(gCS);
+  end;
 end;
 
 procedure EnableLogger(AEnable: Boolean);
@@ -151,6 +215,7 @@ initialization
   InitializeCriticalSection(gCS);
 
 finalization
+  CloseLogger;
   DeleteCriticalSection(gCS);
 
 end.

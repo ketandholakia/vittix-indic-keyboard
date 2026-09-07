@@ -13,7 +13,8 @@ type
   [Category('Logger')]
   TLoggerTests = class
   private
-    class function GetTestLogFile: string; static;
+    FLogFiles: TArray<string>;
+    function GetTestLogFile: string;
   public
     [Setup]
     procedure Setup;
@@ -44,9 +45,11 @@ type
 
 implementation
 
-class function TLoggerTests.GetTestLogFile: string;
+function TLoggerTests.GetTestLogFile: string;
 begin
   Result := TPath.Combine(TPath.GetTempPath, 'vittix_logger_test_' + TPath.GetRandomFileName + '.log');
+  SetLength(FLogFiles, Length(FLogFiles) + 1);
+  FLogFiles[High(FLogFiles)] := Result;
 end;
 
 procedure TLoggerTests.Setup;
@@ -59,11 +62,22 @@ end;
 procedure TLoggerTests.TearDown;
 var
   DefaultLogFile: string;
+  LogFile: string;
 begin
+  CloseLogger;
+
   // Clean up default log file if it was created
   DefaultLogFile := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'logs\vittix-keyboard.log');
   if TFile.Exists(DefaultLogFile) then
     TFile.Delete(DefaultLogFile);
+
+  // Clean up dynamically created test log files
+  for LogFile in FLogFiles do
+  begin
+    if TFile.Exists(LogFile) then
+      TFile.Delete(LogFile);
+  end;
+  SetLength(FLogFiles, 0);
 end;
 
 procedure TLoggerTests.LogBeforeInitLogger_WritesToDefaultFile;
@@ -114,10 +128,6 @@ begin
   Assert.IsTrue(TFile.Exists(CustomLogFile), 'Custom log file should be created');
   Assert.IsFalse(TFile.Exists(TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'logs\vittix-keyboard.log')),
     'Default log file should not be created when explicit InitLogger is used');
-
-  // Clean up
-  if TFile.Exists(CustomLogFile) then
-    TFile.Delete(CustomLogFile);
 end;
 
 procedure TLoggerTests.EnableLoggerFalse_PreventsWriting;
@@ -136,10 +146,6 @@ begin
   EnableLogger(True);
   LogInfo('This should be written');
   Assert.IsTrue(TFile.Exists(LogFile), 'Log file should be created after re-enabling');
-
-  // Clean up
-  if TFile.Exists(LogFile) then
-    TFile.Delete(LogFile);
 end;
 
 procedure TLoggerTests.RepeatedInitLogger_UsesLastFile;
@@ -159,10 +165,6 @@ begin
   // Both files should exist
   Assert.IsTrue(TFile.Exists(LogFile1), 'First log file should exist');
   Assert.IsTrue(TFile.Exists(LogFile2), 'Second log file should exist');
-
-  // Clean up
-  if TFile.Exists(LogFile1) then TFile.Delete(LogFile1);
-  if TFile.Exists(LogFile2) then TFile.Delete(LogFile2);
 end;
 
 procedure TLoggerTests.MultipleLogCalls_SameFile;
@@ -182,6 +184,7 @@ begin
 
   Assert.IsTrue(TFile.Exists(LogFile), 'Log file should exist');
 
+  CloseLogger;
   Content := TFile.ReadAllText(LogFile);
   Assert.IsTrue(Content.Contains('Message 1'), 'Should contain first message');
   Assert.IsTrue(Content.Contains('Message 2'), 'Should contain second message');
@@ -191,9 +194,6 @@ begin
   Assert.IsTrue(Content.Contains('WARN'), 'Should contain WARN level');
   Assert.IsTrue(Content.Contains('ERROR'), 'Should contain ERROR level');
   Assert.IsTrue(Content.Contains('DEBUG'), 'Should contain DEBUG level');
-
-  // Clean up
-  TFile.Delete(LogFile);
 end;
 
 procedure TLoggerTests.DisableThenEnable_ResumesWriting;
@@ -213,12 +213,11 @@ begin
   EnableLogger(True);
   LogInfo('After enable');
 
+  CloseLogger;
   Content := TFile.ReadAllText(LogFile);
   Assert.IsTrue(Content.Contains('Before disable'), 'Should contain message before disable');
   Assert.IsFalse(Content.Contains('During disable'), 'Should not contain message during disable');
   Assert.IsTrue(Content.Contains('After enable'), 'Should contain message after enable');
-
-  TFile.Delete(LogFile);
 end;
 
 procedure TLoggerTests.LogLevels_AllWork;
@@ -236,13 +235,12 @@ begin
   LogWarning('Warning message');
   LogError('Error message');
 
+  CloseLogger;
   Content := TFile.ReadAllText(LogFile);
   Assert.IsTrue(Content.Contains('[DEBUG]'), 'Should contain DEBUG');
   Assert.IsTrue(Content.Contains('[INFO]'), 'Should contain INFO');
   Assert.IsTrue(Content.Contains('[WARN]'), 'Should contain WARN');
   Assert.IsTrue(Content.Contains('[ERROR]'), 'Should contain ERROR');
-
-  TFile.Delete(LogFile);
 end;
 
 initialization

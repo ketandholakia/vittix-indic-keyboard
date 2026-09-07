@@ -299,6 +299,18 @@ begin
         CheckAndRegisterKey(PairStr.Key, 'Sequences');
     end;
 
+    // ---------------- SEQUENCES DEPRECATION WARNING ----------------
+    // Sequences are currently not supported by the engine (the direct-map path
+    // clears KeyBuffer before a multi-key sequence can accumulate, and the reph
+    // rule intercepts 'R' before the sequence check). Use halant-based conjunct
+    // input instead (e.g., key + '\' + next_key for क्ष). This warning will be
+    // removed when proper sequence/prefix-matching support is implemented.
+    if ALayout.Sequences.Count > 0 then
+      AddError(vsWarning, 'Sequences', '',
+        'Sequences are currently not supported by the engine. ' +
+        'Use halant-based conjunct input (e.g., type "k\ + s" for क्ष) instead. ' +
+        'This warning will be removed when sequence support is implemented.');
+
     // ---------------- EXTRA MAPS ----------------
     for MapName in ALayout.ExtraMaps.Keys do
     begin

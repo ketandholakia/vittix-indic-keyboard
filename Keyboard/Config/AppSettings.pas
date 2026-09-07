@@ -8,7 +8,9 @@ uses
   System.IniFiles,
   System.IOUtils, // For TPath
   Vcl.Forms,
-  Winapi.Windows;
+  Winapi.Windows,
+  Winapi.ShlObj,
+  SettingsPathProvider;
 
 type
   TKeyboardAppSettingsData = record
@@ -43,7 +45,8 @@ type
     FallbackFont: string;
     PreviewFontSize: Integer;
 
-    constructor Create;
+    constructor Create; overload;
+    constructor Create(const AIniPath: string; const ALegacyPath: string = ''); overload;
     destructor Destroy; override;
 
     procedure Load;
@@ -52,6 +55,10 @@ type
     function GetToggleHotkeyText: string;
      function ParseHotkey(const HotkeyText: string; out Modifiers: UINT;
        out VirtualKey: UINT): Boolean;
+
+    // M2.3: exposes the concrete INI location (injected or production) so
+    // tests can assert where settings actually go.
+    property IniPath: string read FIniPath;
   end;
 
 var
@@ -63,22 +70,63 @@ constructor TAppSettings.Create;
 var
   AppDataDir: string;
   LegacyPath: string;
+  Provider: TSettingsPathProvider;
+  AppDataPath: array[0..MAX_PATH] of Char;
 begin
-  // Store settings under the per-user application-data folder so they are
-  // always writable. The previous exe-relative path silently fails (and gets
-  // virtualization-redirected) when the app is installed to Program Files.
-  AppDataDir := TPath.Combine(TPath.GetHomePath, 'Vittix');
-  ForceDirectories(AppDataDir);
-  FIniPath := TPath.Combine(AppDataDir, 'settings.ini');
+  Provider := GetSettingsPathProvider();
+  if Assigned(Provider) then
+  begin
+    // M2.3: a provider (test host) owns the location completely. No directory
+    // creation, no legacy migration, no access to the real user profile.
+    FIniPath := Provider(LegacyPath);
+    if (LegacyPath <> '') and (not TFile.Exists(FIniPath)) and TFile.Exists(LegacyPath) then
+    begin
+      try
+        TFile.Copy(LegacyPath, FIniPath, False);
+      except
+        // Ignore migration failures; just start fresh.
+      end;
+    end;
+  end
+  else
+  begin
+    // Store settings under the per-user application-data folder so they are
+    // always writable.
+    if SHGetFolderPath(0, CSIDL_APPDATA, 0, 0, AppDataPath) = S_OK then
+      AppDataDir := TPath.Combine(string(AppDataPath), 'Vittix')
+    else
+      AppDataDir := TPath.Combine(TPath.GetHomePath, 'Vittix'); // Fallback
 
-  // Migrate an existing exe-relative settings.ini created by older builds.
-  LegacyPath := ExtractFilePath(Application.ExeName) + 'settings.ini';
-  if (not TFile.Exists(FIniPath)) and TFile.Exists(LegacyPath) then
+    ForceDirectories(AppDataDir);
+    FIniPath := TPath.Combine(AppDataDir, 'settings.ini');
+
+    // Migrate an existing exe-relative settings.ini created by older builds.
+    LegacyPath := ExtractFilePath(Application.ExeName) + 'settings.ini';
+    if (not TFile.Exists(FIniPath)) and TFile.Exists(LegacyPath) then
+    begin
+      try
+        TFile.Copy(LegacyPath, FIniPath, False);
+      except
+        // Ignore migration failures; just start fresh.
+      end;
+    end;
+  end;
+
+  FIni := TIniFile.Create(FIniPath);
+end;
+
+constructor TAppSettings.Create(const AIniPath: string; const ALegacyPath: string = '');
+begin
+  // M2.3: explicit path injection. Pure: the caller owns the location and any
+  // directory creation. No profile access, no migration, no filesystem writes
+  // (unless migration is explicitly tested via ALegacyPath).
+  FIniPath := AIniPath;
+
+  if (ALegacyPath <> '') and (not TFile.Exists(FIniPath)) and TFile.Exists(ALegacyPath) then
   begin
     try
-      TFile.Copy(LegacyPath, FIniPath, False);
+      TFile.Copy(ALegacyPath, FIniPath, False);
     except
-      // Ignore migration failures; just start fresh.
     end;
   end;
 

@@ -95,11 +95,23 @@
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
         <DCCReference Include="VittixIndicTests.dpr"/>
+        <DCCReference Include="..\Keyboard\Layout\LayoutManager.pas"/>
+        <DCCReference Include="..\Keyboard\Layout\LayoutLoader.pas"/>
         <DCCReference Include="Tests.Shared.LayoutValidation.pas"/>
         <DCCReference Include="Tests.Shared.LayoutJson.pas"/>
         <DCCReference Include="Tests.Shared.LayoutModel.pas"/>
         <DCCReference Include="Tests.Layouts.RealLayouts.pas"/>
         <DCCReference Include="Tests.Utils.Logger.pas"/>
+        <DCCReference Include="Tests.Engine.PendingState.pas"/>
+        <DCCReference Include="Tests.Engine.OutputBoundary.pas"/>
+        <DCCReference Include="Tests.Keyboard.HookPolicy.pas"/>
+        <DCCReference Include="Tests.SettingsPath.pas"/>
+        <DCCReference Include="Tests.Keyboard.AppSettings.pas"/>
+        <DCCReference Include="Tests.Utils.SendInputHelper.pas"/>
+        <DCCReference Include="Tests.Engine.State.pas"/>
+        <DCCReference Include="Tests.Keyboard.Hotkeys.pas"/>
+        <DCCReference Include="Tests.Keyboard.LayoutManager.pas"/>
+        <DCCReference Include="Tests.Keyboard.ProcessFilter.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

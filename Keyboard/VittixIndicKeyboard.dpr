@@ -1,4 +1,4 @@
-﻿program VittixIndicKeyboard;
+program VittixIndicKeyboard;
 
 {$APPTYPE GUI}
 
@@ -22,7 +22,8 @@ uses
   Logger in 'Utils\Logger.pas',
   frmOnScreenKeyboard in 'Forms\frmOnScreenKeyboard.pas' {frmOnScreenKeyboard},
   frmSettings in 'Forms\frmSettings.pas' {frmSettings},
-  AppSettings in 'Config\AppSettings.pas';
+  AppSettings in 'Config\AppSettings.pas',
+  SettingsPathProvider in 'Config\SettingsPathProvider.pas';
 
 {$R *.res}
 
@@ -33,7 +34,17 @@ function SetCurrentProcessExplicitAppUserModelID(
   AppID: PWideChar
 ): HRESULT; stdcall; external 'shell32.dll';
 
+var
+  hMutex: THandle;
 begin
+  hMutex := CreateMutex(nil, True, 'Global\VittixIndicKeyboardInstance');
+  if (hMutex = 0) or (GetLastError = ERROR_ALREADY_EXISTS) then
+  begin
+    if hMutex <> 0 then CloseHandle(hMutex);
+    Exit;
+  end;
+
+  try
   try
     // CRITICAL for Windows 10/11 tray settings visibility
     // MUST be called before Application.Initialize
@@ -62,5 +73,9 @@ begin
         MB_ICONERROR or MB_OK
       );
     end;
+  end;
+  finally
+    if hMutex <> 0 then
+      CloseHandle(hMutex);
   end;
 end.

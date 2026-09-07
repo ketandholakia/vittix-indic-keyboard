@@ -50,6 +50,17 @@ end;
 procedure TfrmOnScreenKeyboard.LoadLayout(ALayout: TKeyboardLayout);
 begin
   FLayout := ALayout;
+
+  // A nil layout means no layout is active. Clear the view instead of reading
+  // layout fields on a nil reference (see GetGlyphForKey's own nil guard).
+  if ALayout = nil then
+  begin
+    lblLayoutName.Caption := 'No layout loaded';
+    pnlKeyboard.DestroyComponents;
+    lblKeyInfo.Caption := '';
+    Exit;
+  end;
+
   lblLayoutName.Caption := ALayout.Name;
   BuildKeyboard;
 end;

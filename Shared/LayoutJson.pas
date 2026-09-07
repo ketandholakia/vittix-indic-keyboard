@@ -44,6 +44,7 @@ begin
 
   Root := TJSONObject.Create;
   try
+    Root.AddPair('version', ALayout.Version);
     Root.AddPair('layout_id', ALayout.LayoutID);
     Root.AddPair('name', ALayout.Name);
     Root.AddPair('script', ALayout.Script);
@@ -156,6 +157,7 @@ begin
   Result := TKeyboardLayout.Create;
   try
     try
+      Result.Version    := JSON.GetValue<string>('version', '1.0');
       Result.LayoutID   := JSON.GetValue<string>('layout_id', '');
       Result.Name       := JSON.GetValue<string>('name', '');
       Result.Script     := JSON.GetValue<string>('script', '');
