@@ -65,18 +65,21 @@ foreach ($doc in $requiredDocs) {
 # 5.2 Layout JSON validation
 $layoutFiles = Get-ChildItem -Path "layouts" -Filter "*.json" -Recurse -File
 $layoutIds = @{}
+Add-Type -AssemblyName System.Web.Extensions
+$js = New-Object System.Web.Script.Serialization.JavaScriptSerializer
 foreach ($file in $layoutFiles) {
     try {
-        $json = Get-Content $file.FullName -Raw | ConvertFrom-Json -ErrorAction Stop
+        $raw = Get-Content $file.FullName -Raw
+        $json = $js.DeserializeObject($raw)
     } catch {
         Write-Error "Failed to parse JSON in $($file.FullName): $($_.Exception.Message)"
         exit 1
     }
-    if (-not $json.PSObject.Properties.Name -contains "layout_id") {
+    if (-not $json.ContainsKey("layout_id")) {
         Write-Error "Layout missing layout_id property: $($file.FullName)"
         exit 1
     }
-    $id = $json.layout_id
+    $id = $json["layout_id"]
     if ([string]::IsNullOrWhiteSpace($id)) {
         Write-Error "layout_id is empty in $($file.FullName)"
         exit 1
@@ -90,7 +93,7 @@ foreach ($file in $layoutFiles) {
 Write-Information "Found $($layoutFiles.Count) valid unique layouts."
 
 # 5.3 Installer validation
-$installerScript = "installer\VittixIndicKeyboard.iss"
+$installerScript = "installer\InnoSetup.iss"
 if (-not (Test-Path $installerScript)) {
     Write-Error "Installer script missing: $installerScript"
     exit 1
