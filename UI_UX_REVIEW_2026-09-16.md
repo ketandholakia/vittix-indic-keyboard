@@ -579,7 +579,46 @@ at -12, grid fill `$FFFFFF` and fixed row `$F6F8FA`, and section headers reading
 `LAYOUT INFO`, `LAYOUT METADATA`, `HOTKEY CUSTOMIZATION`, `APPLICATION SETTINGS`
 in `$8C959F` at -11 bold.
 
-### 5.1 Sidebar restructure
+### 5.1 Runtime reality: a VCL style overrides most of this
+
+Found during the visual pass, and it corrects the claim above.
+
+The editor links `Vcl.Styles` and calls
+`TStyleManager.TrySetStyle('Windows11 Modern Light')` at startup. The style is
+embedded in `VittixIndicEditor.exe` (the executable carries the `VCLSTYLE`
+resource type and the style name as UTF-16 resource names). The tray
+executable does not embed it, so **the editor runs styled and the tray does
+not**: the two surfaces do not share a look, and that is a product decision that
+was never made explicitly.
+
+Consequences for this unit:
+
+- Under a style, `TControl.Color` and the style-dominated font properties are
+  ignored for style-aware controls. Panels, labels, edits, buttons, menus and
+  scroll bars are painted by the style, not by `EditorTheme`.
+- What `EditorTheme` still governs is the grid, which `GridDrawCell` paints
+  itself, plus caption text such as the uppercase section headers.
+- `ParentBackground := False`, which the theme sets on every panel, does not opt
+  a control out of styling. That requires removing `seClient` from
+  `StyleElements`.
+
+So the original finding behind X-07, nine greys hard-coded in the DFM, was
+largely moot in the editor: the style was already overriding those literals. The
+token set still earns its place, because it is the palette the grid uses and the
+fallback when no style is loaded, but it is not the editor's whole appearance.
+
+`EditorThemeDefault` now returns colours read from the active style when one is
+loaded, and the token palette otherwise. Verified as a visual no-op, which is
+the expected result and confirms that the style, not the theme, was painting
+those surfaces either way.
+
+**Not yet decided:** whether the editor should keep the style (and the theme
+reduce to the grid and the fallback), be opted out of it so the token palette
+applies, or have the tray adopt the same style for a consistent product. The
+third option is the only one that makes both surfaces look like one product.
+
+
+### 5.2 Sidebar restructure
 
 Done, with a deliberate deviation from the sketch above.
 

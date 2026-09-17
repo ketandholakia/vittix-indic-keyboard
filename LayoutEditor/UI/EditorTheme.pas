@@ -21,7 +21,8 @@ interface
 uses
   System.SysUtils,
   Vcl.Graphics,
-  Vcl.Controls;
+  Vcl.Controls,
+  Vcl.Themes;
 
 type
   // TLabel does not republish Color, so reaching it needs the standard
@@ -51,6 +52,13 @@ type
     BodyHeight: Integer;    // text height in pixels, negative as VCL expects
     SmallHeight: Integer;
   end;
+
+// The palette used when no VCL style is active, and the source of the semantic
+// colours (success, warning, danger) that styles do not provide.
+function EditorThemeFromTokens: TEditorTheme;
+
+// The palette used when the editor is running under a VCL style.
+function EditorThemeFromStyle: TEditorTheme;
 
 // The palette the editor uses when High Contrast is off.
 function EditorThemeDefault: TEditorTheme;
@@ -107,7 +115,49 @@ var
   GCurrentTheme: TEditorTheme;
   GThemeLoaded: Boolean;
 
+// The palette the editor uses when no VCL style is active. This is the fallback
+// path; when a custom style is loaded it owns the colours of every style-aware
+// control, so the theme defers to it instead of fighting it.
 function EditorThemeDefault: TEditorTheme;
+begin
+  Result := EditorThemeFromStyle;
+end;
+
+// Colours taken from the active VCL style, so the few surfaces this unit does
+// paint itself (the grid) match the chrome the style draws everywhere else.
+function EditorThemeFromStyle: TEditorTheme;
+var
+  S: TCustomStyleServices;
+begin
+  if not TStyleManager.IsCustomStyleActive then
+    Exit(EditorThemeFromTokens);
+
+  S := StyleServices;
+
+  Result.Canvas := S.GetSystemColor(clWindow);
+  Result.Surface := S.GetSystemColor(clBtnFace);
+  Result.SurfaceAlt := S.GetSystemColor(clBtnFace);
+  Result.Inset := S.GetSystemColor(clBtnFace);
+  Result.Border := S.GetSystemColor(clBtnShadow);
+  Result.BorderMuted := S.GetSystemColor(clBtnShadow);
+  Result.BorderSubtle := S.GetSystemColor(cl3DLight);
+  Result.Text := S.GetSystemColor(clWindowText);
+  Result.TextMuted := S.GetSystemColor(clGrayText);
+  Result.TextSubtle := S.GetSystemColor(clGrayText);
+  Result.Accent := S.GetSystemColor(clHighlight);
+  Result.AccentHover := S.GetSystemColor(clHighlight);
+  Result.AccentSubtle := S.GetSystemColor(clHighlight);
+  Result.Success := CLR_SUCCESS;
+  Result.SuccessSubtle := CLR_SUCCESS_SUBTLE;
+  Result.Warning := CLR_WARNING;
+  Result.WarningSubtle := CLR_WARNING_SUBTLE;
+  Result.Danger := CLR_DANGER;
+  Result.DangerSubtle := CLR_DANGER_SUBTLE;
+  Result.BodyHeight := BODY_HEIGHT;
+  Result.SmallHeight := SMALL_HEIGHT;
+end;
+
+function EditorThemeFromTokens: TEditorTheme;
 begin
   Result.Canvas := CLR_CANVAS;
   Result.Surface := CLR_SURFACE;
