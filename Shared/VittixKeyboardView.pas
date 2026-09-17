@@ -194,14 +194,18 @@ type
 implementation
 
 const
-  ROW_NUMBERS = '1234567890';
-  ROW_NUMBERS_SHIFT = '!@#$%^&*()';
-  ROW_1 = 'QWERTYUIOP';
-  ROW_1_SHIFT = 'QWERTYUIOP';
-  ROW_2 = 'ASDFGHJKL';
-  ROW_2_SHIFT = 'ASDFGHJKL';
-  ROW_3 = 'ZXCVBNM';
-  ROW_3_SHIFT = 'ZXCVBNM';
+  // Full ANSI key sets. The earlier table held only the alphabet and digits, so
+  // punctuation ( - = [ ] ; ' , . / ` ) could not be selected in the keyboard
+  // view even though Indic layouts map those keys. Every row is sized to the
+  // same 15 units so the columns line up as they do on real hardware.
+  ROW_0       = '`1234567890-=';
+  ROW_0_SHIFT = '~!@#$%^&*()_+';
+  ROW_1       = 'QWERTYUIOP[]';
+  ROW_1_SHIFT = 'QWERTYUIOP{}';
+  ROW_2       = 'ASDFGHJKL;' + #39;
+  ROW_2_SHIFT = 'ASDFGHJKL:' + #34;
+  ROW_3       = 'ZXCVBNM,./';
+  ROW_3_SHIFT = 'ZXCVBNM<>?';
 
   // All metrics are expressed at 96 DPI and scaled by ChangeScale.
   BASE_ORIGIN        = 20;
@@ -246,42 +250,44 @@ begin
 
   if AShiftState then
   begin
-    // Number row + Backspace. No indent -- reference row.
+    // Number row, then Backspace. 13 keys + 2.0 = 15 units.
     Result[0].IndentUnits := 0;
-    Result[0].Keys := MakeKeys(ROW_NUMBERS_SHIFT) + [SpecialKey('Backspace', 2.0)];
+    Result[0].Keys := MakeKeys(ROW_0_SHIFT) + [SpecialKey('Backspace', 2.0)];
 
-    // Tab + QWERTY row.
+    // Tab + QWERTY row + backslash. 1.5 + 12 + 1.5 = 15 units.
     Result[1].IndentUnits := 0;
-    Result[1].Keys := [SpecialKey('Tab', 1.5)] + MakeKeys(ROW_1_SHIFT) + [NormalKey('|', 1.5)];
+    Result[1].Keys := [SpecialKey('Tab', 1.5)] + MakeKeys(ROW_1_SHIFT) +
+      [NormalKey('|', 1.5)];
 
-    // Caps + ASDF row + Enter.
+    // Caps + ASDF row + Enter. 1.75 + 11 + 2.25 = 15 units.
     Result[2].IndentUnits := 0;
-    Result[2].Keys := [SpecialKey('Caps Lock', 1.75)] + MakeKeys(ROW_2_SHIFT) + [SpecialKey('Return', 2.25)];
+    Result[2].Keys := [SpecialKey('Caps Lock', 1.75)] + MakeKeys(ROW_2_SHIFT) +
+      [SpecialKey('Return', 2.25)];
 
-    // Shift + ZXCV row + Shift.
+    // Shift + ZXCV row + Shift. 2.25 + 10 + 2.75 = 15 units.
     Result[3].IndentUnits := 0;
-    Result[3].Keys := [SpecialKey('Shift', 2.25)] + MakeKeys(ROW_3_SHIFT) + [SpecialKey('Shift', 2.75)];
+    Result[3].Keys := [SpecialKey('Shift', 2.25)] + MakeKeys(ROW_3_SHIFT) +
+      [SpecialKey('Shift', 2.75)];
   end
   else
   begin
-    // Number row + Backspace. No indent -- reference row.
     Result[0].IndentUnits := 0;
-    Result[0].Keys := MakeKeys(ROW_NUMBERS) + [SpecialKey('Backspace', 2.0)];
+    Result[0].Keys := MakeKeys(ROW_0) + [SpecialKey('Backspace', 2.0)];
 
-    // Tab + QWERTY row.
     Result[1].IndentUnits := 0;
-    Result[1].Keys := [SpecialKey('Tab', 1.5)] + MakeKeys(ROW_1) + [NormalKey('\', 1.5)];
+    Result[1].Keys := [SpecialKey('Tab', 1.5)] + MakeKeys(ROW_1) +
+      [NormalKey('\', 1.5)];
 
-    // Caps + ASDF row + Enter.
     Result[2].IndentUnits := 0;
-    Result[2].Keys := [SpecialKey('Caps Lock', 1.75)] + MakeKeys(ROW_2) + [SpecialKey('Return', 2.25)];
+    Result[2].Keys := [SpecialKey('Caps Lock', 1.75)] + MakeKeys(ROW_2) +
+      [SpecialKey('Return', 2.25)];
 
-    // Shift + ZXCV row + Shift.
     Result[3].IndentUnits := 0;
-    Result[3].Keys := [SpecialKey('Shift', 2.25)] + MakeKeys(ROW_3) + [SpecialKey('Shift', 2.75)];
+    Result[3].Keys := [SpecialKey('Shift', 2.25)] + MakeKeys(ROW_3) +
+      [SpecialKey('Shift', 2.75)];
   end;
 
-  // Space bar row.
+  // Space bar row. 1.25 * 6 + 6.25 = 15 units.
   Result[4].IndentUnits := 0;
   Result[4].Keys := [
     SpecialKey('Control', 1.25),
