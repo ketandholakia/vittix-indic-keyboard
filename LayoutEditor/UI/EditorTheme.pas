@@ -142,8 +142,11 @@ begin
   Result.BorderMuted := S.GetSystemColor(clBtnShadow);
   Result.BorderSubtle := S.GetSystemColor(cl3DLight);
   Result.Text := S.GetSystemColor(clWindowText);
-  Result.TextMuted := S.GetSystemColor(clGrayText);
-  Result.TextSubtle := S.GetSystemColor(clGrayText);
+  // Not clGrayText: a style can map that to something too pale to read as a
+  // section heading on the style's own panel colour. These greys are readable
+  // on any light surface.
+  Result.TextMuted := CLR_TEXT_MUTED;
+  Result.TextSubtle := CLR_TEXT_SUBTLE;
   Result.Accent := S.GetSystemColor(clHighlight);
   Result.AccentHover := S.GetSystemColor(clHighlight);
   Result.AccentSubtle := S.GetSystemColor(clHighlight);

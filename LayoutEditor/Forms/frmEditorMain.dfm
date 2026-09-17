@@ -17,7 +17,7 @@ object frmEditorMain: TfrmEditorMain
   TextHeight = 17
   object pnlMain: TPanel
     Left = 0
-    Top = 0
+    Top = 33
     Width = 980
     Height = 681
     Align = alClient
@@ -328,7 +328,7 @@ object frmEditorMain: TfrmEditorMain
             TabOrder = 0
             object lblKeyboardHint: TLabel
               Left = 12
-              Top = 9
+              Top = 13
               Width = 344
               Height = 17
               Caption = 'Click a key below to see and assign its mapping.'
@@ -434,16 +434,16 @@ object frmEditorMain: TfrmEditorMain
         ExplicitHeight = 568
         object pnlLayoutInfo: TPanel
           Left = 0
-          Top = 170
+          Top = 0
           Width = 338
           Height = 185
           Align = alTop
           BevelOuter = bvNone
           Color = clWhite
-          TabOrder = 1
+          TabOrder = 0
           object lblSectionLayout: TLabel
             Left = 14
-            Top = 170
+            Top = 12
             Width = 71
             Height = 13
             Caption = 'LAYOUT INFO'
@@ -456,7 +456,7 @@ object frmEditorMain: TfrmEditorMain
           end
           object lblDivider1: TLabel
             Left = 14
-            Top = 170
+            Top = 30
             Width = 310
             Height = 1
             AutoSize = False
@@ -465,7 +465,7 @@ object frmEditorMain: TfrmEditorMain
           end
           object lblLayoutName: TLabel
             Left = 14
-            Top = 170
+            Top = 44
             Width = 71
             Height = 15
             Caption = 'Layout Name'
@@ -478,7 +478,7 @@ object frmEditorMain: TfrmEditorMain
           end
           object lblScript: TLabel
             Left = 14
-            Top = 170
+            Top = 98
             Width = 93
             Height = 15
             Caption = 'Script / Language'
@@ -491,7 +491,7 @@ object frmEditorMain: TfrmEditorMain
           end
           object Label1: TLabel
             Left = 14
-            Top = 170
+            Top = 150
             Width = 68
             Height = 15
             Caption = 'Preview Font'
@@ -504,7 +504,7 @@ object frmEditorMain: TfrmEditorMain
           end
           object edtLayoutName: TEdit
             Left = 14
-            Top = 170
+            Top = 62
             Width = 312
             Height = 25
             Font.Charset = DEFAULT_CHARSET
@@ -513,11 +513,11 @@ object frmEditorMain: TfrmEditorMain
             Font.Name = 'Segoe UI'
             Font.Style = []
             ParentFont = False
-            TabOrder = 1
+            TabOrder = 0
           end
           object ComboBoxScript: TComboBox
             Left = 14
-            Top = 170
+            Top = 116
             Width = 312
             Height = 25
             Font.Charset = DEFAULT_CHARSET
@@ -531,7 +531,7 @@ object frmEditorMain: TfrmEditorMain
           end
           object ComboBoxFonts: TComboBox
             Left = 14
-            Top = 170
+            Top = 168
             Width = 312
             Height = 25
             Font.Charset = DEFAULT_CHARSET
@@ -540,22 +540,22 @@ object frmEditorMain: TfrmEditorMain
             Font.Name = 'Segoe UI'
             Font.Style = []
             ParentFont = False
-            TabOrder = 1
+            TabOrder = 2
             Text = 'Select Font for Preview'
           end
         end
         object pnlProperties: TPanel
           Left = 0
-          Top = 355
+          Top = 185
           Width = 338
           Height = 158
           Align = alTop
           BevelOuter = bvNone
           Color = clWhite
-          TabOrder = 2
+          TabOrder = 1
           object lblSectionProps: TLabel
             Left = 14
-            Top = 355
+            Top = 12
             Width = 103
             Height = 13
             Caption = 'LAYOUT METADATA'
@@ -568,7 +568,7 @@ object frmEditorMain: TfrmEditorMain
           end
           object lblDivider2: TLabel
             Left = 14
-            Top = 355
+            Top = 30
             Width = 310
             Height = 1
             AutoSize = False
@@ -577,7 +577,7 @@ object frmEditorMain: TfrmEditorMain
           end
           object btnAddKeyMap: TButton
             Left = 210
-            Top = 355
+            Top = 8
             Width = 116
             Height = 26
             Hint = 'Add a new key map type to this layout'
@@ -590,11 +590,11 @@ object frmEditorMain: TfrmEditorMain
             ParentFont = False
             ParentShowHint = False
             ShowHint = True
-            TabOrder = 2
+            TabOrder = 0
           end
           object grdProperties: TStringGrid
             Left = 14
-            Top = 355
+            Top = 36
             Width = 312
             Height = 114
             Hint = 'Edit layout metadata properties here.'
@@ -604,21 +604,21 @@ object frmEditorMain: TfrmEditorMain
             Options = [goEditing, goAlwaysShowEditor]
             ParentShowHint = False
             ShowHint = True
-            TabOrder = 2
+            TabOrder = 1
           end
         end
         object pnlHotkeys: TPanel
           Left = 0
-          Top = 513
+          Top = 343
           Width = 338
           Height = 108
           Align = alTop
           BevelOuter = bvNone
           Color = clWhite
-          TabOrder = 3
+          TabOrder = 2
           object lblSectionHotkeys: TLabel
             Left = 14
-            Top = 513
+            Top = 12
             Width = 134
             Height = 13
             Caption = 'HOTKEY CUSTOMIZATION'
@@ -631,7 +631,7 @@ object frmEditorMain: TfrmEditorMain
           end
           object lblDivider3: TLabel
             Left = 14
-            Top = 513
+            Top = 30
             Width = 310
             Height = 1
             AutoSize = False
@@ -640,7 +640,7 @@ object frmEditorMain: TfrmEditorMain
           end
           object lblHotkeySwitch: TLabel
             Left = 14
-            Top = 513
+            Top = 42
             Width = 115
             Height = 15
             Caption = 'Switch Layout Hotkey'
@@ -653,7 +653,7 @@ object frmEditorMain: TfrmEditorMain
           end
           object lblHotkeyAction: TLabel
             Left = 14
-            Top = 513
+            Top = 74
             Width = 116
             Height = 15
             Caption = 'Special Action Hotkey'
@@ -666,7 +666,7 @@ object frmEditorMain: TfrmEditorMain
           end
           object edtHotkeySwitch: TEdit
             Left = 170
-            Top = 513
+            Top = 40
             Width = 156
             Height = 25
             Hint = 'Set hotkey for switching layouts'
@@ -678,11 +678,11 @@ object frmEditorMain: TfrmEditorMain
             ParentFont = False
             ParentShowHint = False
             ShowHint = True
-            TabOrder = 3
+            TabOrder = 0
           end
           object edtHotkeyAction: TEdit
             Left = 170
-            Top = 513
+            Top = 72
             Width = 156
             Height = 25
             Hint = 'Set hotkey for special action'
@@ -694,12 +694,12 @@ object frmEditorMain: TfrmEditorMain
             ParentFont = False
             ParentShowHint = False
             ShowHint = True
-            TabOrder = 3
+            TabOrder = 1
           end
         end
         object pnlAppSettings: TPanel
           Left = 0
-          Top = 621
+          Top = 451
           Width = 338
           Height = 104
           Align = alTop
@@ -708,7 +708,7 @@ object frmEditorMain: TfrmEditorMain
           TabOrder = 4
           object lblSectionAppSettings: TLabel
             Left = 14
-            Top = 621
+            Top = 10
             Width = 142
             Height = 13
             Caption = 'APPLICATION SETTINGS'
@@ -721,7 +721,7 @@ object frmEditorMain: TfrmEditorMain
           end
           object lblDivider5: TLabel
             Left = 14
-            Top = 621
+            Top = 28
             Width = 310
             Height = 1
             AutoSize = False
@@ -730,7 +730,7 @@ object frmEditorMain: TfrmEditorMain
           end
           object lblKeyFontSize: TLabel
             Left = 14
-            Top = 621
+            Top = 42
             Width = 73
             Height = 15
             Caption = 'Key Font Size'
@@ -743,7 +743,7 @@ object frmEditorMain: TfrmEditorMain
           end
           object ComboBoxKeyFontSize: TComboBox
             Left = 170
-            Top = 621
+            Top = 40
             Width = 156
             Height = 25
             Font.Charset = DEFAULT_CHARSET
@@ -752,11 +752,11 @@ object frmEditorMain: TfrmEditorMain
             Font.Name = 'Segoe UI'
             Font.Style = []
             ParentFont = False
-            TabOrder = 4
+            TabOrder = 0
           end
           object chkHighContrast: TCheckBox
             Left = 14
-            Top = 621
+            Top = 72
             Width = 160
             Height = 24
             Hint = 'Toggle high-contrast colours for accessibility'
@@ -769,11 +769,11 @@ object frmEditorMain: TfrmEditorMain
             ParentFont = False
             ParentShowHint = False
             ShowHint = True
-            TabOrder = 4
+            TabOrder = 1
           end
           object btnHelp: TButton
             Left = 206
-            Top = 621
+            Top = 70
             Width = 108
             Height = 28
             Hint = 'Show help, user guide and about'
@@ -786,7 +786,7 @@ object frmEditorMain: TfrmEditorMain
             ParentFont = False
             ParentShowHint = False
             ShowHint = True
-            TabOrder = 4
+            TabOrder = 2
           end
         end
         object pnlDiagnostics: TPanel
@@ -797,10 +797,10 @@ object frmEditorMain: TfrmEditorMain
           Align = alTop
           BevelOuter = bvNone
           Color = 16053492
-          TabOrder = 5
+          TabOrder = 3
           object lblSectionDiag: TLabel
             Left = 14
-            Top = 725
+            Top = 10
             Width = 72
             Height = 13
             Caption = 'DIAGNOSTICS'
@@ -813,7 +813,7 @@ object frmEditorMain: TfrmEditorMain
           end
           object lblDivider4: TLabel
             Left = 14
-            Top = 725
+            Top = 28
             Width = 310
             Height = 1
             AutoSize = False
@@ -822,7 +822,7 @@ object frmEditorMain: TfrmEditorMain
           end
           object lblDiagInfo: TLabel
             Left = 14
-            Top = 725
+            Top = 36
             Width = 310
             Height = 40
             AutoSize = False
@@ -838,16 +838,16 @@ object frmEditorMain: TfrmEditorMain
         end
         object pnlMappingInspector: TPanel
           Left = 0
-          Top = 0
+          Top = 555
           Width = 338
           Height = 170
           Align = alTop
           BevelOuter = bvNone
           Color = clWhite
-          TabOrder = 0
+          TabOrder = 3
           object lblInspectorTitle: TLabel
             Left = 14
-            Top = 0
+            Top = 12
             Width = 126
             Height = 13
             Caption = 'Mapping Inspector'
@@ -860,62 +860,62 @@ object frmEditorMain: TfrmEditorMain
           end
           object lblInspectorGrid: TLabel
             Left = 14
-            Top = 0
+            Top = 34
             Width = 65
             Height = 15
             Caption = 'Grid: -'
           end
           object lblInspectorKey: TLabel
             Left = 14
-            Top = 0
+            Top = 60
             Width = 23
             Height = 15
             Caption = 'Key'
           end
           object lblInspectorValue: TLabel
             Left = 14
-            Top = 0
+            Top = 96
             Width = 37
             Height = 15
             Caption = 'Value'
           end
           object edtInspectorKey: TEdit
             Left = 72
-            Top = 0
+            Top = 56
             Width = 256
             Height = 23
             TabOrder = 0
           end
           object edtInspectorValue: TEdit
             Left = 72
-            Top = 0
+            Top = 92
             Width = 256
             Height = 23
-            TabOrder = 0
+            TabOrder = 1
           end
           object btnInspectorApply: TButton
             Left = 14
-            Top = 0
+            Top = 128
             Width = 75
             Height = 25
             Caption = 'Apply'
-            TabOrder = 0
+            TabOrder = 2
           end
           object btnInspectorClear: TButton
             Left = 95
-            Top = 0
+            Top = 128
             Width = 75
             Height = 25
             Caption = 'Clear'
-            TabOrder = 0
+            TabOrder = 3
           end
           object btnInspectorAdd: TButton
             Left = 256
-            Top = 0
+            Top = 128
             Width = 72
             Height = 25
             Caption = '+ Add'
-            TabOrder = 0
+            TabOrder = 4
           end
         end
       end
