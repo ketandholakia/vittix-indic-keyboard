@@ -157,7 +157,9 @@ begin
   Result := TKeyboardLayout.Create;
   try
     try
-      Result.Version    := JSON.GetValue<string>('version', '1.0');
+      // Version was absent in the original layout files; retain that legacy
+      // compatibility by treating it as the current schema version.
+      Result.Version    := JSON.GetValue<string>('version', CURRENT_LAYOUT_SCHEMA_VERSION);
       Result.LayoutID   := JSON.GetValue<string>('layout_id', '');
       Result.Name       := JSON.GetValue<string>('name', '');
       Result.Script     := JSON.GetValue<string>('script', '');

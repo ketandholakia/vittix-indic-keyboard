@@ -1,62 +1,77 @@
 # Vittix Indic Keyboard
 
-Vittix Indic Keyboard is a fast, reliable, and fail-open Indic language typing tool for Windows. It provides comprehensive layout support for various Indic scripts (such as Devanagari, Gujarati, Marathi, Tamil, etc.) and integrates deeply with Win32 applications via a global keyboard hook to intercept and translate keystrokes dynamically.
+Vittix Indic Keyboard is a Windows typing tool with a global keyboard hook,
+fail-open text injection, JSON layouts, and a companion Layout Editor. When
+translation cannot be completed, the keyboard passes the native keystroke
+through instead of silently consuming it.
 
-## Features
-- **Broad Language Support:** Extensible JSON-based layout configuration.
-- **Fail-Open Injection:** Safe handling of Win32 `SendInput` results, falling back seamlessly if translation fails.
-- **Customizable:** Settings stored locally (`%APPDATA%`), whitelist target applications, and bounded logging (`%LOCALAPPDATA%`).
-- **Layout Editor:** A companion GUI layout editor to modify and validate custom layout sequences and mappings.
+## Shipped layouts
 
-## Supported Versions
-- **OS:** Windows 10, Windows 11 (Standard user installation supported)
-- **Toolchain:** Embarcadero Delphi Studio 23.0 for Win32
+The repository currently ships ten layouts. The `script` values represented
+by those files are Devanagari and Gujarati; this is the supported shipped
+layout inventory, not a claim of general support for every Indic script.
 
-## Building from Source
+| File | Layout |
+|---|---|
+| `layouts/devnagari/krutidev_010.json` | KrutiDev Devanagari 010 |
+| `layouts/devnagari/shreelipi_0708.json` | ShreeLipi Devanagari 0708 |
+| `layouts/devnagari/shree_dev_1076.json` | ShreeLipi Devanagari 1076 |
+| `layouts/custom/press_custom_1.json` | Press Custom 1 (Devanagari) |
+| `layouts/hindi/hindi_phonetic.json` | Hindi Phonetic Example (Devanagari) |
+| `layouts/hindi/hindi_inscript.json` | Hindi InScript (Devanagari) |
+| `layouts/gujarati/remington.json` | Gujarati Remington |
+| `layouts/gujarati/gujarati_remington_unicode.json` | Gujarati Remington Unicode |
+| `layouts/gujarati/gujarati_phonetic.json` | Gujarati Phonetic Example |
+| `layouts/gujarati/gujarati_inscript.json` | Gujarati InScript |
 
-To compile the keyboard, editor, and run tests, you can use the provided batch scripts:
+The InScript files are positional examples, not verified official government
+standards.
+
+## Runtime behavior
+
+Layouts can define direct mappings, prebase mappings, postbase mappings, and
+the executable `reph` and `halant` modifier rules. General multi-key
+`sequences` are retained in legacy layout data but are not executed by the
+current runtime. Other modifier definitions are likewise compatibility data,
+not executable typing rules.
+
+See [the layout file guide](docs/UserGuide_EN.md) for the authoring and
+validation contract.
+
+## Build and verification
+
+The supported developer entry point is:
+
 ```bat
-# 1. Build tests
-.\build_tests.bat
-
-# 2. Run tests
-.\build\Win32\VittixIndicTests.exe
-
-# 3. Build main keyboard application
-.\build_test.bat
-
-# 4. Build Layout Editor
-.\build_editor.bat
+verify.bat
 ```
 
-## Installation & Configuration
-Install the software using the provided Inno Setup executable. The configuration files are stored safely in:
-- Config: `%APPDATA%\Vittix\settings.ini`
-- Logs: `%LOCALAPPDATA%\Vittix\Logs\`
+It builds the DUnitX tests, `VittixIndicKeyboard`, and `VittixIndicEditor`,
+validates the shipped layouts, builds the installer when Inno Setup is
+available, and runs `git diff --check`.
 
-Target applications are filtered via an internal whitelist, which can be modified dynamically via the tray icon menu.
+The projects require Embarcadero Delphi Studio 23.0 for Win32. For a local
+test-only build, use `Tests\build_tests_local.bat`, then run
+`build\Win32\VittixIndicTests.exe`.
 
-## Layout Overview
-Layouts dictate the behavior of keys and sequence mappings.
-**Note on Sequences**: Multi-key sequences (e.g., legacy combinations) are currently deprecated and retained only for backward compatibility. Users are encouraged to utilize halant-based conjunct entry, which the runtime explicitly supports.
+## Installation and configuration
 
-## Example Unicode Layouts
+The Inno Setup package installs the keyboard application, Layout Editor,
+layouts, documentation, README, and license. It adds Start Menu shortcuts for
+the keyboard and editor, with an optional desktop shortcut for the keyboard.
 
-### Gujarati
-- Gujarati Phonetic Example: An English-key phonetic typing layout for users who are familiar with Latin keys. Output uses real Unicode characters. Example mappings: `a -> અ`, `k -> ક`.
-- Gujarati InScript: A positional standard layout producing real Unicode Gujarati characters.
+Application settings are stored in `%APPDATA%\Vittix\settings.ini`; logs are
+stored under `%LOCALAPPDATA%\Vittix\Logs\`. Target applications are controlled
+through the application whitelist.
 
-### Hindi
-- Hindi Phonetic Example: An English-key-to-Devanagari phonetic layout, using real Devanagari Unicode characters. Example mappings: `a -> अ`, `k -> क`.
-- Hindi InScript: A positional layout producing Unicode Devanagari characters.
+## Limitations
 
-*Note: The InScript layouts are examples of positional mappings and should not be considered verified official government standards.*
+Elevated target applications may reject injection from a standard-user
+keyboard process. In that case Vittix fails open and lets the native keystroke
+through. Rendering also depends on the fonts available in the target
+application.
 
-## Known Limitations
-- Elevated targets (Run As Administrator) might reject keyboard injection if the keyboard is running as a standard user. In these cases, the engine correctly fails open and passes native keystrokes through.
-- Multi-key sequences are not executed by the runtime.
-- Some edge-case rendering might depend on the active font within the target application.
+## Release packaging
 
-## Contribution & Release
-Before proposing changes, ensure you test thoroughly without adding destructive hooks. Always run `build\Win32\VittixIndicTests.exe` to guarantee the engine's core input lifecycle remains isolated and correct.
-For release, compile the Inno Setup script (`installer/InnoSetup.iss`) to package the application.
+`installer/InnoSetup.iss` packages the verified Win32 binaries and the files
+listed above into `build\VittixIndicKeyboardSetup.exe`.

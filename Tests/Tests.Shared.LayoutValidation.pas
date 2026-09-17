@@ -29,6 +29,24 @@ type
     procedure CrossMapDuplicate_DetectedWhenEnabled;
 
     [Test]
+    procedure CrossMapDuplicate_UsesModifierPhysicalKeyWhenEnabled;
+
+    [Test]
+    procedure UnsupportedSchemaVersion_FailsValidation;
+
+    [Test]
+    procedure EmptySchemaVersion_FailsValidation;
+
+    [Test]
+    procedure LegacyDefaultSchemaVersion_PassesValidation;
+
+    [Test]
+    procedure Sequences_AreWarningsAndRemainCompatible;
+
+    [Test]
+    procedure Validation_DoesNotMutateRichMapping;
+
+    [Test]
     procedure EmptyGlyphInDirectMap_FailsValidation;
 
     [Test]
@@ -143,12 +161,152 @@ begin
     KM.InitMetadata;
     Layout.PrebaseMap.Add('k', KM);
 
-    ResultObj := TLayoutValidation.ValidateAndReport(Layout, True, False); // ACheckCrossMapDuplicates = False
+    ResultObj := TLayoutValidation.ValidateAndReport(Layout, True, False); // structural-only validation intentionally permits overlap
     try
       Assert.IsTrue(ResultObj.IsValid, 'Cross-map duplicates should be allowed by default: ' + ResultObj.ToString);
     finally
       ResultObj.Free;
     end;
+  finally
+    Layout.Free;
+  end;
+end;
+
+procedure TLayoutValidationTests.CrossMapDuplicate_UsesModifierPhysicalKeyWhenEnabled;
+var
+  Layout: TKeyboardLayout;
+  ResultObj: TLayoutValidationResult;
+  KM: TKeyMapping;
+begin
+  Layout := CreateMinimalValidLayout;
+  try
+    Layout.DirectMap.Add('d', 'x');
+    KM := Default(TKeyMapping);
+    KM.Key := 'd';
+    KM.Glyph := 'halant';
+    KM.MapType := 'modifier';
+    KM.InitMetadata;
+    Layout.Modifiers.Add('halant', KM);
+
+    ResultObj := TLayoutValidation.ValidateAndReport(Layout, True, True);
+    try
+      Assert.IsFalse(ResultObj.IsValid,
+        'The opt-in collision diagnostic must use a modifier physical key');
+      Assert.IsTrue(ResultObj.ToString.Contains('Duplicate key "d"'));
+    finally
+      ResultObj.Free;
+    end;
+  finally
+    Layout.Free;
+  end;
+end;
+
+procedure TLayoutValidationTests.UnsupportedSchemaVersion_FailsValidation;
+var
+  Layout: TKeyboardLayout;
+  ResultObj: TLayoutValidationResult;
+begin
+  Layout := CreateMinimalValidLayout;
+  try
+    Layout.Version := '2.0';
+    ResultObj := TLayoutValidation.ValidateAndReport(Layout);
+    try
+      Assert.IsFalse(ResultObj.IsValid);
+      Assert.IsTrue(ResultObj.ToString.Contains('Unsupported layout schema version'));
+    finally
+      ResultObj.Free;
+    end;
+  finally
+    Layout.Free;
+  end;
+end;
+
+procedure TLayoutValidationTests.EmptySchemaVersion_FailsValidation;
+var
+  Layout: TKeyboardLayout;
+  ResultObj: TLayoutValidationResult;
+begin
+  Layout := CreateMinimalValidLayout;
+  try
+    Layout.Version := '';
+    ResultObj := TLayoutValidation.ValidateAndReport(Layout);
+    try
+      Assert.IsFalse(ResultObj.IsValid);
+      Assert.IsTrue(ResultObj.ToString.Contains('Unsupported layout schema version'));
+    finally
+      ResultObj.Free;
+    end;
+  finally
+    Layout.Free;
+  end;
+end;
+
+procedure TLayoutValidationTests.LegacyDefaultSchemaVersion_PassesValidation;
+var
+  Layout: TKeyboardLayout;
+  ResultObj: TLayoutValidationResult;
+begin
+  Layout := CreateMinimalValidLayout;
+  try
+    Assert.AreEqual(CURRENT_LAYOUT_SCHEMA_VERSION, Layout.Version);
+    ResultObj := TLayoutValidation.ValidateAndReport(Layout);
+    try
+      Assert.IsTrue(ResultObj.IsValid, ResultObj.ToString);
+    finally
+      ResultObj.Free;
+    end;
+  finally
+    Layout.Free;
+  end;
+end;
+
+procedure TLayoutValidationTests.Sequences_AreWarningsAndRemainCompatible;
+var
+  Layout: TKeyboardLayout;
+  ResultObj: TLayoutValidationResult;
+begin
+  Layout := CreateMinimalValidLayout;
+  try
+    Layout.Sequences.Add('ks', 'conjunct');
+    ResultObj := TLayoutValidation.ValidateAndReport(Layout);
+    try
+      Assert.IsTrue(ResultObj.IsValid,
+        'Legacy sequences are retained but explicitly warned about');
+      Assert.IsTrue(ResultObj.WarningCount > 0);
+      Assert.IsTrue(ResultObj.ToString.Contains('not supported by the engine'));
+    finally
+      ResultObj.Free;
+    end;
+  finally
+    Layout.Free;
+  end;
+end;
+
+procedure TLayoutValidationTests.Validation_DoesNotMutateRichMapping;
+var
+  Layout: TKeyboardLayout;
+  ResultObj: TLayoutValidationResult;
+  KM: TKeyMapping;
+begin
+  Layout := CreateMinimalValidLayout;
+  try
+    KM := Default(TKeyMapping);
+    KM.Key := 'f';
+    KM.Glyph := 'i';
+    KM.MapType := 'legacy-prebase';
+    KM.InitMetadata;
+    KM.Metadata.Add('source', 'imported');
+    Layout.PrebaseMap.Add('f', KM);
+
+    ResultObj := TLayoutValidation.ValidateAndReport(Layout);
+    try
+      Assert.IsTrue(ResultObj.IsValid, ResultObj.ToString);
+    finally
+      ResultObj.Free;
+    end;
+    KM := Layout.PrebaseMap['f'];
+    Assert.AreEqual('legacy-prebase', KM.MapType);
+    Assert.AreEqual('imported', KM.Metadata['source']);
   finally
     Layout.Free;
   end;

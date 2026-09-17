@@ -26,6 +26,7 @@ Use this as a starting template:
 
 ```json
 {
+  "version": "1.0",
   "layout_id": "my-layout-id",
   "name": "My Layout",
   "script": "Devanagari",
@@ -36,7 +37,8 @@ Use this as a starting template:
   "direct": {},
   "prebase": {},
   "postbase": {},
-  "modifiers": {}
+  "modifiers": {},
+  "sequences": {}
 }
 ```
 
@@ -68,18 +70,21 @@ Example:
 
 The script/language family.
 
-Known values used in the project:
+Shipped layouts currently use:
 
 - `Devanagari`
 - `Gujarati`
-- `Tamil`
-- `Bengali`
-- `Kannada`
-- `Malayalam`
-- `Oriya`
-- `Punjabi`
-- `Telugu`
-- `Sinhala`
+
+The editor can present additional script labels, but a label alone does not
+mean a shipped or runtime-verified layout exists for that script.
+
+### `version`
+
+The supported layout schema version is `1.0`.
+
+- A missing `version` is treated as legacy-compatible `1.0`.
+- An explicit `"1.0"` is supported.
+- An empty or unsupported declared version is a validation error.
 
 ### `encoding`
 
@@ -198,7 +203,9 @@ Format:
 
 ### `modifiers`
 
-Defines special modifier rules such as halant or reph behavior.
+Defines modifier records. The current runtime executes only the `halant` and
+`reph` rules; other modifier records are retained for compatibility and shown
+as validation warnings.
 
 Format:
 
@@ -295,14 +302,18 @@ Do not use sequences for new layouts. Instead, use halant-based conjunct entry (
 2. Change `layout_id`, `name`, `font_family`, and `layout_type`.
 3. Update the `direct` map first so basic typing works.
 4. Add `prebase` and `postbase` mappings for vowel signs and matras.
-5. Add `modifiers` for halant, reph, or other script-specific behaviors. (Use halant keys to produce conjuncts.)
+5. Add executable `halant` and/or `reph` modifier rules when needed. Use a
+   halant key to produce conjuncts.
 6. Save the file as UTF-8 JSON.
 8. Place it under the correct `layouts\<group>\` folder.
 9. Restart the keyboard app or rebuild/copy the layout into the output folder if you are testing from `build\Win32`.
 
 ## Using the Layout Editor
 
-The Layout Editor can create and save layout files, but the saved file still follows the same JSON format described above.
+The Layout Editor can open any layout file, edit supported mapping fields, save
+to the selected file, and run the shared validator. It preserves mapping
+`map_type` and metadata that its grids do not expose; the saved file still
+follows the same JSON format described above.
 
 Editor fields map roughly as follows:
 
@@ -326,6 +337,8 @@ Editor fields map roughly as follows:
 - Empty files will fail to load.
 - Invalid JSON in one file can prevent that layout from loading.
 - The app scans every `*.json` file in the layouts folder tree, so do not keep broken scratch files there.
+- Cross-map overlap diagnostics are available to validation callers but remain
+  opt-in because legacy shipped layouts intentionally overlap some maps.
 
 ## Troubleshooting
 
@@ -374,4 +387,5 @@ Useful examples:
 - [layouts/devnagari/shreelipi_0708.json](d:/ketan/github/vittix-indic-keyboard/layouts/devnagari/shreelipi_0708.json)
 - [layouts/gujarati/remington.json](d:/ketan/github/vittix-indic-keyboard/layouts/gujarati/remington.json)
 - [Keyboard/Layout/LayoutLoader.pas](d:/ketan/github/vittix-indic-keyboard/Keyboard/Layout/LayoutLoader.pas)
-- [LayoutEditor/IO/LayoutJsonIO.pas](d:/ketan/github/vittix-indic-keyboard/LayoutEditor/IO/LayoutJsonIO.pas)
+- [Shared/LayoutJson.pas](../Shared/LayoutJson.pas)
+- [LayoutEditor/Forms/frmEditorMain.pas](../LayoutEditor/Forms/frmEditorMain.pas)

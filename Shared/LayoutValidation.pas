@@ -43,6 +43,8 @@ type
       const ALayout: TKeyboardLayout;
       const AErrors: TValidationErrors;
       const ACheckRequiredFields: Boolean = True;
+      // Legacy layouts deliberately overlap maps; callers can opt into this
+      // structural diagnostic when authoring a new layout.
       const ACheckCrossMapDuplicates: Boolean = False;
       const ACheckSequenceContent: Boolean = False
     ); static;
@@ -210,6 +212,13 @@ begin
       AddError(vsError, 'Layout', 'LayoutType', 'LayoutType is required');
   end;
 
+  // Parsing and runtime execution implement only the current schema. Loading
+  // a declared version we do not understand would falsely claim compatibility.
+  if ALayout.Version <> CURRENT_LAYOUT_SCHEMA_VERSION then
+    AddError(vsError, 'Layout', 'Version',
+      Format('Unsupported layout schema version "%s"; supported version is "%s"',
+        [ALayout.Version, CURRENT_LAYOUT_SCHEMA_VERSION]));
+
   SeenKeys := TDictionary<string, string>.Create;
   try
     // ---------------- DIRECT MAP ----------------
@@ -278,8 +287,17 @@ begin
             AddError(vsWarning, 'Modifiers.Metadata', PairMod.Key, 'Empty metadata key');
         end;
 
-      if ACheckCrossMapDuplicates then
-        CheckAndRegisterKey(PairMod.Key, 'Modifiers');
+      // The dictionary key names a modifier rule; runtime lookup uses the
+      // physical key stored in the mapping. Only reph and halant are executed
+      // by the engine, so unrelated legacy modifier metadata is not treated
+      // as a physical-key mapping here.
+      if (PairMod.Key <> 'reph') and (PairMod.Key <> 'halant') then
+        AddError(vsWarning, 'Modifiers', PairMod.Key,
+          'Modifier is retained as metadata but is not executed by the engine');
+
+      if ACheckCrossMapDuplicates and
+         ((PairMod.Key = 'reph') or (PairMod.Key = 'halant')) then
+        CheckAndRegisterKey(PairMod.Value.Key, 'Modifiers');
     end;
 
     // ---------------- SEQUENCES ----------------

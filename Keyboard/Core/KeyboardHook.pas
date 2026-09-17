@@ -13,7 +13,7 @@ uses
   Logger;
 
 type
-  TOnKeyChar = procedure(const AChar: string) of object;
+  TOnKeyChar = function(const AChar: string): TInjectionOutcome of object;
 
   // M2.2: hook-policy dependencies. Every field is a narrow replaceable seam;
   // a nil field selects the production (Win32-backed) implementation. Tests
@@ -286,8 +286,10 @@ function HandleKeyEvent(const AKey: TKeyContext): Boolean;
 var
   Modifiers: TKeyModifierState;
   Ch: string;
+  Outcome: TInjectionOutcome;
 begin
   Result := False;   // default: pass through
+  Outcome := ioNoOutput;
 
   // Never reprocess our own (or anyone else's) synthetic key events. Every key
   // injected below comes back through this same global hook; without this
@@ -336,17 +338,17 @@ begin
     if Assigned(KeyHandler) then
     begin
       if AKey.VKCode = VK_TAB then
-        KeyHandler(#9)
+        Outcome := KeyHandler(#9)
       else
-        KeyHandler(#13);
+        Outcome := KeyHandler(#13);
     end;
 
     if AKey.VKCode = VK_TAB then
-      SendVirtualKey(VK_TAB)
+      Outcome := CombineInjectionOutcomes(Outcome, SendVirtualKey(VK_TAB))
     else
-      SendVirtualKey(VK_RETURN);
+      Outcome := CombineInjectionOutcomes(Outcome, SendVirtualKey(VK_RETURN));
 
-    Result := True;   // consumed
+    Result := Outcome <> ioZeroAccepted;
     Exit;
   end;
 
@@ -355,8 +357,8 @@ begin
   begin
     if Assigned(KeyHandler) then
     begin
-      KeyHandler(#8);  // ASCII Backspace
-      Result := True;  // BLOCK original
+      Outcome := KeyHandler(#8);  // ASCII Backspace
+      Result := Outcome <> ioZeroAccepted;
       Exit;
     end;
   end;
@@ -369,8 +371,10 @@ begin
   // Pass to engine
   if Assigned(KeyHandler) then
   begin
-    KeyHandler(Ch);
-    Result := True;  // BLOCK original keystroke
+    Outcome := KeyHandler(Ch);
+    // Zero accepted records are safe to pass through.  Partial acceptance is
+    // deliberately consumed because some synthetic input may already exist.
+    Result := Outcome <> ioZeroAccepted;
     Exit;
   end;
 

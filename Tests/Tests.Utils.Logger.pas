@@ -6,6 +6,7 @@ uses
   DUnitX.TestFramework,
   System.SysUtils,
   System.IOUtils,
+  Winapi.Windows,
   Logger;
 
 type
@@ -46,8 +47,16 @@ type
 implementation
 
 function TLoggerTests.GetTestLogFile: string;
+var
+  TempDir: string;
 begin
-  Result := TPath.Combine(TPath.GetTempPath, 'vittix_logger_test_' + TPath.GetRandomFileName + '.log');
+  TempDir := TPath.GetTempPath;
+  // The console test host can report an empty Delphi temp path even when its
+  // parent process has TEMP/TMP set.  A known existing working directory keeps
+  // each test's file absolute and gives Logger a non-empty parent directory.
+  if TempDir = '' then
+    TempDir := TDirectory.GetCurrentDirectory;
+  Result := TPath.Combine(TempDir, 'vittix_logger_test_' + TPath.GetRandomFileName + '.log');
   SetLength(FLogFiles, Length(FLogFiles) + 1);
   FLogFiles[High(FLogFiles)] := Result;
 end;

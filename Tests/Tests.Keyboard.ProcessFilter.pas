@@ -9,6 +9,7 @@ uses
   Winapi.Windows,
   KeyboardHook,
   EngineState,
+  SendInputHelper,
   AppSettings;
 
 type
@@ -21,7 +22,7 @@ type
     FDeps: THookPolicyDependencies;
     procedure ResetGlobalHookState;
   public
-    procedure FakeKeyHandler(const AChar: string);
+    function FakeKeyHandler(const AChar: string): TInjectionOutcome;
     [Setup]
     procedure Setup;
     [TearDown]
@@ -63,9 +64,10 @@ begin
   Result := True; // always healthy
 end;
 
-procedure TProcessFilterTests.FakeKeyHandler(const AChar: string);
+function TProcessFilterTests.FakeKeyHandler(const AChar: string): TInjectionOutcome;
 begin
   // Do nothing
+  Result := ioSuccess;
 end;
 
 function MakeKey: TKeyContext;

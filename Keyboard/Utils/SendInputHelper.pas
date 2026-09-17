@@ -8,6 +8,16 @@ uses
   Logger;
 
 type
+  // Semantic result for one SendInput batch.  Callers deliberately receive no
+  // record counts: they only need to know whether it is safe to pass through
+  // the original physical key.
+  TInjectionOutcome = (
+    ioNoOutput,
+    ioSuccess,
+    ioZeroAccepted,
+    ioPartialAccepted
+  );
+
   // Injectable boundary for the Win32 SendInput call (M1.2). By default the
   // production path calls the real Win32 SendInput. Tests install a fake hook to
   // simulate complete success, zero accepted, or partial acceptance without
@@ -22,11 +32,11 @@ type
   Low-level keyboard output helpers
 -------------------------------------------------- }
 
-procedure SendUnicodeText(const S: string);
-procedure SendUnicodeChar(AChar: WideChar);
+function SendUnicodeText(const S: string): TInjectionOutcome;
+function SendUnicodeChar(AChar: WideChar): TInjectionOutcome;
 
-procedure SendBackspace(Count: Integer = 1);
-procedure SendVirtualKey(VK: Word);
+function SendBackspace(Count: Integer = 1): TInjectionOutcome;
+function SendVirtualKey(VK: Word): TInjectionOutcome;
 
 procedure SetSendInputHook(AHook: TSendInputProc);
 
@@ -38,6 +48,7 @@ procedure SetSendInputHook(AHook: TSendInputProc);
 -------------------------------------------------- }
 function InjectionOK: Boolean;
 procedure ResetInjectionStatus;
+function CombineInjectionOutcomes(const ACurrent, ANext: TInjectionOutcome): TInjectionOutcome;
 
 implementation
 
@@ -79,27 +90,55 @@ begin
   gInjectionOK := False;
 end;
 
+function CombineInjectionOutcomes(const ACurrent, ANext: TInjectionOutcome): TInjectionOutcome;
+begin
+  // Any accepted side effect paired with a failure is partial-equivalent: the
+  // original physical event must not be replayed into potentially changed text.
+  if (ACurrent = ioPartialAccepted) or (ANext = ioPartialAccepted) then
+    Exit(ioPartialAccepted);
+  if ACurrent = ioNoOutput then
+    Exit(ANext);
+  if ANext = ioNoOutput then
+    Exit(ACurrent);
+  if ACurrent = ioSuccess then
+  begin
+    if ANext = ioZeroAccepted then
+      Exit(ioPartialAccepted);
+    Exit(ANext);
+  end;
+  if ANext = ioSuccess then
+  begin
+    if ACurrent = ioZeroAccepted then
+      Exit(ioPartialAccepted);
+    Exit(ACurrent);
+  end;
+  Result := ioZeroAccepted;
+end;
+
 // Submit a batch of INPUT records through the boundary and require that the
 // Win32 API accepted the EXACT requested number of records. Partial acceptance
 // is a failure, never partial success.
-function SubmitInputs(const Inputs: array of TInput; const What: string): Boolean;
+function SubmitInputs(const Inputs: array of TInput; const What: string): TInjectionOutcome;
 var
   Requested: Integer;
   Returned: UINT;
 begin
   Requested := Length(Inputs);
   if Requested = 0 then
-    Exit(True);
+    Exit(ioNoOutput);
 
   Returned := DoSendInput(Requested, @Inputs[0], SizeOf(TInput));
 
   if Returned = Cardinal(Requested) then
-    Exit(True);
+    Exit(ioSuccess);
 
   MarkInjectionFailure(What,
     Format('SendInput accepted %d of %d input record(s)',
       [Integer(Returned), Requested]));
-  Result := False;
+  if Returned = 0 then
+    Result := ioZeroAccepted
+  else
+    Result := ioPartialAccepted;
 end;
 function SendKeyInput(
   AScanCode: Word;
@@ -122,7 +161,7 @@ end;
   conceal a failed key-down.
 -------------------------------------------------- }
 
-procedure SendUnicodeChar(AChar: WideChar);
+function SendUnicodeChar(AChar: WideChar): TInjectionOutcome;
 var
   Inputs: array[0..1] of TInput;
 begin
@@ -138,7 +177,7 @@ begin
   Inputs[1].ki.wScan := Ord(AChar);
   Inputs[1].ki.dwFlags := KEYEVENTF_UNICODE or KEYEVENTF_KEYUP;
 
-  SubmitInputs(Inputs, 'SendUnicodeChar');
+  Result := SubmitInputs(Inputs, 'SendUnicodeChar');
 end;
 
 { --------------------------------------------------
@@ -148,14 +187,14 @@ end;
   the exact record count (2 per code unit).
 -------------------------------------------------- }
 
-procedure SendUnicodeText(const S: string);
+function SendUnicodeText(const S: string): TInjectionOutcome;
 var
   I, Len: Integer;
   Inputs: array of TInput;
 begin
   Len := Length(S);
   if Len = 0 then
-    Exit;
+    Exit(ioNoOutput);
 
   SetLength(Inputs, Len * 2);
   for I := 0 to Len - 1 do
@@ -171,7 +210,7 @@ begin
     Inputs[I * 2 + 1].ki.dwFlags := KEYEVENTF_UNICODE or KEYEVENTF_KEYUP;
   end;
 
-  SubmitInputs(Inputs, 'SendUnicodeText');
+  Result := SubmitInputs(Inputs, 'SendUnicodeText');
 end;
 
 { --------------------------------------------------
@@ -180,13 +219,13 @@ end;
   SendInput call and verified against the exact record count.
 -------------------------------------------------- }
 
-procedure SendBackspace(Count: Integer);
+function SendBackspace(Count: Integer): TInjectionOutcome;
 var
   I: Integer;
   Inputs: array of TInput;
 begin
   if Count <= 0 then
-    Exit;
+    Exit(ioNoOutput);
 
   SetLength(Inputs, Count * 2);
   for I := 0 to Count - 1 do
@@ -201,7 +240,7 @@ begin
     Inputs[I * 2 + 1].ki.dwFlags := KEYEVENTF_KEYUP;
   end;
 
-  SubmitInputs(Inputs, 'SendBackspace');
+  Result := SubmitInputs(Inputs, 'SendBackspace');
 end;
 
 { --------------------------------------------------
@@ -209,7 +248,7 @@ end;
   Down and up are batched into one SendInput call and verified together.
 -------------------------------------------------- }
 
-procedure SendVirtualKey(VK: Word);
+function SendVirtualKey(VK: Word): TInjectionOutcome;
 var
   Inputs: array[0..1] of TInput;
 begin
@@ -222,7 +261,7 @@ begin
   Inputs[1].ki.wVk := VK;
   Inputs[1].ki.dwFlags := KEYEVENTF_KEYUP;
 
-  SubmitInputs(Inputs, 'SendVirtualKey');
+  Result := SubmitInputs(Inputs, 'SendVirtualKey');
 end;
 
 end.

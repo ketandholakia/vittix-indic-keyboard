@@ -21,7 +21,8 @@ type
     [Test]
     [TestCase('krutidev_010','layouts\devnagari\krutidev_010.json')]
     [TestCase('shreelipi_0708','layouts\devnagari\shreelipi_0708.json')]
-    [TestCase('remington','layouts\gujarati\remington.json')]
+[TestCase('remington','layouts\gujarati\remington.json')]
+[TestCase('remington_unicode','layouts\gujarati\gujarati_remington_unicode.json')]
     [TestCase('press_custom_1','layouts\custom\press_custom_1.json')]
     [TestCase('hindi_phonetic','layouts\hindi\hindi_phonetic.json')]
     [TestCase('hindi_inscript','layouts\hindi\hindi_inscript.json')]
@@ -59,6 +60,7 @@ begin
     'layouts\devnagari\krutidev_010.json',
     'layouts\devnagari\shreelipi_0708.json',
     'layouts\gujarati\remington.json',
+    'layouts\gujarati\gujarati_remington_unicode.json',
     'layouts\custom\press_custom_1.json',
     'layouts\hindi\hindi_phonetic.json',
     'layouts\hindi\hindi_inscript.json',

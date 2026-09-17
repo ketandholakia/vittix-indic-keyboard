@@ -23,7 +23,7 @@ type
   strict private
     FDeps: THookPolicyDependencies;
     FKeys: TStringList;
-    procedure CaptureKey(const AChar: string);
+    function CaptureKey(const AChar: string): TInjectionOutcome;
   public
     [Setup]
     procedure Setup;
@@ -62,6 +62,10 @@ type
     procedure Tab_KeyDown_Consumed_NotifiesEngine;
     [Test]
     procedure Backspace_KeyDown_Consumed_NotifiesEngine;
+    [Test]
+    procedure ZeroAcceptance_PassesThroughCurrentAndNextEvent;
+    [Test]
+    procedure PartialAcceptance_ConsumesCurrentThenFailsOpen;
   end;
 
 implementation
@@ -112,10 +116,11 @@ begin
   Result.IsInjected := AInjected;
 end;
 
-procedure THookPolicyTests.CaptureKey(const AChar: string);
+function THookPolicyTests.CaptureKey(const AChar: string): TInjectionOutcome;
 begin
   if Assigned(GCaptured) then
     GCaptured.Add(AChar);
+  Result := SendUnicodeText(AChar);
 end;
 
 procedure THookPolicyTests.Setup;
@@ -301,6 +306,38 @@ begin
     'Backspace must be consumed');
   Assert.AreEqual(1, FKeys.Count);
   Assert.AreEqual(#8, FKeys[0], 'the engine must receive ASCII Backspace');
+end;
+
+procedure THookPolicyTests.ZeroAcceptance_PassesThroughCurrentAndNextEvent;
+begin
+  FDeps.IsInjectionHealthy := nil;
+  SetHookPolicyDependencies(FDeps);
+  GFakeSendReturn := 0;
+  Assert.IsFalse(HandleKeyEvent(MakeKey($41, True)),
+    'zero accepted records must pass through the current physical key');
+  Assert.IsFalse(InjectionOK);
+  Assert.AreEqual(1, FKeys.Count);
+
+  GFakeSendReturn := 2;
+  Assert.IsFalse(HandleKeyEvent(MakeKey($42, True)),
+    'the next eligible key must fail open before invoking the handler');
+  Assert.AreEqual(1, FKeys.Count);
+end;
+
+procedure THookPolicyTests.PartialAcceptance_ConsumesCurrentThenFailsOpen;
+begin
+  FDeps.IsInjectionHealthy := nil;
+  SetHookPolicyDependencies(FDeps);
+  GFakeSendReturn := 1;
+  Assert.IsTrue(HandleKeyEvent(MakeKey($41, True)),
+    'partial acceptance must consume the current key to prevent duplicate fallback');
+  Assert.IsFalse(InjectionOK);
+  Assert.AreEqual(1, FKeys.Count);
+
+  GFakeSendReturn := 2;
+  Assert.IsFalse(HandleKeyEvent(MakeKey($42, True)),
+    'the next eligible key must fail open after partial acceptance');
+  Assert.AreEqual(1, FKeys.Count);
 end;
 
 initialization

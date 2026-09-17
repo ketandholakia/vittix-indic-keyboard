@@ -7,6 +7,7 @@ uses
   System.SysUtils,
   System.IOUtils,
   System.JSON,
+  Winapi.Windows,
   LayoutModel,
   LayoutJson;
 
@@ -43,6 +44,18 @@ type
   end;
 
 implementation
+
+function TestTempFile(const Prefix: string): string;
+var
+  TempDir: string;
+begin
+  TempDir := TPath.GetTempPath;
+  // See Logger tests: the Delphi console test host may expose no temp path.
+  // SaveLayoutToFile requires a filename with a real parent directory.
+  if TempDir = '' then
+    TempDir := TDirectory.GetCurrentDirectory;
+  Result := TPath.Combine(TempDir, Prefix + TPath.GetRandomFileName + '.json');
+end;
 
 function CreateTestLayout: TKeyboardLayout;
 begin
@@ -140,7 +153,7 @@ var
 begin
   Layout := CreateTestLayout;
   try
-    TempFile := TPath.Combine(TPath.GetTempPath, 'vittix_test_layout_' + TPath.GetRandomFileName + '.json');
+    TempFile := TestTempFile('vittix_test_layout_');
     try
       SaveLayoutToFile(Layout, TempFile);
       Assert.IsTrue(TFile.Exists(TempFile), 'Layout file should be created');
@@ -175,7 +188,7 @@ begin
   Layout := CreateTestLayout;
   try
     // Save as UTF-16LE with BOM (simulating legacy layout files)
-    TempFile := TPath.Combine(TPath.GetTempPath, 'vittix_test_utf16le_' + TPath.GetRandomFileName + '.json');
+    TempFile := TestTempFile('vittix_test_utf16le_');
     try
       // Use LayoutToJson to get valid JSON, then write as UTF-16LE with BOM
       UTF16Bytes := TEncoding.Unicode.GetBytes(LayoutToJson(Layout));
@@ -215,7 +228,7 @@ var
 begin
   Layout := CreateTestLayout;
   try
-    TempFile := TPath.Combine(TPath.GetTempPath, 'vittix_test_utf8bom_' + TPath.GetRandomFileName + '.json');
+    TempFile := TestTempFile('vittix_test_utf8bom_');
     try
       // Write as UTF-8 with BOM
       TFile.WriteAllText(TempFile, LayoutToJson(Layout), TEncoding.UTF8);
@@ -246,7 +259,7 @@ var
 begin
   Layout := CreateTestLayout;
   try
-    TempFile := TPath.Combine(TPath.GetTempPath, 'vittix_test_utf8nobom_' + TPath.GetRandomFileName + '.json');
+    TempFile := TestTempFile('vittix_test_utf8nobom_');
     try
       // Write as UTF-8 without BOM
       Utf8NoBOM := TUTF8Encoding.Create(False);

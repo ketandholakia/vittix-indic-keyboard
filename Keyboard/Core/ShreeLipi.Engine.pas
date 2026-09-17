@@ -28,7 +28,7 @@ type
   );
 
 procedure SetActiveLayout(ALayout: TKeyboardLayout);
-procedure ProcessKeyChar(const AKey: string);
+function ProcessKeyChar(const AKey: string): TInjectionOutcome;
 procedure SetEngineOutputHandler(AHandler: TEngineOutputHandler);
 
 implementation
@@ -45,15 +45,23 @@ end;
 
 // Route an output action through the boundary. With no injected handler the
 // actions are dispatched to the hardened SendInputHelper-backed output layer.
-procedure EmitOutput(const AAction: TEngineOutputAction; const AText: string);
+function EmitOutput(const AAction: TEngineOutputAction; const AText: string): TInjectionOutcome;
 begin
+  Result := ioNoOutput;
   if Assigned(OnOutput) then
-    OnOutput(AAction, AText)
+  begin
+    OnOutput(AAction, AText);
+    Exit(ioSuccess);
+  end
   else
   case AAction Of
-    eoEmitText:        SendUnicodeText(AText);
-      eoEmitBackspace:     SendBackspace;
-      eoResetState:         ResetEngineState;
+    eoEmitText:        Result := SendUnicodeText(AText);
+    eoEmitBackspace:   Result := SendBackspace;
+    eoResetState:
+      begin
+        ResetEngineState;
+        Result := ioNoOutput;
+      end;
     end;
 end;
 
@@ -63,7 +71,7 @@ end;
   fall back. Without this the hook has already swallowed the trigger
   key, so dropping this state loses the matra/ra entirely.
 -------------------------------------------------- }
-procedure FlushPendingPreludes;
+procedure FlushPendingPreludes(var AOutcome: TInjectionOutcome);
 var
   ModRule: TKeyMapping;
 begin
@@ -73,13 +81,14 @@ begin
   if gEngineState.PendingReph then
   begin
     if ActiveLayout.Modifiers.TryGetValue('reph', ModRule) then
-      EmitOutput(eoEmitText, ModRule.Glyph);
+      AOutcome := CombineInjectionOutcomes(AOutcome, EmitOutput(eoEmitText, ModRule.Glyph));
     gEngineState.PendingReph := False;
   end;
 
   if gEngineState.PendingPrebase <> '' then
   begin
-    EmitOutput(eoEmitText, gEngineState.PendingPrebase);
+    AOutcome := CombineInjectionOutcomes(AOutcome,
+      EmitOutput(eoEmitText, gEngineState.PendingPrebase));
     gEngineState.PendingPrebase := '';
   end;
 end;
@@ -89,11 +98,14 @@ end;
 -------------------------------------------------- }
 
 procedure SetActiveLayout(ALayout: TKeyboardLayout);
+var
+  Outcome: TInjectionOutcome;
 begin
   // M1.1: commit any consumed pending matra/reph using the OLD active layout's
   // glyphs before switching, so input typed in the previous layout is not
   // silently dropped on a layout switch.
-  FlushPendingPreludes;
+  Outcome := ioNoOutput;
+  FlushPendingPreludes(Outcome);
 
   ActiveLayout := ALayout;
   SetEngineHasActiveLayout(ALayout <> nil);
@@ -104,12 +116,14 @@ end;
 { --------------------------------------------------
   Core typing logic
 -------------------------------------------------- }
-procedure ProcessKeyChar(const AKey: string);
+function ProcessKeyChar(const AKey: string): TInjectionOutcome;
 var
   OutGlyph: string;
   Matra: TKeyMapping;
   ModRule: TKeyMapping;
+  Outcome: TInjectionOutcome;
 begin
+  Outcome := ioNoOutput;
   try
     // ---------------- BACKSPACE ----------------
     if AKey = #8 then
@@ -118,35 +132,39 @@ begin
       if gEngineState.PendingPrebase <> '' then
       begin
         gEngineState.PendingPrebase := '';
-        Exit;
+        Exit(ioSuccess);
       end;
 
       if gEngineState.PendingReph then
       begin
         gEngineState.PendingReph := False;
-        Exit;
+        Exit(ioSuccess);
       end;
 
       // Send real backspace through the output boundary
-      EmitOutput(eoEmitBackspace, '');
+      Outcome := CombineInjectionOutcomes(Outcome, EmitOutput(eoEmitBackspace, ''));
       EmitOutput(eoResetState, '');
-      Exit;
+      if Outcome <> ioSuccess then
+        ResetEngineState;
+      Exit(Outcome);
     end;
 
     if (AKey = #9) or (AKey = #13) then
     begin
       // M1.1: commit any consumed pending matra/reph BEFORE the Tab/Enter so the
       // already-consumed keystroke is not silently lost on the control key.
-      FlushPendingPreludes;
+      FlushPendingPreludes(Outcome);
       EmitOutput(eoResetState, '');
-      Exit;
+      if Outcome <> ioSuccess then
+        ResetEngineState;
+      Exit(Outcome);
     end;
 
     if not EngineEnabled then
-      Exit;
+      Exit(ioSuccess);
 
     if ActiveLayout = nil then
-      Exit;
+      Exit(ioSuccess);
 
     { ---------------- REPH ---------------- }
     if ActiveLayout.Modifiers.TryGetValue('reph', ModRule) then
@@ -154,7 +172,7 @@ begin
       if AKey = ModRule.Key then
       begin
         gEngineState.PendingReph := True;
-        Exit;
+        Exit(ioSuccess);
       end;
     end;
 
@@ -162,24 +180,28 @@ begin
     if ActiveLayout.PrebaseMap.TryGetValue(AKey, Matra) then
     begin
       gEngineState.PendingPrebase := Matra.Glyph;
-      Exit;
+      Exit(ioSuccess);
     end;
 
     { ---------------- DIRECT CONSONANT ---------------- }
     if ActiveLayout.DirectMap.TryGetValue(AKey, OutGlyph) then
     begin
-      FlushPendingPreludes;
-      EmitOutput(eoEmitText, OutGlyph);
+      FlushPendingPreludes(Outcome);
+      Outcome := CombineInjectionOutcomes(Outcome, EmitOutput(eoEmitText, OutGlyph));
       gEngineState.CurrentCluster := OutGlyph;
-      Exit;
+      if Outcome <> ioSuccess then
+        ResetEngineState;
+      Exit(Outcome);
     end;
 
     { ---------------- POSTBASE MATRA ---------------- }
     if ActiveLayout.PostbaseMap.TryGetValue(AKey, OutGlyph) then
     begin
-      FlushPendingPreludes;
-      EmitOutput(eoEmitText, OutGlyph);
-      Exit;
+      FlushPendingPreludes(Outcome);
+      Outcome := CombineInjectionOutcomes(Outcome, EmitOutput(eoEmitText, OutGlyph));
+      if Outcome <> ioSuccess then
+        ResetEngineState;
+      Exit(Outcome);
     end;
 
     { ---------------- HALANT ---------------- }
@@ -187,18 +209,23 @@ begin
     begin
       if AKey = ModRule.Key then
       begin
-        FlushPendingPreludes;
-        EmitOutput(eoEmitText, ModRule.Glyph);
-        Exit;
+        FlushPendingPreludes(Outcome);
+        Outcome := CombineInjectionOutcomes(Outcome, EmitOutput(eoEmitText, ModRule.Glyph));
+        if Outcome <> ioSuccess then
+          ResetEngineState;
+        Exit(Outcome);
       end;
     end;
 
     { ---------------- FALLBACK (English / Symbols) ---------------- }
     // Place any consumed prebase/reph before sending the literal key; the hook
     // has already eaten the trigger key, so dropping it here would lose input.
-    FlushPendingPreludes;
+    FlushPendingPreludes(Outcome);
     EmitOutput(eoResetState, '');
-    EmitOutput(eoEmitText, AKey);
+    Outcome := CombineInjectionOutcomes(Outcome, EmitOutput(eoEmitText, AKey));
+    if Outcome <> ioSuccess then
+      ResetEngineState;
+    Result := Outcome;
   except
     on E: Exception do
     begin

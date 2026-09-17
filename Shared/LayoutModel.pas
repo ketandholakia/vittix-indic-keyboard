@@ -7,6 +7,10 @@ uses
   System.Generics.Collections;
 
 const
+  // The only layout schema understood by the current parser, validator, and
+  // runtime. LayoutJson uses this for omitted legacy version fields.
+  CURRENT_LAYOUT_SCHEMA_VERSION = '1.0';
+
   // Maximum permitted length of a multi-key sequence key. The runtime engine no
   // longer matches multi-key sequences (legacy feature that never fired and
   // conflicted with the reph mechanism); the constant is retained so the editor
@@ -84,7 +88,7 @@ end;
 constructor TKeyboardLayout.Create;
 begin
   inherited Create;
-  Version := '1.0';
+  Version := CURRENT_LAYOUT_SCHEMA_VERSION;
   DirectMap   := TDictionary<string, string>.Create;
   PrebaseMap  := TDictionary<string, TKeyMapping>.Create;
   PostbaseMap := TDictionary<string, string>.Create;
