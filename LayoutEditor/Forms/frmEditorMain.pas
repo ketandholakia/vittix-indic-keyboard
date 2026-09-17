@@ -20,16 +20,45 @@ uses
   System.Generics.Collections, // ✅ REQUIRED for TPair
 
   LayoutModel,
+  LayoutResolver,
   LayoutLoader,
   LayoutJson,
   LayoutValidation,
-  KeyboardPainter,
-  Vcl.ToolWin;
+  LayoutMappingSync,
+  LayoutEditorSettings,
+  EditorTheme,
+  VittixKeyboardView,
+  Vcl.ToolWin,
+  Vcl.Themes;
 
 type
 
+  // Captured so leaving high-contrast mode restores the design palette instead
+  // of flattening every surface to a system colour.
+  TEditorThemeEntry = record
+    Control: TControl;
+    SurfaceColor: TColor;
+    TextColor: TColor;
+    ParentBackground: Boolean;
+  end;
+
   TfrmEditorMain = class(TForm)
-    pnlTop: TPanel;
+    MainMenu1: TMainMenu;
+    miFile: TMenuItem;
+    miNew: TMenuItem;
+    miOpen: TMenuItem;
+    miSave: TMenuItem;
+    miSaveAs: TMenuItem;
+    miSep1: TMenuItem;
+    miSep2: TMenuItem;
+    miExit: TMenuItem;
+    miEdit: TMenuItem;
+    miUndo: TMenuItem;
+    miRedo: TMenuItem;
+    miHelpMenu: TMenuItem;
+    miAbout: TMenuItem;
+    miTools: TMenuItem;
+    miValidateLayout: TMenuItem;
 
     pnlMain: TPanel;
 
@@ -42,8 +71,6 @@ type
     ComboBoxScript: TComboBox;
     grdProperties: TStringGrid;
     Label1: TLabel;
-    btnOpen: TButton;
-    btnSave: TButton;
     PageControl: TPageControl;
     tabDirect: TTabSheet;
     edtSearchDirect: TEdit;
@@ -61,22 +88,42 @@ type
     edtSearchModifiers: TEdit;
     grdModifiers: TStringGrid;
     pmGridContext: TPopupMenu;
+    miAddKey: TMenuItem;
+    miRemoveKey: TMenuItem;
+    miCopy: TMenuItem;
+    miPaste: TMenuItem;
+    miValidate: TMenuItem;
     tabKeyboard: TTabSheet;
     pnlKeyboardHeader: TPanel;
     lblKeyboardHint: TLabel;
-    pbRealKeyboard: TPaintBox;
+    vkvKeyboard: TVittixKeyboardView;
     tabPreview: TTabSheet;
     pnlPreview: TPanel;
+    lblPreviewHint: TLabel;
+    edtPreviewInput: TEdit;
+    lblPreviewOutput: TLabel;
+    lblPreviewSourcesCaption: TLabel;
+    lstPreviewSources: TListBox;
     pnlDiagnostics: TPanel;
     lblDiagInfo: TLabel;
-    btnSaveAs: TButton;
     lblEmptyState: TLabel;
-    btnNewLayout: TButton;
-    btnExportLayout: TButton;
-    btnImportLayout: TButton;
-    btnUndo: TButton;
-    btnRedo: TButton;
+    pnlProblems: TPanel;
+    lblProblemsSummary: TLabel;
+    btnProblemsClose: TButton;
+    lstProblems: TListBox;
+    StatusBar1: TStatusBar;
+    btnBarNew: TButton;
+    btnBarOpen: TButton;
+    btnBarSave: TButton;
+    btnBarSaveAs: TButton;
+    btnBarUndo: TButton;
+    btnBarRedo: TButton;
+    btnBarValidate: TButton;
     btnAddKeyMap: TButton;
+    btnAddDirect: TButton;
+    btnAddPrebase: TButton;
+    btnAddPostbase: TButton;
+    btnAddModifiers: TButton;
     pnlMappingInspector: TPanel;
     lblInspectorTitle: TLabel;
     lblInspectorGrid: TLabel;
@@ -91,47 +138,43 @@ type
     chkHighContrast: TCheckBox;
     edtHotkeySwitch: TEdit;
     edtHotkeyAction: TEdit;
-    ToolBar1: TToolBar;
-    tbtnUndo: TToolButton;
-    tbtnRedo: TToolButton;
-    tbtnHelp: TToolButton;
-    tbtnNew: TToolButton;
-    tbtnExportLayout: TToolButton;
-    tbtnImportLayout: TToolButton;
-    tbtnSave: TToolButton;
-    tbtnSaveAs: TToolButton;
-    tbtnOpen: TToolButton;
     pnlLayoutInfo: TPanel;
     pnlProperties: TPanel;
     pnlHotkeys: TPanel;
-    pnlAccessibility: TPanel;
     pnlSideScroll: TScrollBox;
     splitterVert: TSplitter;
     lblSectionLayout: TLabel;
     lblSectionProps: TLabel;
     lblSectionHotkeys: TLabel;
     lblSectionDiag: TLabel;
+    lblSectionAppSettings: TLabel;
     lblDivider1: TLabel;
     lblDivider2: TLabel;
     lblDivider3: TLabel;
     lblDivider4: TLabel;
+    lblDivider5: TLabel;
     pnlSearchDirect: TPanel;
     pnlSearchPrebase: TPanel;
     pnlSearchPostbase: TPanel;
     pnlSearchSequences: TPanel;
     pnlSearchModifiers: TPanel;
+    pnlAppSettings: TPanel;
+    lblKeyFontSize: TLabel;
+    ComboBoxKeyFontSize: TComboBox;
   procedure UpdateLayoutPreview;
-    procedure pbRealKeyboardPaint(Sender: TObject);
     procedure edtSearchDirectChange(Sender: TObject);
     procedure edtSearchPrebaseChange(Sender: TObject);
     procedure edtSearchPostbaseChange(Sender: TObject);
     procedure edtSearchSequencesChange(Sender: TObject);
     procedure edtSearchModifiersChange(Sender: TObject);
+    procedure ComboBoxKeyFontSizeChange(Sender: TObject);
 
     procedure FormCreate(Sender: TObject);
+    procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
     procedure btnOpenClick(Sender: TObject);
     procedure btnSaveClick(Sender: TObject);
     procedure btnSaveAsClick(Sender: TObject);
+    procedure miExitClick(Sender: TObject);
     procedure GridSelectCell(Sender: TObject; ACol, ARow: Integer;
       var CanSelect: Boolean);
     procedure GridMouseDown(Sender: TObject; Button: TMouseButton;
@@ -147,22 +190,90 @@ type
     procedure btnHelpClick(Sender: TObject);
     procedure chkHighContrastClick(Sender: TObject);
     procedure btnAddKeyMapClick(Sender: TObject);
+    procedure btnAddRowClick(Sender: TObject);
+    procedure btnProblemsCloseClick(Sender: TObject);
+    procedure lstProblemsDblClick(Sender: TObject);
     procedure btnInspectorApplyClick(Sender: TObject);
     procedure btnInspectorClearClick(Sender: TObject);
     procedure btnInspectorAddClick(Sender: TObject);
-    procedure pbRealKeyboardMouseDown(Sender: TObject; Button: TMouseButton;
-      Shift: TShiftState; X, Y: Integer);
-    procedure pbRealKeyboardMouseMove(Sender: TObject; Shift: TShiftState; X,
-      Y: Integer);
+    procedure vkvKeyboardKeySelect(Sender: TObject; const KeyName, CurrentGlyph: string);
+    procedure vkvKeyboardKeyAssign(Sender: TObject; const KeyName, NewGlyph: string);
+
+    destructor Destroy; override;
   private
+    FSelectedKeyboardKey: string;
+
+    // The model name each visible grid row is responsible for. Empty means the
+    // row is new.  These arrays are what stops a filtered grid from deleting
+    // the mappings it is hiding.
+    FDirectOwned: TArray<string>;
+    FPrebaseOwned: TArray<string>;
+    FPostbaseOwned: TArray<string>;
+    FSequencesOwned: TArray<string>;
+    FModifiersOwned: TArray<string>;
+
+    FPreviewTimer: TTimer;
+    FPreviewDirty: Boolean;
+    FLastUndoTick: Cardinal;
+
+    // Cached LayoutResolver.Redefinitions for the current model. Rebuilt lazily
+    // when the model changes, so the cell-paint path never recomputes it.
+    FRedefinitions: TDictionary<string, TMappingSourceSet>;
+    FRedefinitionsDirty: Boolean;
+
+    // The problems currently shown in the dock, so a double-click can map a list
+    // row back to the section and key that produced it.
+    FProblems: TValidationErrors;
+    FHighContrast: Boolean;
+    FThemeBackup: TList<TEditorThemeEntry>;
     FLayout: TKeyboardLayout;
     FCurrentFileName: string;
     FUndoStack: TStack<string>;
     FRedoStack: TStack<string>;
+    FIsModified: Boolean;
     procedure LoadLayoutFromCommandLine;
     procedure OpenLayoutFile(const FileName: string);
     procedure UpdateWindowCaption;
+    procedure SetModified(Value: Boolean);
     procedure PushUndo;
+
+    // Returns True when it is safe to discard the current document: either it
+    // is unmodified, or the user resolved the save prompt. Every code path
+    // that replaces FLayout must go through this first.
+    function ConfirmDiscardChanges: Boolean;
+
+    // Resolves the grid a context-menu command applies to without casting
+    // Screen.ActiveControl (which raises EInvalidCast for any non-grid focus).
+    function GetActiveGrid: TStringGrid;
+    procedure RemoveGridRow(Grid: TStringGrid; Row: Integer);
+    procedure GridContextPopup(Sender: TObject);
+    function GridForCurrentTab: TStringGrid;
+    procedure UpdateEmptyState;
+    procedure UpdateOutputPreview;
+    procedure edtPreviewInputChange(Sender: TObject);
+
+    // One renderer per section, shared by "load the file" and "apply a search
+    // filter", so a filter can never produce a grid with columns missing.
+    procedure RenderDirect(const Filter: string);
+    procedure RenderPrebase(const Filter: string);
+    procedure RenderPostbase(const Filter: string);
+    procedure RenderSequences(const Filter: string);
+    procedure RenderModifiers(const Filter: string);
+    procedure ReportFilterCount(Grid: TStringGrid; Total: Integer);
+
+    function CollectStringRows(Grid: TStringGrid): TArray<TStringMappingRow>;
+    function CollectPrebaseRows: TArray<TEditorMapping>;
+    function CollectModifierRows: TArray<TEditorMapping>;
+    function CollectOwnedKeys(Grid: TStringGrid): TArray<string>;
+
+    procedure PreviewTimerTick(Sender: TObject);
+    procedure UpdateLayoutPreviewNow;
+
+    procedure ApplyHighContrast(const Enabled: Boolean);
+    procedure ApplyHighContrastTo(AParent: TWinControl);
+    procedure CaptureTheme;
+    procedure CaptureThemeIn(AParent: TWinControl);
+    procedure RestoreTheme;
 
     procedure GridDrawCell(
       Sender: TObject;
@@ -176,6 +287,7 @@ type
     procedure ClearGrids;
     procedure LoadLayoutToUI;
     procedure UpdateDiagnosticsPanel;
+    procedure UpdateStatusBar;
     procedure LoadDirect;
     procedure LoadPrebase;
     procedure LoadPostbase;
@@ -200,6 +312,9 @@ type
     procedure SelectGridRow(Grid: TStringGrid; Row: Integer);
     function GetMappingForKey(const Key: string; out Value: string): Boolean;
     function IsRealDuplicateKey(Grid: TStringGrid; const Key: string): Boolean;
+    function RedefinitionIndex: TDictionary<string, TMappingSourceSet>;
+    function GridForSection(const Section: string): TStringGrid;
+    procedure TrimUndoStack;
   public
   end;
 
@@ -213,24 +328,43 @@ implementation
 const
   DEFAULT_EDITOR_CAPTION = 'Vittix Indic Keyboard Layout Editor';
 
+  // Tall enough for a 16pt preview glyph in the layout font.  The DFM ships 26,
+  // which clipped Devanagari matras.
+  GRID_ROW_HEIGHT = 32;
+
+  // In-place grid editing fires per keystroke; collapse a burst into one undo
+  // entry and one preview rebuild instead of one of each per character.
+  UNDO_COALESCE_MS = 700;
+  PREVIEW_REFRESH_MS = 250;
+
+  // Snapshots are full layout JSON, so the stack needs a ceiling.
+  MAX_UNDO_DEPTH = 50;
+
 procedure EnableGridEditing(Grid: TStringGrid);
 begin
   Grid.Options := Grid.Options + [goEditing, goAlwaysShowEditor, goTabs];
 end;
 
-procedure AddToolbarButton(Parent: TWinControl; const Caption: string;
-  LeftPos: Integer; OnClick: TNotifyEvent);
+function AskSaveChanges(AOwner: TComponent): Integer;
 var
-  Btn: TButton;
+  Dlg: TTaskDialog;
 begin
-  Btn := TButton.Create(Parent);
-  Btn.Parent := Parent;
-  Btn.Left := LeftPos;
-  Btn.Top := 6;
-  Btn.Width := 84;
-  Btn.Height := 24;
-  Btn.Caption := Caption;
-  Btn.OnClick := OnClick;
+  Dlg := TTaskDialog.Create(AOwner);
+  try
+    Dlg.Caption := 'Unsaved Changes';
+    Dlg.Title := 'Do you want to save your changes?';
+    Dlg.Text := 'Your layout has been modified. If you close without ' +
+      'saving, your changes will be lost.';
+    Dlg.MainIcon := tdiWarning;
+    Dlg.CommonButtons := [];
+    with Dlg.Buttons.Add do begin Caption := '&Save';        ModalResult := mrYes;    Default := True; end;
+    with Dlg.Buttons.Add do begin Caption := 'Do&n''t Save';  ModalResult := mrNo;     end;
+    with Dlg.Buttons.Add do begin Caption := 'Cancel';        ModalResult := mrCancel; end;
+    Dlg.Execute;
+    Result := Dlg.ModalResult;
+  finally
+    Dlg.Free;
+  end;
 end;
 
 procedure TfrmEditorMain.LoadInstalledFonts;
@@ -244,8 +378,87 @@ begin
   end;
 end;
 
+procedure TfrmEditorMain.FormCloseQuery(Sender: TObject; var CanClose: Boolean);
+begin
+  CanClose := ConfirmDiscardChanges;
+end;
+
+function TfrmEditorMain.ConfirmDiscardChanges: Boolean;
+begin
+  Result := True;
+  if not FIsModified then
+    Exit;
+
+  case AskSaveChanges(Self) of
+    mrYes:
+      begin
+        btnSaveClick(nil);
+        // Only safe to continue if saving actually cleared the modified flag,
+        // which it does not when the user cancels the file dialog.
+        Result := not FIsModified;
+      end;
+    mrNo: Result := True;
+  else
+    Result := False;
+  end;
+end;
+
+function TfrmEditorMain.GetActiveGrid: TStringGrid;
+begin
+  Result := nil;
+  if Screen.ActiveControl is TStringGrid then
+    Result := Screen.ActiveControl as TStringGrid;
+end;
+
+procedure TfrmEditorMain.RemoveGridRow(Grid: TStringGrid; Row: Integer);
+var
+  I: Integer;
+begin
+  if (Grid = nil) or (Row < Grid.FixedRows) or (Row >= Grid.RowCount) then
+    Exit;
+
+  // Shift the rows below up by one, then shrink. Clearing the row instead
+  // leaves a permanent blank line that SaveUIToModel silently ignores.
+  for I := Row to Grid.RowCount - 2 do
+    Grid.Rows[I].Assign(Grid.Rows[I + 1]);
+  Grid.RowCount := Grid.RowCount - 1;
+
+  if Grid.Row >= Grid.RowCount then
+    Grid.Row := Grid.RowCount - 1;
+  if Grid.Row < Grid.FixedRows then
+    Grid.Row := Grid.FixedRows;
+  Grid.Invalidate;
+end;
+
+procedure TfrmEditorMain.GridContextPopup(Sender: TObject);
+var
+  Grid: TStringGrid;
+  Editable: Boolean;
+begin
+  Grid := GetActiveGrid;
+  Editable := Assigned(Grid) and (goEditing in Grid.Options);
+
+  // A read-only grid (Sequences) must not advertise commands that write to it.
+  miAddKey.Enabled := Editable;
+  miRemoveKey.Enabled := Editable;
+  miPaste.Enabled := Editable;
+  miCopy.Enabled := Assigned(Grid);
+  miValidate.Enabled := Assigned(FLayout);
+end;
+
+destructor TfrmEditorMain.Destroy;
+begin
+  FreeAndNil(FRedefinitions);
+  FreeAndNil(FProblems);
+  inherited;
+end;
+
 procedure TfrmEditorMain.FormCreate(Sender: TObject);
 begin
+  // One token set for the whole window. Everything the form shows is assigned
+  // from EditorTheme, so the palette can be changed in one file.
+  ApplyEditorTheme(Self, EditorThemeDefault);
+
   FCurrentFileName := '';
   UpdateWindowCaption;
 
@@ -274,19 +487,48 @@ begin
   pmGridContext.Items[2].OnClick := miCopyClick;
   pmGridContext.Items[3].OnClick := miPasteClick;
   pmGridContext.Items[4].OnClick := miValidateClick;
+  pmGridContext.OnPopup := GridContextPopup;
+
+  // Validation used to be reachable only by right-clicking a grid. It now has a
+  // menu item and F7 as well.
+  miValidateLayout.OnClick := miValidateClick;
   btnHelp.OnClick := btnHelpClick;
   chkHighContrast.OnClick := chkHighContrastClick;
   btnAddKeyMap.OnClick := btnAddKeyMapClick;
   btnInspectorApply.OnClick := btnInspectorApplyClick;
   btnInspectorClear.OnClick := btnInspectorClearClick;
   btnInspectorAdd.OnClick := btnInspectorAddClick;
-  pbRealKeyboard.OnMouseDown := pbRealKeyboardMouseDown;
-  pbRealKeyboard.OnMouseMove := pbRealKeyboardMouseMove;
-  AddToolbarButton(pnlSearchDirect, '+ Add', 500, btnInspectorAddClick);
-  AddToolbarButton(pnlSearchPrebase, '+ Add', 500, btnInspectorAddClick);
-  AddToolbarButton(pnlSearchPostbase, '+ Add', 500, btnInspectorAddClick);
-  // Sequences do not get an Add button since they are deprecated
-  AddToolbarButton(pnlSearchModifiers, '+ Add', 500, btnInspectorAddClick);
+  vkvKeyboard.OnKeySelect := vkvKeyboardKeySelect;
+  vkvKeyboard.OnKeyAssign := vkvKeyboardKeyAssign;
+  // The inspector is the only editing surface, so keyboard selection needs no
+  // separate wiring: vkvKeyboardKeySelect loads the inspector directly.
+  // The Add buttons live in the DFM and are anchored to the right edge of their
+  // search panel. Creating them at runtime with absolute Left offsets placed
+  // them on top of the search field at every DPI.
+  btnAddDirect.OnClick := btnAddRowClick;
+  btnAddPrebase.OnClick := btnAddRowClick;
+  btnAddPostbase.OnClick := btnAddRowClick;
+  // Sequences do not get an Add button: the section is deprecated and read-only.
+  btnAddModifiers.OnClick := btnAddRowClick;
+
+  // Initialize Application Settings
+  ComboBoxKeyFontSize.Items.Clear;
+  ComboBoxKeyFontSize.Items.Add('8');
+  ComboBoxKeyFontSize.Items.Add('9');
+  ComboBoxKeyFontSize.Items.Add('10');
+  ComboBoxKeyFontSize.Items.Add('11');
+  ComboBoxKeyFontSize.Items.Add('12');
+  ComboBoxKeyFontSize.Items.Add('14');
+  ComboBoxKeyFontSize.Items.Add('16');
+  ComboBoxKeyFontSize.Items.Add('18');
+  ComboBoxKeyFontSize.Items.Add('20');
+  ComboBoxKeyFontSize.Items.Add('24');
+  ComboBoxKeyFontSize.Items.Add('28');
+  ComboBoxKeyFontSize.Items.Add('32');
+  ComboBoxKeyFontSize.Text := IntToStr(GEditorSettings.KeyFontSize);
+  ComboBoxKeyFontSize.OnChange := ComboBoxKeyFontSizeChange;
+  vkvKeyboard.Font.Size := GEditorSettings.KeyFontSize;
+
   // Populate script/language options
   ComboBoxScript.Items.Clear;
   if Assigned(FLayout) then
@@ -338,17 +580,26 @@ begin
   edtSearchSequences.OnChange := edtSearchSequencesChange;
   edtSearchModifiers.OnChange := edtSearchModifiersChange;
 
-  btnNewLayout.OnClick := btnNewLayoutClick;
-  btnExportLayout.OnClick := btnExportLayoutClick;
-  btnImportLayout.OnClick := btnImportLayoutClick;
+  // (the command-bar buttons are declared in the DFM and wired there)
 
-  btnUndo.OnClick := btnUndoClick;
-  btnRedo.OnClick := btnRedoClick;
+  btnBarUndo.OnClick := btnUndoClick;
+  btnBarRedo.OnClick := btnRedoClick;
+  // Wired here rather than in the DFM because miValidateClick is not published.
+  // Wired here so the handler can stay private.
+  edtPreviewInput.OnChange := edtPreviewInputChange;
+
+  btnBarValidate.OnClick := miValidateClick;
 
   FUndoStack := TStack<string>.Create;
   FRedoStack := TStack<string>.Create;
 
+  FPreviewTimer := TTimer.Create(Self);
+  FPreviewTimer.Interval := PREVIEW_REFRESH_MS;
+  FPreviewTimer.Enabled := False;
+  FPreviewTimer.OnTimer := PreviewTimerTick;
+
   LoadLayoutFromCommandLine;
+  UpdateEmptyState;
 end;
 procedure TfrmEditorMain.ComboBoxScriptChange(Sender: TObject);
 begin
@@ -356,6 +607,19 @@ begin
   begin
     FLayout.Script := ComboBoxScript.Text;
     UpdateLayoutPreview;
+  end;
+end;
+
+procedure TfrmEditorMain.ComboBoxKeyFontSizeChange(Sender: TObject);
+var
+  NewSize: Integer;
+begin
+  if TryStrToInt(ComboBoxKeyFontSize.Text, NewSize) then
+  begin
+    GEditorSettings.KeyFontSize := NewSize;
+    GEditorSettings.Save;
+    vkvKeyboard.Font.Size := NewSize;
+    vkvKeyboard.Invalidate;
   end;
 end;
 
@@ -387,39 +651,202 @@ begin
 end;
 
 procedure TfrmEditorMain.btnHelpClick(Sender: TObject);
+var
+  Dlg: TTaskDialog;
 begin
-  MessageDlg('Vittix Indic Keyboard Editor'#13#10#13#10 +
-    '- See User Guide (Help menu) for details.'#13#10 +
-    '- Tooltips are available for most controls.'#13#10 +
-    '- For accessibility, use High Contrast Mode.'#13#10#13#10 +
-    'Visit: docs/UserGuide_EN.md', mtInformation, [mbOK], 0);
+  Dlg := TTaskDialog.Create(Self);
+  try
+    Dlg.Caption := 'About Vittix';
+    Dlg.Title := 'Vittix Indic Keyboard Editor';
+    Dlg.Text :=
+      #$2022' See User Guide (Help menu) for details.' + sLineBreak +
+      #$2022' Tooltips are available for most controls.' + sLineBreak +
+      #$2022' For accessibility, use High Contrast Mode.';
+    Dlg.FooterText := 'Documentation: docs/UserGuide_EN.md';
+    Dlg.MainIcon := tdiInformation;
+    Dlg.CommonButtons := [tcbOk];
+    Dlg.Execute;
+  finally
+    Dlg.Free;
+  end;
 end;
 
 procedure TfrmEditorMain.chkHighContrastClick(Sender: TObject);
 begin
-  if chkHighContrast.Checked then
+  ApplyHighContrast(chkHighContrast.Checked);
+end;
+
+// TControl.Color, TControl.Font and TWinControl.ParentBackground are all
+// protected. Several VCL controls republish them and several do not (TScrollBox
+// and TTabSheet among them), and the theme walk must not care which. These are
+// the standard Delphi accessors for reaching them generically.
+type
+  TControlSurfaceAccess = class(TControl);
+  TWinControlAccess = class(TWinControl);
+
+function ControlHasSurface(AControl: TControl): Boolean;
+begin
+  Result := (AControl is TPanel) or (AControl is TScrollBox) or
+    (AControl is TTabSheet) or (AControl is TStringGrid) or
+    (AControl is TEdit) or (AControl is TComboBox);
+end;
+
+procedure TfrmEditorMain.CaptureThemeIn(AParent: TWinControl);
+var
+  I: Integer;
+  Ctl: TControl;
+  Entry: TEditorThemeEntry;
+begin
+  for I := 0 to AParent.ControlCount - 1 do
   begin
+    Ctl := AParent.Controls[I];
+    Entry.Control := Ctl;
+    Entry.SurfaceColor := TControlSurfaceAccess(Ctl).Color;
+    Entry.TextColor := TControlSurfaceAccess(Ctl).Font.Color;
+    Entry.ParentBackground := (Ctl is TWinControl) and
+      TWinControlAccess(Ctl).ParentBackground;
+    FThemeBackup.Add(Entry);
+
+    if Ctl is TWinControl then
+      CaptureThemeIn(TWinControl(Ctl));
+  end;
+end;
+
+procedure TfrmEditorMain.CaptureTheme;
+begin
+  if Assigned(FThemeBackup) then
+    Exit;
+
+  FThemeBackup := TList<TEditorThemeEntry>.Create;
+  CaptureThemeIn(Self);
+end;
+
+procedure TfrmEditorMain.RestoreTheme;
+var
+  Entry: TEditorThemeEntry;
+begin
+  if not Assigned(FThemeBackup) then
+    Exit;
+
+  for Entry in FThemeBackup do
+  begin
+    if not Assigned(Entry.Control) then
+      Continue;
+
+    if ControlHasSurface(Entry.Control) then
+      TControlSurfaceAccess(Entry.Control).Color := Entry.SurfaceColor;
+
+    TControlSurfaceAccess(Entry.Control).Font.Color := Entry.TextColor;
+
+    if Entry.Control is TWinControl then
+      TWinControlAccess(Entry.Control).ParentBackground := Entry.ParentBackground;
+  end;
+
+  // Re-apply the editor palette rather than hardcoded defaults, so leaving High
+  // Contrast returns to the themed look instead of the old DFM literals.
+  ApplyEditorTheme(Self, EditorThemeDefault);
+end;
+
+procedure TfrmEditorMain.ApplyHighContrastTo(AParent: TWinControl);
+var
+  I: Integer;
+  Ctl: TControl;
+  Bg, Fg: TColor;
+begin
+  if not FHighContrast then
+    Exit;
+
+  Bg := clBlack;
+  Fg := clWhite;
+
+  for I := 0 to AParent.ControlCount - 1 do
+  begin
+    Ctl := AParent.Controls[I];
+
+    // The surface and the text on it are set together. Setting only the font
+    // is what produced white text on the white sidebar panels.
+    if ControlHasSurface(Ctl) then
+      TControlSurfaceAccess(Ctl).Color := Bg;
+
+    if Ctl is TWinControl then
+      TWinControlAccess(Ctl).ParentBackground := False;
+
+    TControlSurfaceAccess(Ctl).Font.Color := Fg;
+
+    if Ctl is TWinControl then
+      ApplyHighContrastTo(TWinControl(Ctl));
+  end;
+end;
+
+procedure TfrmEditorMain.ApplyHighContrast(const Enabled: Boolean);
+begin
+  if FHighContrast = Enabled then
+    Exit;
+
+  FHighContrast := Enabled;
+
+  if Enabled then
+  begin
+    CaptureTheme;
+    ApplyHighContrastTo(Self);
     Color := clBlack;
     Font.Color := clWhite;
+
+    // The diagnostics strip is the one panel that needs its own accent.
     pnlDiagnostics.Color := clBlack;
     lblDiagInfo.Font.Color := clYellow;
   end
   else
   begin
-    Color := clBtnFace;
-    Font.Color := clWindowText;
+    RestoreTheme;
     pnlDiagnostics.Color := $00F4F4F4;
     lblDiagInfo.Font.Color := $00666666;
   end;
+
+  vkvKeyboard.HighContrastMode := Enabled;
+
+  grdDirect.Invalidate;
+  grdPrebase.Invalidate;
+  grdPostbase.Invalidate;
+  grdSequences.Invalidate;
+  grdModifiers.Invalidate;
+  grdProperties.Invalidate;
 end;
 
 procedure TfrmEditorMain.PushUndo;
 begin
-  if FLayout <> nil then
-  begin
-    FUndoStack.Push(LayoutToJson(FLayout));
-    FRedoStack.Clear;
-  end;
+  SetModified(True);
+  if FLayout = nil then
+    Exit;
+
+  // Coalesce: typing a multi-character glyph must not create one full layout
+  // snapshot per keystroke.
+  if (FUndoStack.Count > 0) and (GetTickCount - FLastUndoTick < UNDO_COALESCE_MS) then
+    Exit;
+
+  FLastUndoTick := GetTickCount;
+  FUndoStack.Push(LayoutToJson(FLayout));
+  FRedoStack.Clear;
+  TrimUndoStack;
+end;
+
+procedure TfrmEditorMain.TrimUndoStack;
+var
+  Temp: TArray<string>;
+  I: Integer;
+begin
+  if FUndoStack.Count <= MAX_UNDO_DEPTH then
+    Exit;
+
+  // TStack offers no way to drop the oldest entry, so rebuild the stack when it
+  // overflows. Temp[0] ends up newest, Temp[High] oldest.
+  SetLength(Temp, FUndoStack.Count);
+  for I := 0 to High(Temp) do
+    Temp[I] := FUndoStack.Pop;
+
+  FUndoStack.Clear;
+  for I := MAX_UNDO_DEPTH - 1 downto 0 do
+    FUndoStack.Push(Temp[I]);
 end;
 
 procedure TfrmEditorMain.btnUndoClick(Sender: TObject);
@@ -451,6 +878,9 @@ begin
 end;
 procedure TfrmEditorMain.btnNewLayoutClick(Sender: TObject);
 begin
+  if not ConfirmDiscardChanges then
+    Exit;
+
   PushUndo;
   FreeAndNil(FLayout);
   FLayout := TKeyboardLayout.Create;
@@ -462,6 +892,7 @@ begin
   LoadLayoutToUI;
   UpdateWindowCaption;
   UpdateLayoutPreview;
+  UpdateEmptyState;
 end;
 
 procedure TfrmEditorMain.btnExportLayoutClick(Sender: TObject);
@@ -475,6 +906,9 @@ procedure TfrmEditorMain.btnImportLayoutClick(Sender: TObject);
 begin
   if OpenDialog.Execute then
   begin
+    if not ConfirmDiscardChanges then
+      Exit;
+
     PushUndo;
     FreeAndNil(FLayout);
     FLayout := LoadLayoutFromFile(OpenDialog.FileName);
@@ -484,126 +918,28 @@ begin
   end;
 end;
 procedure TfrmEditorMain.edtSearchPrebaseChange(Sender: TObject);
-var
-  SearchText: string;
-  Filtered: TArray<string>;
-  Key: string;
-  I: Integer;
 begin
-  if FLayout = nil then Exit;
-  SearchText := Trim(edtSearchPrebase.Text).ToLower;
-  Filtered := [];
-  for Key in FLayout.PrebaseMap.Keys do
-    if (SearchText = '') or (Pos(SearchText, Key.ToLower) > 0) or (Pos(SearchText, FLayout.PrebaseMap[Key].Glyph.ToLower) > 0) then
-      Filtered := Filtered + [Key];
-
-  grdPrebase.RowCount := Length(Filtered) + 1;
-  grdPrebase.Cells[0,0] := 'Key';
-  grdPrebase.Cells[1,0] := 'Glyph';
-  for I := 0 to High(Filtered) do
-  begin
-    grdPrebase.Cells[0,I+1] := Filtered[I];
-    grdPrebase.Cells[1,I+1] := FLayout.PrebaseMap[Filtered[I]].Glyph;
-  end;
+  RenderPrebase(edtSearchPrebase.Text);
 end;
 
 procedure TfrmEditorMain.edtSearchPostbaseChange(Sender: TObject);
-var
-  SearchText: string;
-  Filtered: TArray<string>;
-  Key: string;
-  I: Integer;
 begin
-  if FLayout = nil then Exit;
-  SearchText := Trim(edtSearchPostbase.Text).ToLower;
-  Filtered := [];
-  for Key in FLayout.PostbaseMap.Keys do
-    if (SearchText = '') or (Pos(SearchText, Key.ToLower) > 0) or (Pos(SearchText, FLayout.PostbaseMap[Key].ToLower) > 0) then
-      Filtered := Filtered + [Key];
-
-  grdPostbase.RowCount := Length(Filtered) + 1;
-  grdPostbase.Cells[0,0] := 'Key';
-  grdPostbase.Cells[1,0] := 'Glyph';
-  for I := 0 to High(Filtered) do
-  begin
-    grdPostbase.Cells[0,I+1] := Filtered[I];
-    grdPostbase.Cells[1,I+1] := FLayout.PostbaseMap[Filtered[I]];
-  end;
+  RenderPostbase(edtSearchPostbase.Text);
 end;
 
 procedure TfrmEditorMain.edtSearchSequencesChange(Sender: TObject);
-var
-  SearchText: string;
-  Filtered: TArray<string>;
-  Key: string;
-  I: Integer;
 begin
-  if FLayout = nil then Exit;
-  SearchText := Trim(edtSearchSequences.Text).ToLower;
-  Filtered := [];
-  for Key in FLayout.Sequences.Keys do
-    if (SearchText = '') or (Pos(SearchText, Key.ToLower) > 0) or (Pos(SearchText, FLayout.Sequences[Key].ToLower) > 0) then
-      Filtered := Filtered + [Key];
-
-  grdSequences.RowCount := Length(Filtered) + 1;
-  grdSequences.Cells[0,0] := 'Keys';
-  grdSequences.Cells[1,0] := 'Output';
-  for I := 0 to High(Filtered) do
-  begin
-    grdSequences.Cells[0,I+1] := Filtered[I];
-    grdSequences.Cells[1,I+1] := FLayout.Sequences[Filtered[I]];
-  end;
+  RenderSequences(edtSearchSequences.Text);
 end;
 
 procedure TfrmEditorMain.edtSearchModifiersChange(Sender: TObject);
-var
-  SearchText: string;
-  Filtered: TArray<string>;
-  Key: string;
-  I: Integer;
 begin
-  if FLayout = nil then Exit;
-  SearchText := Trim(edtSearchModifiers.Text).ToLower;
-  Filtered := [];
-  for Key in FLayout.Modifiers.Keys do
-    if (SearchText = '') or (Pos(SearchText, Key.ToLower) > 0) or (Pos(SearchText, FLayout.Modifiers[Key].Glyph.ToLower) > 0) then
-      Filtered := Filtered + [Key];
-
-  grdModifiers.RowCount := Length(Filtered) + 1;
-  grdModifiers.Cells[0,0] := 'Name';
-  grdModifiers.Cells[1,0] := 'Key';
-  grdModifiers.Cells[2,0] := 'Glyph';
-  grdModifiers.Cells[3,0] := 'Preview';
-  for I := 0 to High(Filtered) do
-  begin
-    grdModifiers.Cells[0,I+1] := Filtered[I];
-    grdModifiers.Cells[1,I+1] := FLayout.Modifiers[Filtered[I]].Key;
-    grdModifiers.Cells[2,I+1] := FLayout.Modifiers[Filtered[I]].Glyph;
-    grdModifiers.Cells[3,I+1] := FLayout.Modifiers[Filtered[I]].Glyph;
-  end;
+  RenderModifiers(edtSearchModifiers.Text);
 end;
-procedure TfrmEditorMain.edtSearchDirectChange(Sender: TObject);
-var
-  SearchText: string;
-  Filtered: TArray<string>;
-  Key: string;
-  I: Integer;
-begin
-  if FLayout = nil then Exit;
-  SearchText := Trim(edtSearchDirect.Text).ToLower;
-  Filtered := [];
-  for Key in FLayout.DirectMap.Keys do
-    if (SearchText = '') or (Pos(SearchText, Key.ToLower) > 0) or (Pos(SearchText, FLayout.DirectMap[Key].ToLower) > 0) then
-      Filtered := Filtered + [Key];
 
-  grdDirect.RowCount := Length(Filtered) + 1;
-  grdDirect.Cells[0,0] := 'Key';
-  grdDirect.Cells[1,0] := 'Glyph';
-  for I := 0 to High(Filtered) do
-  begin
-    grdDirect.Cells[0,I+1] := Filtered[I];
-    grdDirect.Cells[1,I+1] := FLayout.DirectMap[Filtered[I]];
-  end;
+procedure TfrmEditorMain.edtSearchDirectChange(Sender: TObject);
+begin
+  RenderDirect(edtSearchDirect.Text);
 end;
 
 procedure TfrmEditorMain.ClearGrids;
@@ -625,50 +961,118 @@ begin
   ComboBoxFonts.ItemIndex := -1;
   ComboBoxFonts.Enabled := False;
   ClearGrids;
+  SetModified(False);
   UpdateWindowCaption;
-  pbRealKeyboard.Invalidate;
+  FSelectedKeyboardKey := '';
+  vkvKeyboard.Layout := nil;
+  edtInspectorKey.Clear;
+  edtInspectorValue.Clear;
   UpdateLayoutPreview;
 end;
 
 procedure TfrmEditorMain.UpdateLayoutPreview;
-var
-  i: Integer;
-  lbl: TLabel;
-  Keys: TArray<string>;
-  Row, Col: Integer;
-  Key, Glyph: string;
-const
-  Cols = 10;
 begin
-  pbRealKeyboard.Invalidate;
-
-  // Remove all controls from pnlPreview
-  for i := pnlPreview.ControlCount - 1 downto 0 do
-    pnlPreview.Controls[i].Free;
-
-  if FLayout = nil then Exit;
-
-  Keys := FLayout.DirectMap.Keys.ToArray;
-  for i := 0 to High(Keys) do
+  FPreviewDirty := True;
+  if Assigned(FPreviewTimer) then
   begin
-    Key := Keys[i];
-    Glyph := FLayout.DirectMap[Key];
-    Row := i div Cols;
-    Col := i mod Cols;
+    // Restart the interval so the rebuild runs once, after the user stops.
+    FPreviewTimer.Enabled := False;
+    FPreviewTimer.Enabled := True;
+  end
+  else
+    UpdateLayoutPreviewNow;
+end;
 
-    lbl := TLabel.Create(nil);
-    lbl.Parent := pnlPreview;
-    lbl.Left := 10 + Col * 36;
-    lbl.Top := 10 + Row * 36;
-    lbl.Width := 34;
-    lbl.Height := 34;
-    lbl.Caption := Key + ' → ' + Glyph;
-    lbl.Layout := tlCenter;
-    lbl.Alignment := taCenter;
-    lbl.Transparent := False;
-    lbl.Color := clInfoBk;
-    lbl.Font.Size := 10;
-    lbl.Font.Name := 'Segoe UI';
+procedure TfrmEditorMain.PreviewTimerTick(Sender: TObject);
+begin
+  FPreviewTimer.Enabled := False;
+  if not FPreviewDirty then
+    Exit;
+  FPreviewDirty := False;
+  if csDestroying in ComponentState then
+    Exit;
+  UpdateLayoutPreviewNow;
+end;
+
+procedure TfrmEditorMain.UpdateLayoutPreviewNow;
+begin
+  // The Preview tab used to draw a second copy of the mapping list as a grid of
+  // labels, which duplicated the Keyboard tab and rebuilt every label on each
+  // keystroke. It is now a typing scratchpad: type on the physical keyboard and
+  // the resolved output appears in the layout font, with the source per key.
+  UpdateOutputPreview;
+end;
+
+procedure TfrmEditorMain.edtPreviewInputChange(Sender: TObject);
+begin
+  UpdateOutputPreview;
+end;
+
+procedure TfrmEditorMain.UpdateOutputPreview;
+var
+  I: Integer;
+  Ch: Char;
+  Rendered: string;
+  Resolved: TResolvedGlyph;
+  Sources: TStringList;
+begin
+  if not Assigned(lblPreviewOutput) then
+    Exit;
+
+  if Assigned(lblPreviewHint) then
+  begin
+    if Assigned(FLayout) then
+      lblPreviewHint.Caption := Format(
+        'Typing preview for %s. Type above; the resolved output appears here and the source of each key is listed below.',
+        [FLayout.Name])
+    else
+      lblPreviewHint.Caption := 'Open a layout to preview its output.';
+  end;
+
+  Rendered := '';
+  Sources := TStringList.Create;
+  try
+    if Assigned(edtPreviewInput) and Assigned(FLayout) then
+    begin
+      for I := 1 to Length(edtPreviewInput.Text) do
+      begin
+        Ch := edtPreviewInput.Text[I];
+        Resolved := TLayoutResolver.Resolve(FLayout, Ch);
+        if Resolved.Found then
+        begin
+          Rendered := Rendered + Resolved.Glyph;
+          Sources.Add(Format('%s   %s   (%s)',
+            [Ch, Resolved.Glyph, Resolved.SourceLabel]));
+        end
+        else
+        begin
+          Rendered := Rendered + Ch;
+          Sources.Add(Format('%s   %s   (no mapping, passed through)', [Ch, Ch]));
+        end;
+      end;
+    end;
+
+    lblPreviewOutput.Font.Color := EditorThemeCurrent.Text;
+    lblPreviewOutput.Font.Style := [];
+    if Assigned(FLayout) and (Trim(FLayout.FontFamily) <> '') then
+    begin
+      // The preview must render in the layout's own font or it shows nothing
+      // useful for a legacy encoding such as KrutiDev.
+      lblPreviewOutput.Font.Name := FLayout.FontFamily;
+      lblPreviewOutput.Font.Size := GEditorSettings.KeyFontSize;
+    end;
+    lblPreviewOutput.Caption := Rendered;
+
+    lstPreviewSources.Items.BeginUpdate;
+    try
+      lstPreviewSources.Items.Clear;
+      for I := 0 to Sources.Count - 1 do
+        lstPreviewSources.Items.Add(Sources[I]);
+    finally
+      lstPreviewSources.Items.EndUpdate;
+    end;
+  finally
+    Sources.Free;
   end;
 end;
 
@@ -695,29 +1099,24 @@ begin
   if FLayout.DirectMap.TryGetValue(Key, Value) then Exit(True);
 end;
 
-function TfrmEditorMain.IsRealDuplicateKey(Grid: TStringGrid; const Key: string): Boolean;
-var
-  PairStr: TPair<string, string>;
-  KeyCount: Integer;
+function TfrmEditorMain.RedefinitionIndex: TDictionary<string, TMappingSourceSet>;
 begin
-  Result := False;
-  if (FLayout = nil) or (Trim(Key) = '') then
-    Exit;
+  if FRedefinitionsDirty or (FRedefinitions = nil) then
+  begin
+    FreeAndNil(FRedefinitions);
+    FRedefinitions := TLayoutResolver.Redefinitions(FLayout);
+    FRedefinitionsDirty := False;
+  end;
+  Result := FRedefinitions;
+end;
 
-  if Grid = grdDirect then
-    Exit(False);
-
-  KeyCount := 0;
-  for PairStr in FLayout.DirectMap do
-    if SameText(Trim(PairStr.Key), Trim(Key)) then
-      Inc(KeyCount);
-
-  for PairStr in FLayout.PostbaseMap do
-    if SameText(Trim(PairStr.Key), Trim(Key)) then
-      Inc(KeyCount);
-
-  if KeyCount > 1 then
-    Exit(True);
+function TfrmEditorMain.IsRealDuplicateKey(Grid: TStringGrid; const Key: string): Boolean;
+begin
+  // A key is flagged when more than one section defines it, which is exactly the
+  // case where one mapping shadows another. The previous version only counted
+  // DirectMap and PostbaseMap and re-scanned both for every painted cell.
+  Result := (FLayout <> nil) and (Trim(Key) <> '') and
+    RedefinitionIndex.ContainsKey(Trim(Key));
 end;
 
 procedure TfrmEditorMain.SelectGridRow(Grid: TStringGrid; Row: Integer);
@@ -789,31 +1188,26 @@ begin
   if (KeyText = '') and (ValueText = '') then
     lblDiagInfo.Caption := GridName + ': empty row'
   else
-    lblDiagInfo.Caption := Format('%s: %s -> %s', [GridName, KeyText, ValueText]);
+  begin
+    // Say where the glyph actually comes from, and call out shadowing, so the
+    // author is not left guessing why an edit in one grid did nothing.
+    var Resolved := TLayoutResolver.Resolve(FLayout, KeyText);
+    var Line := Format('%s: %s -> %s', [GridName, KeyText, ValueText]);
+    if Resolved.Found then
+      Line := Line + '   resolves from ' + Resolved.SourceLabel
+    else if ValueText <> '' then
+      Line := Line + '   not resolvable (empty glyph)';
+
+    if RedefinitionIndex.ContainsKey(Trim(KeyText)) then
+      Line := Line + '   [shadowed: another section defines this key]';
+
+    lblDiagInfo.Caption := Line;
+  end;
 end;
 
-procedure TfrmEditorMain.pbRealKeyboardPaint(Sender: TObject);
-var
-  Painter: TKeyboardPainter;
+procedure TfrmEditorMain.miExitClick(Sender: TObject);
 begin
-  pbRealKeyboard.Canvas.Brush.Color := clWhite;
-  pbRealKeyboard.Canvas.FillRect(pbRealKeyboard.ClientRect);
-
-  if not Assigned(FLayout) then
-  begin
-    pbRealKeyboard.Canvas.Font.Name := 'Segoe UI';
-    pbRealKeyboard.Canvas.Font.Size := 10;
-    pbRealKeyboard.Canvas.Font.Color := clGrayText;
-    pbRealKeyboard.Canvas.TextOut(20, 20, 'Open or create a layout to see the keyboard view.');
-    Exit;
-  end;
-
-  Painter := TKeyboardPainter.Create;
-  try
-    Painter.PaintKeyboard(pbRealKeyboard.Canvas, Point(20, 24), FLayout);
-  finally
-    Painter.Free;
-  end;
+  Close;
 end;
 
 procedure TfrmEditorMain.btnOpenClick(Sender: TObject);
@@ -835,6 +1229,7 @@ begin
   if FCurrentFileName <> '' then
   begin
     SaveLayoutToFile(FLayout, FCurrentFileName);
+    SetModified(False);
   end
   else
   begin
@@ -844,15 +1239,8 @@ begin
 
     FCurrentFileName := SaveDialog.FileName;
     SaveLayoutToFile(FLayout, FCurrentFileName);
-    UpdateWindowCaption;
+    SetModified(False);
   end;
-
-  MessageBox(
-    Handle,
-    'Layout saved successfully.',
-    'Vittix Indic Editor',
-    MB_OK or MB_ICONINFORMATION
-  );
 end;
 
 procedure TfrmEditorMain.btnSaveAsClick(Sender: TObject);
@@ -862,11 +1250,17 @@ begin
   SaveUIToLayout;
   FCurrentFileName := SaveDialog.FileName;
   SaveLayoutToFile(FLayout, FCurrentFileName);
-  UpdateWindowCaption;
+  SetModified(False);
 end;
 
 procedure TfrmEditorMain.LoadLayoutToUI;
 begin
+  // The virtual keyboard on the Keyboard tab renders this layout. This used to
+  // be assigned from the preview builder, which meant the Keyboard tab only
+  // worked as a side effect of the Preview tab.
+  vkvKeyboard.Layout := FLayout;
+  vkvKeyboard.Invalidate;
+
   edtLayoutName.Text := FLayout.Name;
 
   // Select font in ComboBox
@@ -911,6 +1305,28 @@ begin
   LoadModifiers;
   LoadExtraMaps;
   UpdateDiagnosticsPanel;
+  UpdateEmptyState;
+  FRedefinitionsDirty := True;
+
+  // A freshly loaded layout has not been validated, so the dock is stale.
+  pnlProblems.Visible := False;
+  lstProblems.Items.Clear;
+  FreeAndNil(FProblems);
+end;
+
+procedure TfrmEditorMain.UpdateEmptyState;
+var
+  HasLayout: Boolean;
+begin
+  HasLayout := Assigned(FLayout);
+
+  // The page control is alClient and used to cover the empty-state label
+  // completely, so a first-run editor showed blank grids and no guidance.
+  if Assigned(PageControl) then
+    PageControl.Visible := HasLayout;
+
+  if Assigned(lblEmptyState) then
+    lblEmptyState.Visible := not HasLayout;
 end;
 
 procedure TfrmEditorMain.LoadLayoutFromCommandLine;
@@ -940,13 +1356,28 @@ end;
 
 procedure TfrmEditorMain.OpenLayoutFile(const FileName: string);
 begin
+  if not ConfirmDiscardChanges then
+    Exit;
+
   FreeAndNil(FLayout);
   FLayout := LoadLayoutFromFile(FileName);
   FCurrentFileName := FileName;
   LoadLayoutToUI;
   UpdateWindowCaption;
+  UpdateStatusBar;
   ComboBoxFonts.Enabled := True;
   UpdateLayoutPreview;
+  SetModified(False);
+end;
+
+procedure TfrmEditorMain.SetModified(Value: Boolean);
+begin
+  if FIsModified <> Value then
+  begin
+    FIsModified := Value;
+    UpdateWindowCaption;
+    UpdateStatusBar;
+  end;
 end;
 
 procedure TfrmEditorMain.UpdateWindowCaption;
@@ -974,6 +1405,9 @@ begin
       Caption := DEFAULT_EDITOR_CAPTION + ' - ' + StringReplace(Trim(Parts.Text), sLineBreak, ' | ', [rfReplaceAll])
     else
       Caption := DEFAULT_EDITOR_CAPTION;
+
+    if FIsModified then
+      Caption := Caption + '*';
   finally
     Parts.Free;
   end;
@@ -987,6 +1421,27 @@ begin
   Info := 'Script: ' + FLayout.Script + ' | Keys: ' + FLayout.DirectMap.Count.ToString;
   Info := Info + ' | Layout Type: ' + FLayout.LayoutType;
   lblDiagInfo.Caption := Info;
+  UpdateStatusBar;
+end;
+
+procedure TfrmEditorMain.UpdateStatusBar;
+begin
+  if not Assigned(StatusBar1) then Exit;
+
+  if FCurrentFileName <> '' then
+    StatusBar1.Panels[1].Text := ExtractFileName(FCurrentFileName)
+  else
+    StatusBar1.Panels[1].Text := '(untitled)';
+
+  if Assigned(FLayout) then
+    StatusBar1.Panels[2].Text := Format('Keys: %d', [FLayout.DirectMap.Count])
+  else
+    StatusBar1.Panels[2].Text := 'Keys: 0';
+
+  if FIsModified then
+    StatusBar1.Panels[0].Text := 'Modified'
+  else
+    StatusBar1.Panels[0].Text := 'Ready';
 end;
 
 procedure TfrmEditorMain.LoadExtraMaps;
@@ -1042,7 +1497,10 @@ var
   Grid: TStringGrid;
   Row: Integer;
 begin
-  Grid := Screen.ActiveControl as TStringGrid;
+  Grid := GetActiveGrid;
+  if (Grid = nil) or not (goEditing in Grid.Options) then
+    Exit;
+
   Row := Grid.RowCount;
   Grid.RowCount := Row + 1;
   Grid.Cells[0,Row] := 'NewKey';
@@ -1053,15 +1511,14 @@ end;
 procedure TfrmEditorMain.miRemoveKeyClick(Sender: TObject);
 var
   Grid: TStringGrid;
-  Row: Integer;
 begin
-  Grid := Screen.ActiveControl as TStringGrid;
-  Row := Grid.Row;
-  if Row > 0 then
-  begin
-    Grid.Rows[Row].Clear;
-    SaveUIToLayout;
-  end;
+  Grid := GetActiveGrid;
+  if (Grid = nil) or not (goEditing in Grid.Options) then
+    Exit;
+
+  RemoveGridRow(Grid, Grid.Row);
+  SetInspectorFromSelection(Grid, Grid.Row);
+  SaveUIToLayout;
 end;
 
 procedure TfrmEditorMain.miCopyClick(Sender: TObject);
@@ -1069,9 +1526,12 @@ var
   Grid: TStringGrid;
   Row: Integer;
 begin
-  Grid := Screen.ActiveControl as TStringGrid;
+  Grid := GetActiveGrid;
+  if Grid = nil then
+    Exit;
+
   Row := Grid.Row;
-  if Row > 0 then
+  if Row >= Grid.FixedRows then
     Clipboard.AsText := Grid.Cells[0,Row] + #9 + Grid.Cells[1,Row];
 end;
 
@@ -1081,15 +1541,19 @@ var
   Row: Integer;
   Parts: TArray<string>;
 begin
-  Grid := Screen.ActiveControl as TStringGrid;
+  Grid := GetActiveGrid;
+  if (Grid = nil) or not (goEditing in Grid.Options) then
+    Exit;
+
   Row := Grid.Row;
-  if Row > 0 then
+  if Row >= Grid.FixedRows then
   begin
     Parts := Clipboard.AsText.Split([#9]);
-    if Length(Parts) = 2 then
+    if Length(Parts) >= 2 then
     begin
       Grid.Cells[0,Row] := Parts[0];
       Grid.Cells[1,Row] := Parts[1];
+      SetInspectorFromSelection(Grid, Row);
       SaveUIToLayout;
     end;
   end;
@@ -1099,6 +1563,13 @@ procedure TfrmEditorMain.miValidateClick(Sender: TObject);
 var
   Errors: TValidationErrors;
 begin
+  if not Assigned(FLayout) then
+  begin
+    MessageBox(Handle, 'Open or create a layout before validating.',
+      'Vittix Indic Editor', MB_OK or MB_ICONINFORMATION);
+    Exit;
+  end;
+
   Errors := TValidationErrors.Create;
   try
     TLayoutValidation.ValidateLayout(FLayout, Errors);
@@ -1110,147 +1581,432 @@ end;
 
 procedure TfrmEditorMain.ShowValidationErrors(const Errors: TValidationErrors);
 var
-  Msg: string;
   E: TValidationError;
 begin
-  if Errors.Count = 0 then
-    Msg := 'No validation errors.'
-  else
-  begin
-    Msg := 'Validation errors:' + sLineBreak;
-    for E in Errors do
-      Msg := Msg + E.ToString + sLineBreak;
+  // Results go to the dock instead of a modal wall of text. The diagnostics
+  // strip keeps one short summary line, so the two no longer share a label.
+  FreeAndNil(FProblems);
+  FProblems := TValidationErrors.Create;
+  for E in Errors do
+    FProblems.Add(E);
+
+  lstProblems.Items.BeginUpdate;
+  try
+    lstProblems.Items.Clear;
+    for E in FProblems do
+      lstProblems.Items.Add(E.ToString);
+  finally
+    lstProblems.Items.EndUpdate;
   end;
-  pnlDiagnostics.Color := $00FFF4E0;
-  lblDiagInfo.Caption := Msg;
-  MessageDlg(Msg, mtWarning, [mbOK], 0);
+
+  if Errors.Count = 0 then
+  begin
+    lblProblemsSummary.Caption := 'Problems';
+    pnlProblems.Visible := False;
+    lblDiagInfo.Caption := 'Validation: layout is valid.';
+    Exit;
+  end;
+
+  lblProblemsSummary.Caption := Format('Problems - %d issue(s). Double-click to jump to the row.',
+    [Errors.Count]);
+  pnlProblems.Visible := True;
+  lblDiagInfo.Caption := Format('Validation: %d issue(s), listed below.', [Errors.Count]);
+end;
+
+function TfrmEditorMain.GridForSection(const Section: string): TStringGrid;
+begin
+  Result := nil;
+  if SameText(Section, 'Direct') then
+    Result := grdDirect
+  else if SameText(Section, 'Prebase') then
+    Result := grdPrebase
+  else if SameText(Section, 'Postbase') then
+    Result := grdPostbase
+  else if SameText(Section, 'Sequences') then
+    Result := grdSequences
+  else if SameText(Section, 'Modifiers') then
+    Result := grdModifiers;
+end;
+
+procedure TfrmEditorMain.btnProblemsCloseClick(Sender: TObject);
+begin
+  pnlProblems.Visible := False;
+end;
+
+procedure TfrmEditorMain.lstProblemsDblClick(Sender: TObject);
+var
+  Index, Row: Integer;
+  Problem: TValidationError;
+  Grid: TStringGrid;
+begin
+  Index := lstProblems.ItemIndex;
+  if (Index < 0) or (FProblems = nil) or (Index >= FProblems.Count) then
+    Exit;
+
+  Problem := FProblems[Index];
+  Grid := GridForSection(Problem.Section);
+  if Grid = nil then
+    Exit;
+
+  Row := FindRowByKey(Grid, Problem.Key);
+  if Row < 0 then
+    Exit;
+
+  if Grid.Parent is TTabSheet then
+    PageControl.ActivePage := TTabSheet(Grid.Parent);
+  SelectGridRow(Grid, Row);
 end;
 
 procedure TfrmEditorMain.LoadDirect;
-var
-  Pair: TPair<string, string>;
-  R: Integer;
 begin
-  grdDirect.ColCount := 3;
-  grdDirect.RowCount := FLayout.DirectMap.Count + 1;
-  grdDirect.Cells[0,0] := 'Key';
-  grdDirect.Cells[1,0] := 'Glyph';
-  grdDirect.Cells[2,0] := 'Preview';
-
-  R := 1;
-  for Pair in FLayout.DirectMap do
-  begin
-    grdDirect.Cells[0,R] := Pair.Key;
-    grdDirect.Cells[1,R] := Pair.Value;
-    grdDirect.Cells[2,R] := Pair.Value;
-    Inc(R);
-  end;
-
-  grdDirect.ColWidths[2] := 120;
-
-  edtSearchDirect.Text := '';
+  if edtSearchDirect.Text <> '' then
+    edtSearchDirect.Text := '';
+  RenderDirect('');
 end;
 
 procedure TfrmEditorMain.LoadPrebase;
-var
-  Pair: TPair<string, TKeyMapping>;
-  R: Integer;
 begin
-  grdPrebase.ColCount := 3;
-  grdPrebase.RowCount := FLayout.PrebaseMap.Count + 1;
-  grdPrebase.Cells[0,0] := 'Key';
-  grdPrebase.Cells[1,0] := 'Glyph';
-  grdPrebase.Cells[2,0] := 'Preview';
-
-  R := 1;
-  for Pair in FLayout.PrebaseMap do
-  begin
-    grdPrebase.Cells[0,R] := Pair.Key;
-    grdPrebase.Cells[1,R] := Pair.Value.Glyph;
-    grdPrebase.Cells[2,R] := Pair.Value.Glyph;
-    Inc(R);
-  end;
-
-  grdPrebase.ColWidths[2] := 120;
-
-  edtSearchPrebase.Text := '';
+  if edtSearchPrebase.Text <> '' then
+    edtSearchPrebase.Text := '';
+  RenderPrebase('');
 end;
 
 procedure TfrmEditorMain.LoadPostbase;
-var
-  Pair: TPair<string, string>;
-  R: Integer;
 begin
-  grdPostbase.ColCount := 3;
-  grdPostbase.RowCount := FLayout.PostbaseMap.Count + 1;
-  grdPostbase.Cells[0,0] := 'Key';
-  grdPostbase.Cells[1,0] := 'Glyph';
-  grdPostbase.Cells[2,0] := 'Preview';
-
-  R := 1;
-  for Pair in FLayout.PostbaseMap do
-  begin
-    grdPostbase.Cells[0,R] := Pair.Key;
-    grdPostbase.Cells[1,R] := Pair.Value;
-    grdPostbase.Cells[2,R] := Pair.Value;
-    Inc(R);
-  end;
-
-  grdPostbase.ColWidths[2] := 120;
-
-  edtSearchPostbase.Text := '';
+  if edtSearchPostbase.Text <> '' then
+    edtSearchPostbase.Text := '';
+  RenderPostbase('');
 end;
 
 procedure TfrmEditorMain.LoadSequences;
-var
-  Pair: TPair<string, string>;
-  R: Integer;
 begin
-  grdSequences.ColCount := 3;
-  grdSequences.RowCount := FLayout.Sequences.Count + 1;
-  grdSequences.Cells[0,0] := 'Keys';
-  grdSequences.Cells[1,0] := 'Output';
-  grdSequences.Cells[2,0] := 'Preview';
-
-  R := 1;
-  for Pair in FLayout.Sequences do
-  begin
-    grdSequences.Cells[0,R] := Pair.Key;
-    grdSequences.Cells[1,R] := Pair.Value;
-    grdSequences.Cells[2,R] := Pair.Value;
-    Inc(R);
-  end;
-
-  grdSequences.ColWidths[2] := 120;
-
-  edtSearchSequences.Text := '';
+  if edtSearchSequences.Text <> '' then
+    edtSearchSequences.Text := '';
+  RenderSequences('');
 end;
 
 procedure TfrmEditorMain.LoadModifiers;
-var
-  Pair: TPair<string, TKeyMapping>;
-  R: Integer;
 begin
-  grdModifiers.ColCount := 4;
-  grdModifiers.RowCount := FLayout.Modifiers.Count + 1;
-  grdModifiers.Cells[0,0] := 'Name';
-  grdModifiers.Cells[1,0] := 'Key';
-  grdModifiers.Cells[2,0] := 'Glyph';
-  grdModifiers.Cells[3,0] := 'Preview';
+  if edtSearchModifiers.Text <> '' then
+    edtSearchModifiers.Text := '';
+  RenderModifiers('');
+end;
 
-  R := 1;
-  for Pair in FLayout.Modifiers do
+{ --------------------------------------------------
+  Section renderers
+
+  Load and filter both go through these, so every column (including the
+  preview column and its header) is always written, and the ownership array
+  always matches exactly what is on screen.
+-------------------------------------------------- }
+
+procedure TfrmEditorMain.RenderDirect(const Filter: string);
+var
+  Keys: TArray<string>;
+  I, Row: Integer;
+  Needle, Glyph: string;
+begin
+  grdDirect.ColCount := 3;
+  grdDirect.DefaultRowHeight := GRID_ROW_HEIGHT;
+  grdDirect.ColWidths[2] := 120;
+  grdDirect.Cells[0, 0] := 'Key';
+  grdDirect.Cells[1, 0] := 'Glyph';
+  grdDirect.Cells[2, 0] := 'Preview';
+  grdDirect.RowCount := 1;
+  FDirectOwned := nil;
+
+  if FLayout = nil then
   begin
-    grdModifiers.Cells[0,R] := Pair.Key;
-    grdModifiers.Cells[1,R] := Pair.Value.Key;
-    grdModifiers.Cells[2,R] := Pair.Value.Glyph;
-    grdModifiers.Cells[3,R] := Pair.Value.Glyph;
-    Inc(R);
+    grdDirect.RowCount := 2;
+    Exit;
   end;
 
-  edtSearchModifiers.Text := '';
+  Needle := LowerCase(Trim(Filter));
+  Keys := FLayout.DirectMap.Keys.ToArray;
+  TArray.Sort<string>(Keys);
 
+  Row := grdDirect.FixedRows;
+  for I := 0 to High(Keys) do
+  begin
+    Glyph := FLayout.DirectMap[Keys[I]];
+    if (Needle <> '') and (Pos(Needle, LowerCase(Keys[I])) = 0) and
+       (Pos(Needle, LowerCase(Glyph)) = 0) then
+      Continue;
+
+    grdDirect.RowCount := Row + 1;
+    grdDirect.Cells[0, Row] := Keys[I];
+    grdDirect.Cells[1, Row] := Glyph;
+    grdDirect.Cells[2, Row] := Glyph;
+    Inc(Row);
+  end;
+
+  if grdDirect.RowCount < 2 then
+    grdDirect.RowCount := 2;
+
+  FDirectOwned := CollectOwnedKeys(grdDirect);
+  ReportFilterCount(grdDirect, FLayout.DirectMap.Count);
+end;
+
+procedure TfrmEditorMain.RenderPostbase(const Filter: string);
+var
+  Keys: TArray<string>;
+  I, Row: Integer;
+  Needle, Glyph: string;
+begin
+  grdPostbase.ColCount := 3;
+  grdPostbase.DefaultRowHeight := GRID_ROW_HEIGHT;
+  grdPostbase.ColWidths[2] := 120;
+  grdPostbase.Cells[0, 0] := 'Key';
+  grdPostbase.Cells[1, 0] := 'Glyph';
+  grdPostbase.Cells[2, 0] := 'Preview';
+  grdPostbase.RowCount := 1;
+  FPostbaseOwned := nil;
+
+  if FLayout = nil then
+  begin
+    grdPostbase.RowCount := 2;
+    Exit;
+  end;
+
+  Needle := LowerCase(Trim(Filter));
+  Keys := FLayout.PostbaseMap.Keys.ToArray;
+  TArray.Sort<string>(Keys);
+
+  Row := grdPostbase.FixedRows;
+  for I := 0 to High(Keys) do
+  begin
+    Glyph := FLayout.PostbaseMap[Keys[I]];
+    if (Needle <> '') and (Pos(Needle, LowerCase(Keys[I])) = 0) and
+       (Pos(Needle, LowerCase(Glyph)) = 0) then
+      Continue;
+
+    grdPostbase.RowCount := Row + 1;
+    grdPostbase.Cells[0, Row] := Keys[I];
+    grdPostbase.Cells[1, Row] := Glyph;
+    grdPostbase.Cells[2, Row] := Glyph;
+    Inc(Row);
+  end;
+
+  if grdPostbase.RowCount < 2 then
+    grdPostbase.RowCount := 2;
+
+  FPostbaseOwned := CollectOwnedKeys(grdPostbase);
+  ReportFilterCount(grdPostbase, FLayout.PostbaseMap.Count);
+end;
+
+procedure TfrmEditorMain.RenderSequences(const Filter: string);
+var
+  Keys: TArray<string>;
+  I, Row: Integer;
+  Needle, Glyph: string;
+begin
+  grdSequences.ColCount := 3;
+  grdSequences.DefaultRowHeight := GRID_ROW_HEIGHT;
+  grdSequences.ColWidths[2] := 120;
+  grdSequences.Cells[0, 0] := 'Keys';
+  grdSequences.Cells[1, 0] := 'Output';
+  grdSequences.Cells[2, 0] := 'Preview';
+  grdSequences.RowCount := 1;
+  FSequencesOwned := nil;
+
+  if FLayout = nil then
+  begin
+    grdSequences.RowCount := 2;
+    Exit;
+  end;
+
+  Needle := LowerCase(Trim(Filter));
+  Keys := FLayout.Sequences.Keys.ToArray;
+  TArray.Sort<string>(Keys);
+
+  Row := grdSequences.FixedRows;
+  for I := 0 to High(Keys) do
+  begin
+    Glyph := FLayout.Sequences[Keys[I]];
+    if (Needle <> '') and (Pos(Needle, LowerCase(Keys[I])) = 0) and
+       (Pos(Needle, LowerCase(Glyph)) = 0) then
+      Continue;
+
+    grdSequences.RowCount := Row + 1;
+    grdSequences.Cells[0, Row] := Keys[I];
+    grdSequences.Cells[1, Row] := Glyph;
+    grdSequences.Cells[2, Row] := Glyph;
+    Inc(Row);
+  end;
+
+  if grdSequences.RowCount < 2 then
+    grdSequences.RowCount := 2;
+
+  FSequencesOwned := CollectOwnedKeys(grdSequences);
+  ReportFilterCount(grdSequences, FLayout.Sequences.Count);
+end;
+
+procedure TfrmEditorMain.RenderPrebase(const Filter: string);
+var
+  Keys: TArray<string>;
+  I, Row: Integer;
+  Needle, Glyph: string;
+begin
+  grdPrebase.ColCount := 3;
+  grdPrebase.DefaultRowHeight := GRID_ROW_HEIGHT;
+  grdPrebase.ColWidths[2] := 120;
+  grdPrebase.Cells[0, 0] := 'Key';
+  grdPrebase.Cells[1, 0] := 'Glyph';
+  grdPrebase.Cells[2, 0] := 'Preview';
+  grdPrebase.RowCount := 1;
+  FPrebaseOwned := nil;
+
+  if FLayout = nil then
+  begin
+    grdPrebase.RowCount := 2;
+    Exit;
+  end;
+
+  Needle := LowerCase(Trim(Filter));
+  Keys := FLayout.PrebaseMap.Keys.ToArray;
+  TArray.Sort<string>(Keys);
+
+  Row := grdPrebase.FixedRows;
+  for I := 0 to High(Keys) do
+  begin
+    Glyph := FLayout.PrebaseMap[Keys[I]].Glyph;
+    if (Needle <> '') and (Pos(Needle, LowerCase(Keys[I])) = 0) and
+       (Pos(Needle, LowerCase(Glyph)) = 0) then
+      Continue;
+
+    grdPrebase.RowCount := Row + 1;
+    grdPrebase.Cells[0, Row] := Keys[I];
+    grdPrebase.Cells[1, Row] := Glyph;
+    grdPrebase.Cells[2, Row] := Glyph;
+    Inc(Row);
+  end;
+
+  if grdPrebase.RowCount < 2 then
+    grdPrebase.RowCount := 2;
+
+  FPrebaseOwned := CollectOwnedKeys(grdPrebase);
+  ReportFilterCount(grdPrebase, FLayout.PrebaseMap.Count);
+end;
+
+procedure TfrmEditorMain.RenderModifiers(const Filter: string);
+var
+  Keys: TArray<string>;
+  I, Row: Integer;
+  Needle, Key, Glyph: string;
+begin
+  grdModifiers.ColCount := 4;
+  grdModifiers.DefaultRowHeight := GRID_ROW_HEIGHT;
   grdModifiers.ColWidths[3] := 120;
+  grdModifiers.Cells[0, 0] := 'Name';
+  grdModifiers.Cells[1, 0] := 'Key';
+  grdModifiers.Cells[2, 0] := 'Glyph';
+  grdModifiers.Cells[3, 0] := 'Preview';
+  grdModifiers.RowCount := 1;
+  FModifiersOwned := nil;
+
+  if FLayout = nil then
+  begin
+    grdModifiers.RowCount := 2;
+    Exit;
+  end;
+
+  Needle := LowerCase(Trim(Filter));
+  Keys := FLayout.Modifiers.Keys.ToArray;
+  TArray.Sort<string>(Keys);
+
+  Row := grdModifiers.FixedRows;
+  for I := 0 to High(Keys) do
+  begin
+    Key := FLayout.Modifiers[Keys[I]].Key;
+    Glyph := FLayout.Modifiers[Keys[I]].Glyph;
+    if (Needle <> '') and (Pos(Needle, LowerCase(Keys[I])) = 0) and
+       (Pos(Needle, LowerCase(Glyph)) = 0) then
+      Continue;
+
+    grdModifiers.RowCount := Row + 1;
+    grdModifiers.Cells[0, Row] := Keys[I];
+    grdModifiers.Cells[1, Row] := Key;
+    grdModifiers.Cells[2, Row] := Glyph;
+    grdModifiers.Cells[3, Row] := Glyph;
+    Inc(Row);
+  end;
+
+  if grdModifiers.RowCount < 2 then
+    grdModifiers.RowCount := 2;
+
+  FModifiersOwned := CollectOwnedKeys(grdModifiers);
+  ReportFilterCount(grdModifiers, FLayout.Modifiers.Count);
+end;
+
+function TfrmEditorMain.CollectOwnedKeys(Grid: TStringGrid): TArray<string>;
+var
+  I, R: Integer;
+begin
+  SetLength(Result, Grid.RowCount - Grid.FixedRows);
+  for R := Grid.FixedRows to Grid.RowCount - 1 do
+  begin
+    I := R - Grid.FixedRows;
+    Result[I] := Trim(Grid.Cells[0, R]);
+  end;
+end;
+
+function TfrmEditorMain.CollectStringRows(Grid: TStringGrid): TArray<TStringMappingRow>;
+var
+  I, R: Integer;
+begin
+  SetLength(Result, Grid.RowCount - Grid.FixedRows);
+  for R := Grid.FixedRows to Grid.RowCount - 1 do
+  begin
+    I := R - Grid.FixedRows;
+    Result[I].Key := Trim(Grid.Cells[0, R]);
+    Result[I].Value := Trim(Grid.Cells[1, R]);
+  end;
+end;
+
+function TfrmEditorMain.CollectPrebaseRows: TArray<TEditorMapping>;
+var
+  I, R: Integer;
+begin
+  SetLength(Result, grdPrebase.RowCount - grdPrebase.FixedRows);
+  for R := grdPrebase.FixedRows to grdPrebase.RowCount - 1 do
+  begin
+    I := R - grdPrebase.FixedRows;
+    Result[I].Name := Trim(grdPrebase.Cells[0, R]);
+    Result[I].Key := Trim(grdPrebase.Cells[0, R]);
+    Result[I].Glyph := Trim(grdPrebase.Cells[1, R]);
+  end;
+end;
+
+function TfrmEditorMain.CollectModifierRows: TArray<TEditorMapping>;
+var
+  I, R: Integer;
+begin
+  SetLength(Result, grdModifiers.RowCount - grdModifiers.FixedRows);
+  for R := grdModifiers.FixedRows to grdModifiers.RowCount - 1 do
+  begin
+    I := R - grdModifiers.FixedRows;
+    Result[I].Name := Trim(grdModifiers.Cells[0, R]);
+    Result[I].Key := Trim(grdModifiers.Cells[1, R]);
+    Result[I].Glyph := Trim(grdModifiers.Cells[2, R]);
+  end;
+end;
+
+procedure TfrmEditorMain.ReportFilterCount(Grid: TStringGrid; Total: Integer);
+var
+  Shown, I: Integer;
+begin
+  if not Assigned(StatusBar1) or (StatusBar1.Panels.Count < 4) then
+    Exit;
+
+  Shown := 0;
+  for I := Grid.FixedRows to Grid.RowCount - 1 do
+    if Trim(Grid.Cells[0, I]) <> '' then
+      Inc(Shown);
+
+  if Shown < Total then
+    StatusBar1.Panels[3].Text := Format('Showing %d of %d', [Shown, Total])
+  else
+    StatusBar1.Panels[3].Text := '';
 end;
 
 procedure TfrmEditorMain.btnAddKeyMapClick(Sender: TObject);
@@ -1271,18 +2027,35 @@ procedure TfrmEditorMain.btnInspectorApplyClick(Sender: TObject);
 var
   Grid: TStringGrid;
   Row: Integer;
+  Key: string;
 begin
+  Key := Trim(edtInspectorKey.Text);
+  if Key = '' then
+    Exit;
+
+  // The inspector owns the edit. With no grid row selected it writes to Direct,
+  // which is where a keyboard selection lands.
   Grid := GetSelectedGrid;
-  if Grid = nil then Exit;
-  Row := Grid.Row;
-  if Row < Grid.FixedRows then Exit;
+  if (Grid = nil) or (Grid.Row < Grid.FixedRows) then
+    Grid := grdDirect;
+
+  Row := FindRowByKey(Grid, Key);
+  if Row < 0 then
+  begin
+    if not (goEditing in Grid.Options) then
+      Exit;
+    AddRowToGrid(Grid);
+    Row := Grid.RowCount - 1;
+  end;
+
   PushUndo;
-  Grid.Cells[0, Row] := edtInspectorKey.Text;
+  Grid.Cells[0, Row] := Key;
   if Grid.ColCount > 1 then
     Grid.Cells[1, Row] := edtInspectorValue.Text;
   Grid.Invalidate;
   SaveUIToLayout;
   UpdateLayoutPreview;
+  SelectGridRow(Grid, Row);
 end;
 
 procedure TfrmEditorMain.btnInspectorClearClick(Sender: TObject);
@@ -1301,26 +2074,62 @@ begin
   UpdateLayoutPreview;
 end;
 
+procedure TfrmEditorMain.btnAddRowClick(Sender: TObject);
+var
+  Grid: TStringGrid;
+begin
+  if not (Sender is TComponent) then
+    Exit;
+
+  case TComponent(Sender).Tag of
+    0: Grid := grdDirect;
+    1: Grid := grdPrebase;
+    2: Grid := grdPostbase;
+    3: Grid := grdModifiers;
+  else
+    Exit;
+  end;
+
+  if not (goEditing in Grid.Options) then
+    Exit;
+
+  AddRowToGrid(Grid);
+  SaveUIToLayout;
+end;
+
+function TfrmEditorMain.GridForCurrentTab: TStringGrid;
+begin
+  Result := nil;
+  if not Assigned(PageControl) or not Assigned(PageControl.ActivePage) then
+    Exit;
+
+  if PageControl.ActivePage = tabDirect then
+    Result := grdDirect
+  else if PageControl.ActivePage = tabPrebase then
+    Result := grdPrebase
+  else if PageControl.ActivePage = tabPostbase then
+    Result := grdPostbase
+  else if PageControl.ActivePage = tabSequences then
+    Result := grdSequences
+  else if PageControl.ActivePage = tabModifiers then
+    Result := grdModifiers;
+end;
+
 procedure TfrmEditorMain.btnInspectorAddClick(Sender: TObject);
 var
   Grid: TStringGrid;
-  ParentName: string;
 begin
+  // The old fallback derived the target grid from the sender's parent name,
+  // which matched nothing for the inspector's own button, so it did nothing.
   Grid := GetSelectedGrid;
-  if (Grid = nil) and (Sender is TControl) then
-  begin
-    ParentName := LowerCase((Sender as TControl).Parent.Name);
-    if Pos('direct', ParentName) > 0 then Grid := grdDirect
-    else if Pos('prebase', ParentName) > 0 then Grid := grdPrebase
-    else if Pos('postbase', ParentName) > 0 then Grid := grdPostbase
-    else if Pos('sequences', ParentName) > 0 then Grid := grdSequences
-    else if Pos('modifiers', ParentName) > 0 then Grid := grdModifiers;
-  end;
-  if Grid <> nil then
-  begin
-    AddRowToGrid(Grid);
-    SaveUIToLayout;
-  end;
+  if Grid = nil then
+    Grid := GridForCurrentTab;
+
+  if (Grid = nil) or not (goEditing in Grid.Options) then
+    Exit;
+
+  AddRowToGrid(Grid);
+  SaveUIToLayout;
 end;
 
 procedure TfrmEditorMain.GridDrawCell(Sender: TObject; ACol, ARow: Integer;
@@ -1328,21 +2137,50 @@ procedure TfrmEditorMain.GridDrawCell(Sender: TObject; ACol, ARow: Integer;
 var
   Grid: TStringGrid;
   Text, KeyText, ValueText, Badge: string;
+  LStyle: TCustomStyleServices;
+  ClrHeaderBg, ClrCellBg, ClrCellAlt, ClrText, ClrSelBg, ClrSelText, ClrBadge: TColor;
 begin
   Grid := Sender as TStringGrid;
+  LStyle := StyleServices;
+
+  // One palette for the whole grid, so high-contrast mode cannot end up with
+  // dark text on a dark surface (or the reverse) in part of the table.
+  if FHighContrast then
+  begin
+    ClrHeaderBg := clBlack;
+    ClrCellBg := clBlack;
+    ClrCellAlt := $00202020;
+    ClrText := clWhite;
+    ClrSelBg := clYellow;
+    ClrSelText := clBlack;
+    ClrBadge := clYellow;
+  end
+  else
+  begin
+    // Normal palette comes from the editor's token set rather than the system
+    // theme, so surfaces, text and the selection treatment stay consistent.
+    var Theme := EditorThemeCurrent;
+    ClrHeaderBg := Theme.Surface;
+    ClrCellBg := Theme.Canvas;
+    ClrCellAlt := Theme.SurfaceAlt;
+    ClrText := Theme.Text;
+    ClrSelBg := Theme.AccentSubtle;
+    ClrSelText := Theme.Text;
+    ClrBadge := Theme.Warning;
+  end;
 
   // -------------------------------
   // HEADER ROW (titles)
   // -------------------------------
   if ARow < Grid.FixedRows then
   begin
-    Grid.Canvas.Brush.Color := clBtnFace;
+    Grid.Canvas.Brush.Color := ClrHeaderBg;
     Grid.Canvas.FillRect(Rect);
 
     Grid.Canvas.Font.Name := 'Segoe UI';
     Grid.Canvas.Font.Size := 9;
     Grid.Canvas.Font.Style := [fsBold];
-    Grid.Canvas.Font.Color := clWindowText;
+    Grid.Canvas.Font.Color := ClrText;
 
     Text := Grid.Cells[ACol, ARow];
 
@@ -1360,9 +2198,9 @@ begin
   // NORMAL CELLS
   // -------------------------------
   if Odd(ARow) then
-    Grid.Canvas.Brush.Color := $00FAFAFA
+    Grid.Canvas.Brush.Color := ClrCellAlt
   else
-  Grid.Canvas.Brush.Color := clWindow;
+    Grid.Canvas.Brush.Color := ClrCellBg;
   Grid.Canvas.FillRect(Rect);
 
   Text := Grid.Cells[ACol, ARow];
@@ -1375,7 +2213,7 @@ begin
       ValueText := Trim(Grid.Cells[1, ARow]);
   end;
 
-  // 🔵 PREVIEW COLUMN (rightmost)
+  // PREVIEW COLUMN (rightmost) — use layout font
   if (ACol = Grid.ColCount - 1) and Assigned(FLayout) then
   begin
     Grid.Canvas.Font.Name := FLayout.FontFamily;
@@ -1388,18 +2226,20 @@ begin
   end;
 
   Grid.Canvas.Font.Style := [];
-  Grid.Canvas.Font.Color := clWindowText;
+  Grid.Canvas.Font.Color := ClrText;
 
   // Selection highlight
   if gdSelected in State then
   begin
-    Grid.Canvas.Brush.Color := clHighlight;
-    Grid.Canvas.Font.Color := clHighlightText;
+    Grid.Canvas.Brush.Color := ClrSelBg;
+    Grid.Canvas.Font.Color := ClrSelText;
     Grid.Canvas.FillRect(Rect);
   end;
 
+  // Status badge. Drawn once per row in the glyph column, not once per cell:
+  // it used to repeat in every column and collide with the preview glyph.
   Badge := '';
-  if ARow >= Grid.FixedRows then
+  if (ARow >= Grid.FixedRows) and (ACol = Grid.ColCount - 2) then
   begin
     if KeyText = '' then
       Badge := 'EMPTY'
@@ -1412,7 +2252,7 @@ begin
   if Badge <> '' then
   begin
     Grid.Canvas.Font.Style := [fsBold];
-    Grid.Canvas.Font.Color := clMaroon;
+    Grid.Canvas.Font.Color := ClrBadge;
     DrawText(
       Grid.Canvas.Handle,
       PChar(Badge),
@@ -1420,7 +2260,7 @@ begin
       Rect,
       DT_SINGLELINE or DT_VCENTER or DT_RIGHT
     );
-    Grid.Canvas.Font.Color := clWindowText;
+    Grid.Canvas.Font.Color := ClrText;
   end;
 
   DrawText(
@@ -1435,9 +2275,7 @@ end;
 procedure TfrmEditorMain.SyncUIToModel;
 var
   R: Integer;
-  Key, Glyph, Name: string;
-  KeyMap: TKeyMapping;
-  Grid: TStringGrid;
+  Key, Glyph: string;
   Tab: TTabSheet;
   MapName: string;
   ExtraMap: TDictionary<string, string>;
@@ -1445,6 +2283,9 @@ var
   I: Integer;
 begin
   if FLayout = nil then Exit;
+
+  // The redefinition index describes the model, so it is stale from here on.
+  FRedefinitionsDirty := True;
 
   PushUndo;
 
@@ -1455,63 +2296,22 @@ begin
   FLayout.Properties.AddOrSetValue('HotkeySwitch', edtHotkeySwitch.Text);
   FLayout.Properties.AddOrSetValue('HotkeyAction', edtHotkeyAction.Text);
 
-  FLayout.DirectMap.Clear;
-  for R := grdDirect.FixedRows to grdDirect.RowCount - 1 do
-  begin
-    Key := Trim(grdDirect.Cells[0, R]);
-    Glyph := Trim(grdDirect.Cells[1, R]);
-    if (Key <> '') and (Glyph <> '') then
-      FLayout.DirectMap.Add(Key, Glyph);
-  end;
+  // Only the rows currently on screen are applied. Any mapping a search filter
+  // is hiding stays in the model untouched. This is the fix for the save path
+  // that used to delete every mapping the filter excluded.
+  SyncVisibleStringMap(FLayout.DirectMap, CollectStringRows(grdDirect), FDirectOwned);
+  SyncVisibleMappings(FLayout.PrebaseMap, CollectPrebaseRows, FPrebaseOwned, 'prebase');
+  SyncVisibleStringMap(FLayout.PostbaseMap, CollectStringRows(grdPostbase), FPostbaseOwned);
+  SyncVisibleStringMap(FLayout.Sequences, CollectStringRows(grdSequences), FSequencesOwned);
+  SyncVisibleMappings(FLayout.Modifiers, CollectModifierRows, FModifiersOwned, 'modifier');
 
-  FLayout.PrebaseMap.Clear;
-  for R := grdPrebase.FixedRows to grdPrebase.RowCount - 1 do
-  begin
-    Key := Trim(grdPrebase.Cells[0, R]);
-    Glyph := Trim(grdPrebase.Cells[1, R]);
-    if (Key <> '') and (Glyph <> '') then
-    begin
-      KeyMap.Key := Key;
-      KeyMap.Glyph := Glyph;
-      KeyMap.MapType := 'prebase';
-      KeyMap.InitMetadata;
-      FLayout.PrebaseMap.Add(Key, KeyMap);
-    end;
-  end;
-
-  FLayout.PostbaseMap.Clear;
-  for R := grdPostbase.FixedRows to grdPostbase.RowCount - 1 do
-  begin
-    Key := Trim(grdPostbase.Cells[0, R]);
-    Glyph := Trim(grdPostbase.Cells[1, R]);
-    if (Key <> '') and (Glyph <> '') then
-      FLayout.PostbaseMap.Add(Key, Glyph);
-  end;
-
-  FLayout.Sequences.Clear;
-  for R := grdSequences.FixedRows to grdSequences.RowCount - 1 do
-  begin
-    Key := Trim(grdSequences.Cells[0, R]);
-    Glyph := Trim(grdSequences.Cells[1, R]);
-    if (Key <> '') and (Glyph <> '') then
-      FLayout.Sequences.Add(Key, Glyph);
-  end;
-
-  FLayout.Modifiers.Clear;
-  for R := grdModifiers.FixedRows to grdModifiers.RowCount - 1 do
-  begin
-    Name := Trim(grdModifiers.Cells[0, R]);
-    Key := Trim(grdModifiers.Cells[1, R]);
-    Glyph := Trim(grdModifiers.Cells[2, R]);
-    if (Name <> '') and (Key <> '') and (Glyph <> '') then
-    begin
-      KeyMap.Key := Key;
-      KeyMap.Glyph := Glyph;
-      KeyMap.MapType := 'modifier';
-      KeyMap.InitMetadata;
-      FLayout.Modifiers.Add(Name, KeyMap);
-    end;
-  end;
+  // Ownership follows what is on screen now, so the next edit is attributed to
+  // the right model entries.
+  FDirectOwned := CollectOwnedKeys(grdDirect);
+  FPrebaseOwned := CollectOwnedKeys(grdPrebase);
+  FPostbaseOwned := CollectOwnedKeys(grdPostbase);
+  FSequencesOwned := CollectOwnedKeys(grdSequences);
+  FModifiersOwned := CollectOwnedKeys(grdModifiers);
 
   for I := PageControl.PageCount - 1 downto 0 do
   begin
@@ -1594,69 +2394,55 @@ begin
   end;
 end;
 
-procedure TfrmEditorMain.pbRealKeyboardMouseDown(Sender: TObject; Button: TMouseButton;
-  Shift: TShiftState; X, Y: Integer);
+// Fired by TVittixKeyboardView when the user clicks a key. The control has
+// already computed the current mapping and repainted itself with the
+// selection highlight — this handler just wires that into the rest of the
+// editor's UI (quick-assign box + the matching grid row, for anyone still
+// working from the grid tabs).
+procedure TfrmEditorMain.vkvKeyboardKeySelect(Sender: TObject; const KeyName, CurrentGlyph: string);
 var
-  Painter: TKeyboardPainter;
-  Hit: TKeyboardKeyHit;
-  Grid: TStringGrid;
-  Value: string;
   Row: Integer;
 begin
-  if FLayout = nil then Exit;
-  Painter := TKeyboardPainter.Create;
-  try
-    Painter.PaintKeyboard(pbRealKeyboard.Canvas, Point(20, 24), FLayout);
-    Hit := Painter.HitTest(Point(X, Y));
-  finally
-    Painter.Free;
-  end;
-  if Hit.KeyName = '' then Exit;
-  if Button = mbRight then
+  FSelectedKeyboardKey := KeyName;
+
+  // The inspector is the single editing surface now, so the keyboard selection
+  // loads into it instead of into a second set of controls.
+  edtInspectorKey.Text := KeyName;
+  edtInspectorValue.Text := CurrentGlyph;
+
+  Row := FindRowByKey(grdDirect, KeyName);
+  if Row >= 0 then
+    SelectGridRow(grdDirect, Row)
+  else
   begin
-    if not GetMappingForKey(Hit.KeyName, Value) then
-      Value := '';
-    edtInspectorKey.Text := Hit.KeyName;
-    edtInspectorValue.Text := Value;
-    if Value = '' then
-      btnInspectorAddClick(Sender)
+    var Resolved := TLayoutResolver.Resolve(FLayout, KeyName);
+    if Resolved.Found then
+      lblDiagInfo.Caption := Format(
+        'Keyboard: %s resolves from %s. Enter a value here and Apply to override it.',
+        [KeyName, Resolved.SourceLabel])
     else
-      ShowMessage(Hit.KeyName + ' = ' + Value);
-    Exit;
+      lblDiagInfo.Caption := Format(
+        'Keyboard: %s is unmapped. Enter a value and press Apply.', [KeyName]);
   end;
-  Grid := grdDirect;
-  Row := FindRowByKey(Grid, Hit.KeyName);
-  if Row > 0 then
-  begin
-    SelectGridRow(Grid, Row);
-    edtInspectorKey.Text := Hit.KeyName;
-    if GetMappingForKey(Hit.KeyName, Value) then
-      edtInspectorValue.Text := Value;
-    Grid.EditorMode := True;
-  end;
+
+  edtInspectorValue.SetFocus;
+  edtInspectorValue.SelectAll;
 end;
 
-procedure TfrmEditorMain.pbRealKeyboardMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);
-var
-  Painter: TKeyboardPainter;
-  Hit: TKeyboardKeyHit;
-  Value: string;
+// Fired by TVittixKeyboardView.AssignKey/ClearKey after it has already
+// written (or removed) the Direct-map entry. Everything else that mirrors
+// that mapping — the grid, the preview tab, the diagnostics line — refreshes
+// from here.
+procedure TfrmEditorMain.vkvKeyboardKeyAssign(Sender: TObject; const KeyName, NewGlyph: string);
 begin
-  if FLayout = nil then Exit;
-  Painter := TKeyboardPainter.Create;
-  try
-    Painter.PaintKeyboard(pbRealKeyboard.Canvas, Point(20, 24), FLayout);
-    Hit := Painter.HitTest(Point(X, Y));
-  finally
-    Painter.Free;
-  end;
-  if Hit.KeyName <> '' then
-  begin
-    if GetMappingForKey(Hit.KeyName, Value) then
-      lblDiagInfo.Caption := Hit.KeyName + ' -> ' + Value
-    else
-      lblDiagInfo.Caption := Hit.KeyName + ' (unmapped)';
-  end;
+  LoadDirect;
+  UpdateLayoutPreview;
+
+  if NewGlyph <> '' then
+    lblDiagInfo.Caption := Format('Direct: %s -> %s', [KeyName, NewGlyph])
+  else
+    lblDiagInfo.Caption := KeyName + ' cleared';
 end;
+
 
 end.

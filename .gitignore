@@ -85,3 +85,18 @@ __recovery/
 
 # Boss dependency manager vendor folder https://github.com/HashLoad/boss
 modules/
+
+# Local agent workspace (AutoClaw). These are not part of the product; they are
+# the assistant's own working files and must not be committed to this repository.
+.agents/
+.openclaw/
+.commandcode/
+AGENTS.md
+SOUL.md
+USER.md
+IDENTITY.md
+HEARTBEAT.md
+MEMORY.md
+
+# Scratch space used for local checks and one-off build scripts
+tmp/

@@ -22,11 +22,11 @@ object frmTray: TfrmTray
   object PopupMenu: TPopupMenu
     OnPopup = PopupMenuPopup
     object miLayoutGroupHeader: TMenuItem
-      Caption = 'DEVANAGARI'
+      Caption = 'Vittix Indic Keyboard'
       Enabled = False
     end
     object miLayoutNameHeader: TMenuItem
-      Caption = 'Layout Name'
+      Caption = 'Engine: ON'
       Default = True
       Enabled = False
     end
@@ -34,7 +34,7 @@ object frmTray: TfrmTray
       Caption = '-'
     end
     object miEnable: TMenuItem
-      Caption = 'Enable Keyboard'
+      Caption = '&Enable Keyboard'
       Checked = True
       OnClick = miEnableClick
     end
@@ -42,28 +42,44 @@ object frmTray: TfrmTray
       Caption = '-'
     end
     object miLayouts: TMenuItem
-      Caption = 'Layouts'
+      Caption = '&Layouts'
     end
     object miOnScreen: TMenuItem
-      Caption = 'On-Screen Keyboard'
+      Caption = 'On-&Screen Keyboard'
       OnClick = miOnScreenClick
     end
     object miLayoutEditor: TMenuItem
-      Caption = 'Layout Editor...'
+      Caption = 'Layout &Editor...'
       OnClick = miLayoutEditorClick
     end
     object miAppWhitelist: TMenuItem
-      Caption = 'Allowed Apps'
+      Caption = 'Allowed &Apps'
     end
     object miSettings: TMenuItem
-      Caption = 'Settings...'
+      Caption = '&Settings...'
       OnClick = miSettingsClick
+    end
+    object miSep3: TMenuItem
+      Caption = '-'
+    end
+    object miOpenLayoutsFolder: TMenuItem
+      Caption = 'Open &layouts folder'
+    end
+    object miReloadLayouts: TMenuItem
+      Caption = '&Reload layouts'
+      ShortCut = 116
+    end
+    object miOpenLogFolder: TMenuItem
+      Caption = 'Open log f&older'
+    end
+    object miAbout: TMenuItem
+      Caption = '&About Vittix Indic Keyboard'
     end
     object miSep2: TMenuItem
       Caption = '-'
     end
     object miExit: TMenuItem
-      Caption = 'Exit'
+      Caption = 'E&xit'
       OnClick = miExitClick
     end
   end

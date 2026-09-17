@@ -67,7 +67,7 @@
         <DCC_S>false</DCC_S>
         <DCC_ImageBase>00400000</DCC_ImageBase>
         <SanitizedProjectName>VittixIndicTests</SanitizedProjectName>
-        <DCC_SearchPath>$(ProjectDir)\..\Shared;$(ProjectDir)\..\Keyboard;$(ProjectDir)\..\Keyboard\Utils;C:/Program Files (x86)/Embarcadero/Studio/23.0/source/DunitX;$(DCC_SearchPath)</DCC_SearchPath>
+        <DCC_SearchPath>$(MSBuildProjectDirectory)\..\Shared;$(MSBuildProjectDirectory)\..\Keyboard;$(MSBuildProjectDirectory)\..\Keyboard\Utils;C:/Program Files (x86)/Embarcadero/Studio/23.0/source/DunitX;$(DCC_SearchPath)</DCC_SearchPath>
         <DCC_Namespace>System;System.Generics.Collections;Xml;Data;Datasnap;Web;Soap;Winapi;Vcl;Vcl.Imaging;Vcl.Touch;Vcl.Samples;Vcl.Shell;$(DCC_Namespace)</DCC_Namespace>
         <VerInfo_Locale>1033</VerInfo_Locale>
         <VerInfo_Keys>CompanyName=;FileDescription=;FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductName=;ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
@@ -79,7 +79,7 @@
         <DCC_Define>DEBUG;$(DCC_Define)</DCC_Define>
         <DCC_DebugInformation>1</DCC_DebugInformation>
         <BT_BuildType>Debug</BT_BuildType>
-        <DCC_SearchPath>$(ProjectDir)\..\Shared;$(ProjectDir)\..\Keyboard;$(ProjectDir)\..\Keyboard\Utils;C:/Program Files (x86)/Embarcadero/Studio/23.0/source/DunitX;$(DCC_SearchPath)</DCC_SearchPath>
+        <DCC_SearchPath>$(MSBuildProjectDirectory)\..\Shared;$(MSBuildProjectDirectory)\..\Keyboard;$(MSBuildProjectDirectory)\..\Keyboard\Utils;C:/Program Files (x86)/Embarcadero/Studio/23.0/source/DunitX;$(DCC_SearchPath)</DCC_SearchPath>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win64)'!=''">
         <DCC_Define>DEBUG;$(DCC_Define)</DCC_Define>
@@ -100,6 +100,8 @@
         <DCCReference Include="Tests.Shared.LayoutValidation.pas"/>
         <DCCReference Include="Tests.Shared.LayoutJson.pas"/>
         <DCCReference Include="Tests.Shared.LayoutModel.pas"/>
+        <DCCReference Include="..\LayoutEditor\Utils\LayoutMappingSync.pas"/>
+        <DCCReference Include="Tests.LayoutEditor.MappingSync.pas"/>
         <DCCReference Include="Tests.Layouts.RealLayouts.pas"/>
         <DCCReference Include="Tests.Utils.Logger.pas"/>
         <DCCReference Include="Tests.Engine.PendingState.pas"/>

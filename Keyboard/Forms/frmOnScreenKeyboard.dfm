@@ -12,6 +12,8 @@ object frmOnScreenKeyboard: TfrmOnScreenKeyboard
   Font.Name = 'Segoe UI'
   Font.Style = []
   Position = poDesigned
+  Constraints.MinHeight = 260
+  Constraints.MinWidth = 520
   OnCreate = FormCreate
   TextHeight = 15
   object pnlHeader: TPanel
@@ -68,5 +70,17 @@ object frmOnScreenKeyboard: TfrmOnScreenKeyboard
     ExplicitTop = 0
     ExplicitWidth = 185
     ExplicitHeight = 41
+    object vkvKeyboard: TVittixKeyboardView
+      Left = 0
+      Top = 0
+      Width = 520
+      Height = 188
+      Align = alClient
+      Color = clWhite
+      ParentColor = False
+      TabOrder = 0
+      ScaleToFit = True
+      OnKeySelect = vkvKeyboardKeySelect
+    end
   end
 end

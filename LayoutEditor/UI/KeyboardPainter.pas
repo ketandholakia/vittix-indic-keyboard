@@ -9,7 +9,8 @@ uses
   Vcl.Graphics,
   Vcl.Controls,
   Vcl.ExtCtrls,
-  LayoutModel;
+  LayoutModel,
+  LayoutResolver;
 
 type
   TKeyboardKeyHit = record
@@ -182,27 +183,11 @@ end;
 ------------------------------------------------- }
 
 function TKeyboardPainter.GetGlyphForKey(const Key: string): string;
-var
-  Matra: TKeyMapping;
 begin
-  Result := '';
-
-  if FLayout.DirectMap.ContainsKey(Key) then
-    Exit(FLayout.DirectMap[Key]);
-
-  if FLayout.PrebaseMap.TryGetValue(Key, Matra) then
-    Exit(Matra.Glyph);
-
-  if FLayout.PostbaseMap.ContainsKey(Key) then
-    Exit(FLayout.PostbaseMap[Key]);
-
-  if FLayout.Modifiers.ContainsKey('halant') then
-    if Key = FLayout.Modifiers['halant'].Key then
-      Exit(FLayout.Modifiers['halant'].Glyph);
-
-  if FLayout.Modifiers.ContainsKey('reph') then
-    if Key = FLayout.Modifiers['reph'].Key then
-      Exit(FLayout.Modifiers['reph'].Glyph);
+  // Delegates to LayoutResolver. This used to look the modifier up by the
+  // literal name 'halant' then 'reph', so a layout that named its modifier
+  // anything else drew nothing for that key.
+  Result := TLayoutResolver.GlyphFor(FLayout, Key);
 end;
 
 end.

@@ -66,7 +66,8 @@
         <DCC_S>false</DCC_S>
         <DCC_ImageBase>00400000</DCC_ImageBase>
         <SanitizedProjectName>VittixIndicKeyboard</SanitizedProjectName>
-        <DCC_SearchPath>$(ProjectDir)\..\Shared;$(ProjectDir);$(DCC_SearchPath)</DCC_SearchPath>
+        <DCC_UnitSearchPath>$(MSBuildProjectDirectory)\..\Shared;$(MSBuildProjectDirectory);$(DCC_SearchPath)</DCC_UnitSearchPath>
+        <DCC_SearchPath>$(MSBuildProjectDirectory)\..\Shared;$(MSBuildProjectDirectory);$(DCC_SearchPath)</DCC_SearchPath>
         <DCC_Namespace>Vcl;Vcl.Imaging;Vcl.Touch;Vcl.Samples;Vcl.Shell;System;System.Generics.Collections;Xml;Data;Datasnap;Web;Soap;$(DCC_Namespace)</DCC_Namespace>
         <VerInfo_Locale>1033</VerInfo_Locale>
         <VerInfo_Keys>CompanyName=Vittix;FileDescription=;FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=VittixIndicKeyboard.exe;ProductName=;ProductVersion=1.0.0.0;Comments=;CFBundleName=</VerInfo_Keys>
@@ -75,7 +76,7 @@
         <Icon_MainIcon>$(BDS)\bin\delphi_PROJECTICON.ico</Icon_MainIcon>
         <UWP_DelphiLogo44>$(BDS)\bin\Artwork\Windows\UWP\delphi_UwpDefault_44.png</UWP_DelphiLogo44>
         <UWP_DelphiLogo150>$(BDS)\bin\Artwork\Windows\UWP\delphi_UwpDefault_150.png</UWP_DelphiLogo150>
-        <DCC_LibPath>$(ProjectDir)\..\Shared;$(DCC_LibPath)</DCC_LibPath>
+        <DCC_LibPath>$(MSBuildProjectDirectory)\..\Shared;$(DCC_LibPath)</DCC_LibPath>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win32)'!=''">
         <DCC_Namespace>Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;Bde;System.Generics.Collections;$(DCC_Namespace)</DCC_Namespace>
@@ -87,8 +88,8 @@
         <AppEnableRuntimeThemes>true</AppEnableRuntimeThemes>
         <UWP_DelphiLogo44>$(BDS)\bin\Artwork\Windows\UWP\delphi_UwpDefault_44.png</UWP_DelphiLogo44>
         <UWP_DelphiLogo150>$(BDS)\bin\Artwork\Windows\UWP\delphi_UwpDefault_150.png</UWP_DelphiLogo150>
-<DCC_LibPath>$(ProjectDir)\..\Shared;$(DCC_LibPath)</DCC_LibPath>
-        <PreBuildEvent>xcopy /E /Y /I "$(ProjectDir)..\layouts\*" "$(ProjectDir)..\build\$(Platform)\layouts\"</PreBuildEvent>
+<DCC_LibPath>$(MSBuildProjectDirectory)\..\Shared;$(DCC_LibPath)</DCC_LibPath>
+        <PreBuildEvent>xcopy /E /Y /I "$(MSBuildProjectDirectory)\..\layouts\*" "$(MSBuildProjectDirectory)\..\build\$(Platform)\layouts\"</PreBuildEvent>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win64)'!=''">
         <DCC_Namespace>Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;$(DCC_Namespace)</DCC_Namespace>
@@ -116,9 +117,10 @@
         <DCC_GenerateStackFrames>true</DCC_GenerateStackFrames>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2_Win32)'!=''">
-        <DCC_SearchPath>$(ProjectDir)\..\Shared;$(DCC_SearchPath)</DCC_SearchPath>
+        <DCC_UnitSearchPath>$(MSBuildProjectDirectory)\..\Shared;$(DCC_SearchPath)</DCC_UnitSearchPath>
+        <DCC_SearchPath>$(MSBuildProjectDirectory)\..\Shared;$(DCC_SearchPath)</DCC_SearchPath>
         <DCC_Namespace>Vcl;Vcl.Imaging;Vcl.Touch;Vcl.Samples;Vcl.Shell;System;System.Generics.Collections;Xml;Data;Datasnap;Web;Soap;$(DCC_Namespace)</DCC_Namespace>
-        <DCC_LibPath>$(ProjectDir)\..\Shared;$(DCC_LibPath)</DCC_LibPath>
+        <DCC_LibPath>$(MSBuildProjectDirectory)\..\Shared;$(DCC_LibPath)</DCC_LibPath>
         <AppEnableRuntimeThemes>true</AppEnableRuntimeThemes>
         <AppDPIAwarenessMode>PerMonitorV2</AppDPIAwarenessMode>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
@@ -141,6 +143,7 @@
         <DCCReference Include="Core\ShreeLipi.Engine.pas"/>
         <DCCReference Include="Core\EngineState.pas"/>
 <DCCReference Include="Layout\LayoutLoader.pas"/>
+        <DCCReference Include="..\Shared\LayoutResolver.pas"/>
         <DCCReference Include="..\Shared\LayoutJson.pas"/>
 <DCCReference Include="..\Shared\LayoutValidation.pas"/>
         <DCCReference Include="Layout\LayoutManager.pas"/>

@@ -1,0 +1,1122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vittix Tray and Editor Redesign - Interactive Prototype</title>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    /* Design tokens. Source: the selected design system's DESIGN.md. */
+    --bg: #FFFFFF;
+    --surface: #F6F8FA;
+    --surface-hover: #EEF2F6;
+    --surface-inset: #EAEEF2;
+    --border: #D0D7DE;
+    --border-muted: #D8DEE4;
+    --border-subtle: #EAEEF2;
+    --fg: #1F2328;
+    --fg-muted: #656D76;
+    --fg-subtle: #8C959F;
+    --accent: #0969DA;
+    --accent-hover: #0550AE;
+    --accent-subtle: #DDF4FF;
+    --success: #1A7F37;
+    --success-subtle: #DAFBE1;
+    --warning: #9A6700;
+    --warning-subtle: #FFF8C5;
+    --danger: #CF222E;
+    --danger-subtle: #FFEBE9;
+    --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: "Cascadia Mono", Consolas, ui-monospace, monospace;
+    --radius: 6px;
+    --radius-panel: 8px;
+    --ring: 0 0 0 1px var(--accent), 0 0 0 4px rgba(9,105,218,0.28);
+    --shadow-win: 0 24px 70px rgba(0,0,0,0.34), 0 6px 18px rgba(0,0,0,0.22);
+    --shadow-menu: 0 10px 34px rgba(31,35,40,0.22), 0 2px 6px rgba(31,35,40,0.14);
+    --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+  }
+
+  html, body { height: 100%; }
+  body {
+    font-family: var(--font-ui);
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--fg);
+    background: #2B3A4A;
+    background-image:
+      radial-gradient(1100px 700px at 18% 8%, rgba(120,170,230,0.30), transparent 62%),
+      radial-gradient(900px 620px at 84% 12%, rgba(70,110,160,0.28), transparent 60%),
+      linear-gradient(160deg, #33455A 0%, #22303F 100%);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------------- desktop shell ---------------- */
+  .desktop { position: fixed; inset: 0; display: flex; flex-direction: column; }
+
+  .stage {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 20px 12px;
+    overflow: auto;
+  }
+
+  .win {
+    width: min(1180px, 100%);
+    height: min(716px, 100%);
+    min-height: 460px;
+    background: var(--bg);
+    border: 1px solid #B9C2CC;
+    border-radius: 10px;
+    box-shadow: var(--shadow-win);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .titlebar {
+    height: 34px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 0 6px 0 12px;
+    flex: none;
+  }
+  .titlebar .appicon { width: 16px; height: 16px; flex: none; color: var(--fg); }
+  .titlebar .wtitle { font-size: 12px; color: var(--fg-muted); }
+  .titlebar .wtitle b { color: var(--fg); font-weight: 600; }
+  .titlebar .wspacer { flex: 1; }
+  .wbtn {
+    width: 34px; height: 26px;
+    border: none; background: transparent;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--fg-muted); border-radius: 4px; cursor: default;
+  }
+  .wbtn:hover { background: var(--surface-hover); }
+  .wbtn.close:hover { background: var(--danger); color: #fff; }
+
+  .menubar { height: 26px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 6px; gap: 2px; flex: none; }
+  .menubar button {
+    border: none; background: transparent; font: inherit; font-size: 12px; color: var(--fg);
+    padding: 4px 9px; border-radius: 4px; cursor: pointer;
+  }
+  .menubar button:hover { background: var(--surface-hover); }
+
+  .commandbar {
+    height: 46px; flex: none;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 6px; padding: 0 10px;
+    background: var(--bg);
+  }
+
+  .btn {
+    height: 28px; padding: 0 11px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--fg);
+    font: inherit; font-size: 12px;
+    display: inline-flex; align-items: center; gap: 6px;
+    cursor: pointer;
+    transition: background 90ms var(--ease), border-color 90ms var(--ease), transform 60ms var(--ease);
+    white-space: nowrap;
+  }
+  .btn:hover:not(:disabled) { background: var(--surface-hover); border-color: var(--border-muted); }
+  .btn:active:not(:disabled) { transform: translateY(1px); }
+  .btn:focus-visible { outline: none; box-shadow: var(--ring); }
+  .btn:disabled { color: var(--fg-subtle); background: var(--surface); cursor: not-allowed; }
+  .btn.primary { background: #1F883D; border-color: rgba(31,35,40,0.15); color: #fff; font-weight: 600; }
+  .btn.primary:hover:not(:disabled) { background: #1a7f37; }
+  .btn.accent { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.accent:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+  .btn.on { background: var(--accent-subtle); border-color: var(--accent); color: var(--accent-hover); font-weight: 600; }
+
+  .vdiv { width: 1px; height: 20px; background: var(--border); margin: 0 4px; flex: none; }
+
+  .field {
+    height: 28px; border: 1px solid var(--border); border-radius: var(--radius);
+    background: #fff; padding: 0 9px; font: inherit; font-size: 12px; color: var(--fg);
+    display: inline-flex; align-items: center;
+  }
+  .field:focus-visible { outline: none; box-shadow: var(--ring); border-color: var(--accent); }
+
+  .dirty-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--warning); display: none; flex: none; }
+  .dirty-dot.on { display: block; }
+
+  /* ---------------- workspace ---------------- */
+  .workspace { flex: 1; min-height: 0; display: flex; }
+
+  .rail { width: 186px; flex: none; background: var(--surface); border-right: 1px solid var(--border); padding: 8px 0; overflow-y: auto; }
+  .rail h4 {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase;
+    color: var(--fg-subtle); padding: 10px 14px 5px;
+  }
+  .rail-item {
+    width: 100%; height: 30px; border: none; background: transparent; font: inherit; font-size: 13px;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 0 12px 0 14px; cursor: pointer; color: var(--fg); text-align: left;
+  }
+  .rail-item:hover { background: var(--surface-hover); }
+  .rail-item:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--accent); }
+  .rail-item[aria-current="true"] { background: var(--accent-subtle); box-shadow: inset 2px 0 0 var(--accent); color: var(--accent-hover); font-weight: 600; }
+  .rail-item .cnt { font-size: 11px; color: var(--fg-subtle); font-family: var(--font-mono); }
+  .rail-item .cnt.warn { color: var(--warning); }
+  .rail-item.legacy { color: var(--fg-subtle); }
+
+  .center { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+  .toolbar { height: 40px; flex: none; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; padding: 0 10px; }
+  .search { flex: 1; min-width: 0; height: 28px; border: 1px solid var(--border); border-radius: var(--radius); background: #fff; display: flex; align-items: center; gap: 7px; padding: 0 9px; }
+  .search:focus-within { border-color: var(--accent); box-shadow: var(--ring); }
+  .search svg { flex: none; color: var(--fg-subtle); }
+  .search input { flex: 1; min-width: 0; border: none; outline: none; font: inherit; font-size: 12px; background: transparent; color: var(--fg); }
+  .search input::placeholder { color: var(--fg-subtle); }
+  .count { font-size: 11px; color: var(--fg-muted); font-family: var(--font-mono); white-space: nowrap; }
+
+  .surface { flex: 1; min-height: 0; overflow: auto; }
+
+  /* table */
+  .trow { display: flex; align-items: center; height: 31px; border-bottom: 1px solid var(--border-subtle); font-size: 12.5px; cursor: pointer; }
+  .trow:hover { background: var(--surface-hover); }
+  .trow:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--accent); }
+  .trow.sel { background: var(--accent-subtle); box-shadow: inset 2px 0 0 var(--accent); }
+  .trow .c-st { width: 36px; flex: none; display: flex; align-items: center; justify-content: center; }
+  .trow .c-key { width: 100px; flex: none; padding: 0 8px; font-family: var(--font-mono); }
+  .trow .c-gly { flex: 1; min-width: 0; padding: 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .trow .c-prev { width: 110px; flex: none; padding: 0 8px; font-size: 19px; line-height: 1; }
+  .trow .c-kind { width: 96px; flex: none; padding: 0 8px; color: var(--fg-muted); font-size: 11px; }
+  .thead { position: sticky; top: 0; z-index: 2; height: 30px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; font-size: 11px; font-weight: 600; color: var(--fg-muted); }
+  .thead .c-st, .thead .c-key, .thead .c-gly, .thead .c-prev, .thead .c-kind { height: 100%; display: flex; align-items: center; }
+
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .dot.ok { background: var(--success); }
+  .dot.empty { border: 1.4px solid #B9C0C8; }
+  .dot.warn { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 9px solid var(--warning); border-radius: 0; }
+
+  /* keyboard view */
+  .kbdwrap { padding: 14px; display: flex; flex-direction: column; gap: 12px; background: var(--surface); min-height: 100%; }
+  .klegend { display: flex; align-items: center; gap: 16px; font-size: 11px; color: var(--fg-muted); flex-wrap: wrap; }
+  .klegend .sw { width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--border); display: inline-block; margin-right: 5px; vertical-align: -2px; }
+  .krow { display: flex; gap: 6px; }
+  .key {
+    height: 46px; border: 1px solid var(--border); border-radius: var(--radius); background: #fff;
+    position: relative; display: flex; align-items: center; justify-content: center; cursor: pointer;
+    font: inherit; transition: background 90ms var(--ease), box-shadow 120ms var(--ease), transform 60ms var(--ease);
+  }
+  .key .ph { position: absolute; top: 3px; left: 6px; font-size: 9px; color: var(--fg-subtle); font-family: var(--font-mono); }
+  .key .gly { font-size: 18px; line-height: 1; }
+  .key:hover { background: #F7FBF8; }
+  .key:active { transform: translateY(1px); }
+  .key:focus-visible { outline: none; box-shadow: var(--ring); }
+  .key.mapped { background: #EAF6EC; border-color: #B4D9BC; }
+  .key.conflict { background: var(--warning-subtle); border-color: #E2CC7A; }
+  .key.sel { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(9,105,218,0.28); }
+  .key.sp { background: #F0F2F5; color: var(--fg-muted); font-size: 10px; cursor: default; }
+  .key.sp:hover { background: #F0F2F5; }
+
+  /* output preview */
+  .out-wrap { padding: 16px; display: flex; flex-direction: column; gap: 14px; min-height: 100%; }
+  .out-label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-subtle); }
+  .out-line { border: 1px solid var(--border); border-radius: var(--radius-panel); padding: 14px 16px; font-size: 28px; line-height: 1.6; min-height: 110px; background: #fff; }
+  .out-line .caret { display: inline-block; width: 1.5px; height: 30px; background: var(--accent); vertical-align: -5px; animation: blink 1.1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .srcrow { display: flex; gap: 6px; flex-wrap: wrap; }
+  .src { font-size: 10.5px; font-family: var(--font-mono); color: var(--fg-muted); border: 1px solid var(--border); border-radius: 4px; padding: 2px 7px; background: var(--surface); }
+  .banner { border-radius: var(--radius); padding: 9px 11px; font-size: 11.5px; line-height: 1.55; }
+  .banner.ok { background: var(--success-subtle); border: 1px solid #A6E3B4; color: var(--success); }
+  .banner.warn { background: var(--warning-subtle); border: 1px solid #F0DFA0; color: var(--warning); }
+  .banner.info { background: var(--surface); border: 1px solid var(--border); color: var(--fg-muted); }
+
+  /* empty state */
+  .emptystate { flex: 1; display: flex; align-items: center; justify-content: center; background: var(--surface); }
+  .emptycard { text-align: center; max-width: 380px; padding: 24px; }
+  .emptycard h2 { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+  .emptycard p { font-size: 13px; color: var(--fg-muted); line-height: 1.6; margin-bottom: 18px; }
+
+  /* inspector */
+  .inspector { width: 288px; flex: none; border-left: 1px solid var(--border); display: flex; flex-direction: column; background: #fff; }
+  .inspector h4 { font-size: 10px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: var(--fg-subtle); padding: 12px 14px 9px; border-bottom: 1px solid var(--border-subtle); }
+  .insp-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 11px; overflow-y: auto; }
+  .lab { display: block; font-size: 11px; color: var(--fg-muted); margin-bottom: 5px; }
+  .glyphbox { font-size: 32px; line-height: 1.3; text-align: center; border: 1px solid var(--border-subtle); border-radius: var(--radius); background: var(--surface); padding: 5px 0; }
+
+  /* problems dock */
+  .problems { flex: none; border-top: 1px solid var(--border); background: #fff; max-height: 150px; display: flex; flex-direction: column; }
+  .problems-head { height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--border-subtle); flex: none; }
+  .problems-head .t { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-muted); }
+  .problems-body { overflow-y: auto; }
+  .prob { display: flex; align-items: center; gap: 9px; padding: 7px 12px; font-size: 12px; border-bottom: 1px solid var(--border-subtle); cursor: pointer; }
+  .prob:hover { background: var(--surface-hover); }
+  .prob:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--accent); }
+  .pill { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 999px; white-space: nowrap; }
+  .pill.warn { background: var(--warning-subtle); color: var(--warning); }
+  .pill.err { background: var(--danger-subtle); color: var(--danger); }
+  .pill.ok { background: var(--success-subtle); color: var(--success); }
+  .push { margin-left: auto; }
+
+  .statusbar { height: 26px; flex: none; background: var(--surface); border-top: 1px solid var(--border); display: flex; align-items: center; gap: 14px; padding: 0 12px; font-size: 11px; color: var(--fg-muted); }
+  .statusbar .strong { color: var(--fg); }
+
+  /* ---------------- taskbar + tray ---------------- */
+  .taskbar {
+    height: 46px; flex: none;
+    background: rgba(20,28,36,0.82);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border-top: 1px solid rgba(255,255,255,0.10);
+    display: flex; align-items: center; padding: 0 8px; gap: 6px;
+    position: relative;
+  }
+  .tb-start { width: 38px; height: 34px; border-radius: 6px; display: flex; align-items: center; justify-content: center; gap: 3px; }
+  .tb-start i { width: 5px; height: 5px; border-radius: 1px; background: #8FB6E0; display: block; }
+  .tb-items { display: flex; gap: 4px; }
+  .tb-app { width: 38px; height: 34px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.10); display: flex; align-items: center; justify-content: center; }
+  .tb-app .mini { width: 16px; height: 12px; border: 1.4px solid rgba(255,255,255,0.55); border-radius: 2px; }
+  .tb-spacer { flex: 1; }
+  .tray { display: flex; align-items: center; gap: 10px; }
+
+  .traybtn {
+    width: 28px; height: 28px; border-radius: 5px; border: 1px solid transparent;
+    background: transparent; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: background 100ms var(--ease);
+  }
+  .traybtn:hover { background: rgba(255,255,255,0.12); }
+  .traybtn:focus-visible { outline: none; box-shadow: 0 0 0 2px #7CB0FF; }
+  .traybtn[aria-expanded="true"] { background: rgba(255,255,255,0.18); }
+  .trayclock { font-size: 11px; color: rgba(255,255,255,0.86); text-align: right; line-height: 1.35; font-variant-numeric: tabular-nums; }
+
+  /* ---------------- tray menu ---------------- */
+  .traymenu {
+    position: absolute;
+    right: 12px;
+    bottom: 52px;
+    width: 312px;
+    max-height: calc(100vh - 90px);
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid #C6CDD5;
+    border-radius: var(--radius-panel);
+    box-shadow: var(--shadow-menu);
+    padding: 5px 0;
+    display: none;
+    z-index: 60;
+  }
+  .traymenu.open { display: block; animation: menuin 140ms var(--ease); }
+  @keyframes menuin { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .traymenu.open { animation: none; } .out-line .caret { animation: none; } }
+
+  .menu-status { padding: 9px 14px 8px; border-bottom: 1px solid var(--border-subtle); margin-bottom: 4px; }
+  .menu-status .brand { font-size: 13px; font-weight: 600; }
+  .menu-status .line { font-size: 11px; color: var(--fg-muted); margin-top: 3px; display: flex; align-items: center; gap: 6px; }
+  .menu-status .line .sep { color: var(--border); }
+
+  .mi {
+    width: 100%; height: 29px; border: none; background: transparent; font: inherit; font-size: 12.5px;
+    display: flex; align-items: center; padding: 0 12px 0 0; cursor: pointer; color: var(--fg); text-align: left;
+  }
+  .mi:hover:not(:disabled) { background: var(--accent-subtle); }
+  .mi:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--accent); }
+  .mi .chk { width: 27px; flex: none; display: flex; align-items: center; justify-content: center; }
+  .mi .lbl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mi .sc { font-size: 11px; color: var(--fg-subtle); font-family: var(--font-mono); padding-left: 10px; }
+  .mi .arw { color: var(--fg-subtle); font-size: 10px; padding-left: 10px; }
+  .mi .submark { width: 8px; flex: none; }
+  .mi.sub { padding-left: 26px; }
+  .mi.indent { padding-left: 40px; }
+  .msep { height: 1px; background: var(--border-subtle); margin: 5px 12px; }
+  .mhead { height: 24px; display: flex; align-items: center; padding: 0 12px 0 28px; font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-subtle); }
+  .msub { display: none; }
+  .msub.open { display: block; }
+
+  .hintbar {
+    position: fixed; left: 50%; transform: translateX(-50%); bottom: 58px;
+    background: rgba(16,22,28,0.86); color: rgba(255,255,255,0.9);
+    font-size: 11.5px; padding: 6px 14px; border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.14); z-index: 70; white-space: nowrap;
+  }
+  .toast {
+    position: absolute; right: 14px; bottom: 58px; z-index: 80;
+    background: #1F2328; color: #fff; font-size: 12px; padding: 9px 14px;
+    border-radius: var(--radius); box-shadow: var(--shadow-menu);
+    opacity: 0; transform: translateY(8px); transition: opacity 180ms var(--ease), transform 180ms var(--ease);
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: none; }
+
+  /* ---------------- responsive ---------------- */
+  @media (max-width: 1080px) {
+    .inspector { width: 252px; }
+    .trow .c-kind, .thead .c-kind { display: none; }
+  }
+  @media (max-width: 900px) {
+    .workspace { flex-direction: column; }
+    .rail {
+      width: 100%; border-right: none; border-bottom: 1px solid var(--border);
+      display: flex; gap: 4px; padding: 6px 8px; overflow-x: auto;
+    }
+    .rail h4 { display: none; }
+    .rail-item { width: auto; height: 28px; border-radius: var(--radius); padding: 0 10px; flex: none; }
+    .rail-item[aria-current="true"] { box-shadow: inset 0 0 0 1px var(--accent); }
+    .inspector { width: 100%; border-left: none; border-top: 1px solid var(--border); max-height: 220px; }
+    .insp-body { flex-direction: row; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
+    .insp-body > div { min-width: 130px; flex: 1; }
+    .trow .c-prev, .thead .c-prev { display: none; }
+  }
+  @media (max-width: 660px) {
+    .stage { padding: 8px; }
+    .win { height: 100%; border-radius: 8px; }
+    .commandbar { flex-wrap: wrap; height: auto; padding: 8px; gap: 6px; }
+    .menubar { overflow-x: auto; }
+    .trow .c-key { width: 74px; }
+    .traymenu { right: 8px; left: 8px; width: auto; }
+    .hintbar { display: none; }
+    .out-line { font-size: 22px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="desktop">
+  <div class="stage">
+    <div class="win" role="application" aria-label="Vittix Indic Keyboard Layout Editor">
+
+      <div class="titlebar">
+        <svg class="appicon" viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="3.5" width="14" height="9" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M4 7h1M7 7h1M10 7h1M4 9.6h8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        <span class="wtitle"><b>Vittix Indic Keyboard Layout Editor</b> <span id="winDoc"></span></span>
+        <span class="wspacer"></span>
+        <button class="wbtn" tabindex="-1" aria-hidden="true"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 6h8" stroke="currentColor" stroke-width="1.4"/></svg></button>
+        <button class="wbtn" tabindex="-1" aria-hidden="true"><svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" fill="none" stroke="currentColor" stroke-width="1.4"/></svg></button>
+        <button class="wbtn close" tabindex="-1" aria-hidden="true"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7" stroke="currentColor" stroke-width="1.4"/></svg></button>
+      </div>
+
+      <div class="menubar">
+        <button type="button">File</button>
+        <button type="button">Edit</button>
+        <button type="button">Layout</button>
+        <button type="button">View</button>
+        <button type="button">Tools</button>
+        <button type="button">Help</button>
+      </div>
+
+      <div class="commandbar">
+        <button class="btn" type="button" id="btnNew">New</button>
+        <button class="btn" type="button" id="btnOpen">Open</button>
+        <button class="btn primary" type="button" id="btnSave">Save</button>
+        <span class="dirty-dot" id="dirtyDot" title="Unsaved changes"></span>
+        <span class="vdiv"></span>
+        <button class="btn" type="button" id="btnUndo" disabled>Undo</button>
+        <button class="btn" type="button" id="btnRedo" disabled>Redo</button>
+        <span class="vdiv"></span>
+        <span class="field" id="docField" style="min-width:150px;">krutidev_010.json</span>
+        <span style="flex:1"></span>
+        <button class="btn accent" type="button" id="btnValidate">Validate</button>
+      </div>
+
+      <div class="workspace">
+        <nav class="rail" id="rail" aria-label="Sections"></nav>
+
+        <div class="center">
+          <div class="toolbar">
+            <label class="search">
+              <svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><circle cx="5.6" cy="5.6" r="4" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8.6 8.6l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+              <input id="searchInput" type="search" placeholder="Search mappings" aria-label="Search mappings">
+            </label>
+            <span class="count" id="resultCount"></span>
+            <button class="btn" type="button" id="btnAddRow">Add row</button>
+          </div>
+
+          <div class="surface" id="surface"></div>
+
+          <div class="problems" id="problemsDock" hidden>
+            <div class="problems-head">
+              <span class="t">Problems</span>
+              <span class="pill warn" id="problemCount">0</span>
+              <span class="push" style="font-size:11px;color:var(--fg-subtle);">Double-click an issue to jump to its row</span>
+            </div>
+            <div class="problems-body" id="problemsBody"></div>
+          </div>
+
+          <div class="statusbar">
+            <span class="strong" id="stState">Ready</span>
+            <span id="stFile">krutidev_010.json</span>
+            <span id="stCounts"></span>
+            <span class="push"></span>
+            <span id="stIssues">0 issues</span>
+          </div>
+        </div>
+
+        <aside class="inspector" aria-label="Inspector">
+          <h4>Inspector</h4>
+          <div class="insp-body" id="inspBody"></div>
+        </aside>
+      </div>
+    </div>
+  </div>
+
+  <div class="taskbar">
+    <div class="tb-start" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <div class="tb-items" aria-hidden="true">
+      <div class="tb-app"><div class="mini"></div></div>
+    </div>
+    <div class="tb-spacer"></div>
+    <div class="tray">
+      <button class="traybtn" type="button" id="trayBtn" aria-haspopup="true" aria-expanded="false" aria-label="Vittix Indic Keyboard tray menu" title="Vittix Indic Keyboard">
+        <span id="trayGlyph"></span>
+      </button>
+      <div class="trayclock"><div id="clockTime"></div><div id="clockDate"></div></div>
+    </div>
+    <div class="traymenu" id="trayMenu" role="menu" aria-label="Vittix Indic Keyboard"></div>
+    <div class="toast" id="toast"></div>
+  </div>
+</div>
+
+<div class="hintbar">Click the tray icon in the taskbar. Switch sections in the rail. Click a row to edit it in the inspector.</div>
+
+<script>
+(() => {
+  "use strict";
+
+  /* =========================================================
+     State
+     ========================================================= */
+  const LAYOUTS = [
+    { group: 'Devanagari', items: [
+      { id: 'krutidev-010', name: 'KrutiDev Devanagari 010', font: 'Kruti Dev 010' },
+      { id: 'shreelipi-0708', name: 'ShreeLipi Devanagari 0708', font: 'SHREE-DEV-0708' },
+      { id: 'shree-dev-1076', name: 'ShreeLipi Devanagari 1076', font: 'SHREE-DEV-1076' },
+    ]},
+    { group: 'Gujarati', items: [
+      { id: 'gujarati-remington', name: 'Gujarati Remington', font: 'SHREE-GUJ-0708' },
+      { id: 'gujarati-inscript', name: 'Gujarati InScript', font: 'Shruti' },
+    ]},
+  ];
+
+  const state = {
+    engine: true,
+    hotkey: 'Ctrl+Alt+K',
+    layoutId: 'krutidev-010',
+    allowed: {
+      'CorelDRW.exe': true,
+      'Adobe Illustrator.exe': true,
+      'WinWord.exe': true,
+      'notepad.exe': false,
+    },
+    openSubmenu: null,
+    section: 'direct',
+    view: 'table',
+    search: '',
+    selected: 1,
+    dirty: false,
+    problemsVisible: false,
+    rows: [
+      { key: 'k',  glyph: 'क', kind: 'direct' },
+      { key: 'kh', glyph: 'ख', kind: 'direct' },
+      { key: 'g',  glyph: 'ग', kind: 'direct' },
+      { key: 'gh', glyph: 'घ', kind: 'direct' },
+      { key: 'f',  glyph: 'િ', kind: 'direct' },
+      { key: 'F',  glyph: 'फ', kind: 'direct' },
+      { key: 'Z',  glyph: '',  kind: '' },
+      { key: 'A',  glyph: 'ा', kind: 'postbase' },
+      { key: 'i',  glyph: 'ि', kind: 'postbase' },
+      { key: '\\', glyph: '्', kind: 'modifier' },
+      { key: 'c',  glyph: 'च', kind: 'direct' },
+      { key: 'ch', glyph: 'छ', kind: 'direct' },
+    ],
+    problems: [],
+    undo: [],
+    redo: [],
+    output: 'भारत एक विशाल देश है।',
+    lastSources: ['b - direct', 'h - direct', 'a - postbase', 'r - direct', 't - direct', '\\ - modifier halant'],
+  };
+
+  const PREBASE_KEYS = ['f'];
+  const TOTAL = 412;
+
+  /* =========================================================
+     Icons
+     ========================================================= */
+  const KBD_ICON = (color, filled) => `
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+      <rect x="1" y="3.5" width="14" height="9" rx="1.8" fill="${filled ? color : 'none'}" stroke="${color}" stroke-width="1.4"/>
+      <path d="M4 7h1.1M7 7h1.1M10 7h1.1M4 9.7h8" stroke="${filled ? '#fff' : color}" stroke-width="1.4" stroke-linecap="round"/>
+    </svg>`;
+
+  const ICON_CHECK = `<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.4l2.6 2.6L10 3.4" fill="none" stroke="#0969DA" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const ICON_RADIO = `<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><circle cx="6" cy="6" r="4.1" fill="#0969DA"/></svg>`;
+  const ICON_ARROW = `<svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true"><path d="M2.6 1l3.2 3-3.2 3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+  const el = (id) => document.getElementById(id);
+
+  function toast(msg) {
+    const t = el('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => t.classList.remove('show'), 1900);
+  }
+
+  /* =========================================================
+     Tray
+     ========================================================= */
+  function activeLayout() {
+    for (const g of LAYOUTS) for (const it of g.items) if (it.id === state.layoutId) return it;
+    return LAYOUTS[0].items[0];
+  }
+
+  function renderTrayGlyph() {
+    const c = state.engine ? '#8FE0A6' : 'rgba(255,255,255,0.55)';
+    el('trayGlyph').innerHTML = KBD_ICON(c, state.engine);
+    el('trayBtn').title = `Vittix Indic Keyboard - ${state.engine ? 'Enabled' : 'Disabled'} - ${activeLayout().name} - ${state.hotkey}`;
+  }
+
+  function menuItem(opts) {
+    const { label, check = false, radio = false, shortcut = '', arrow = false, sub = false, indent = false, dim = false, action = '' } = opts;
+    const cls = ['mi', sub ? 'sub' : '', indent ? 'indent' : ''].filter(Boolean).join(' ');
+    const mark = radio ? (check ? ICON_RADIO : '') : (check ? ICON_CHECK : '');
+    return `<button type="button" class="${cls}" role="menuitem" data-action="${action}" ${dim ? 'disabled style="color:#8C959F;cursor:not-allowed;"' : ''}>
+      <span class="chk">${mark}</span>
+      <span class="lbl">${label}</span>
+      ${shortcut ? `<span class="sc">${shortcut}</span>` : ''}
+      ${arrow ? `<span class="arw">${ICON_ARROW}</span>` : ''}
+    </button>`;
+  }
+
+  function renderTrayMenu() {
+    const groups = LAYOUTS.map(g => `
+      <div class="mhead">${g.group}</div>
+      ${g.items.map(it => menuItem({ label: it.name, radio: true, check: it.id === state.layoutId, indent: state.openSubmenu === 'layouts', action: 'layout:' + it.id })).join('')}
+    `).join('');
+
+    const allowedRows = Object.keys(state.allowed).map(k =>
+      menuItem({ label: k, check: state.allowed[k], indent: state.openSubmenu === 'apps', action: 'app:' + k })).join('');
+
+    el('trayMenu').innerHTML = `
+      <div class="menu-status">
+        <div class="brand">Vittix Indic Keyboard</div>
+        <div class="line">
+          <span class="dot ${state.engine ? 'ok' : 'empty'}" style="width:7px;height:7px;"></span>
+          Engine: ${state.engine ? 'ON' : 'OFF'}
+          <span class="sep">|</span>
+          ${activeLayout().name}
+        </div>
+      </div>
+      ${menuItem({ label: 'Typing enabled', check: state.engine, shortcut: state.hotkey, action: 'toggle' })}
+      ${menuItem({ label: 'Layouts', arrow: true, action: 'sub:layouts' })}
+      <div class="msub ${state.openSubmenu === 'layouts' ? 'open' : ''}">
+        ${groups}
+        <div class="msep"></div>
+        ${menuItem({ label: 'Open layouts folder', sub: true, action: 'openlayouts' })}
+        ${menuItem({ label: 'Reload layouts', sub: true, shortcut: 'F5', action: 'reload' })}
+      </div>
+      ${menuItem({ label: 'On-Screen Keyboard', action: 'osk' })}
+      ${menuItem({ label: 'Layout Editor', action: 'editor' })}
+      <div class="msep"></div>
+      ${menuItem({ label: 'Allowed apps', arrow: true, action: 'sub:apps' })}
+      <div class="msub ${state.openSubmenu === 'apps' ? 'open' : ''}">
+        ${allowedRows}
+        <div class="msep"></div>
+        ${menuItem({ label: 'Add application', sub: true, action: 'addapp' })}
+        ${menuItem({ label: 'Edit allowed list', sub: true, action: 'editapps' })}
+      </div>
+      <div class="msep"></div>
+      ${menuItem({ label: 'Settings', shortcut: 'Ctrl+,', action: 'settings' })}
+      ${menuItem({ label: 'Open log folder', action: 'openlog' })}
+      ${menuItem({ label: 'About Vittix Indic Keyboard', action: 'about' })}
+      <div class="msep"></div>
+      ${menuItem({ label: 'Exit', action: 'exit' })}
+    `;
+  }
+
+  function openTrayMenu() {
+    renderTrayMenu();
+    el('trayMenu').classList.add('open');
+    el('trayBtn').setAttribute('aria-expanded', 'true');
+  }
+  function closeTrayMenu() {
+    el('trayMenu').classList.remove('open');
+    el('trayBtn').setAttribute('aria-expanded', 'false');
+  }
+
+  el('trayBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (el('trayMenu').classList.contains('open')) closeTrayMenu(); else openTrayMenu();
+  });
+
+  el('trayMenu').addEventListener('click', (e) => {
+    // Keep the click from reaching the document-level outside-click handler.
+    // Items re-render the menu, which detaches the clicked node; without this
+    // the handler would see a detached target and close the menu.
+    e.stopPropagation();
+    const item = e.target.closest('[data-action]');
+    if (!item) return;
+    const a = item.dataset.action;
+
+    if (a === 'toggle') {
+      state.engine = !state.engine;
+      renderTrayGlyph();
+      renderTrayMenu();
+      toast(`Typing ${state.engine ? 'enabled' : 'disabled'} - ${activeLayout().name}`);
+      return;
+    }
+    if (a.startsWith('sub:')) {
+      const key = a.slice(4);
+      state.openSubmenu = state.openSubmenu === key ? null : key;
+      renderTrayMenu();
+      return;
+    }
+    if (a.startsWith('layout:')) {
+      state.layoutId = a.slice(7);
+      renderTrayGlyph();
+      renderTrayMenu();
+      toast(`Layout switched to ${activeLayout().name}`);
+      return;
+    }
+    if (a.startsWith('app:')) {
+      const name = a.slice(4);
+      state.allowed[name] = !state.allowed[name];
+      renderTrayMenu();
+      toast(`${name} ${state.allowed[name] ? 'added to' : 'removed from'} the allowed list`);
+      return;
+    }
+    if (a === 'reload') { state.openSubmenu = null; renderTrayMenu(); toast('Layouts reloaded - 10 files, 0 failed'); return; }
+    if (a === 'openlayouts') { toast('Opening the layouts folder in Explorer'); return; }
+    if (a === 'addapp') { toast('Pick an executable to allow'); return; }
+    if (a === 'openlog') { toast('Opening the log folder'); return; }
+    if (a === 'about') { toast('Vittix Indic Keyboard 1.0 - 10 layouts loaded - hook active'); return; }
+    if (a === 'exit') { toast('Exit requested'); return; }
+    toast('Opens the corresponding window');
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!el('trayMenu').contains(e.target) && e.target !== el('trayBtn')) closeTrayMenu();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeTrayMenu();
+  });
+
+  function tickClock() {
+    const d = new Date();
+    el('clockTime').textContent = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    el('clockDate').textContent = d.toLocaleDateString([], { day: '2-digit', month: '2-digit', year: 'numeric' });
+  }
+  tickClock();
+  setInterval(tickClock, 20000);
+
+  /* =========================================================
+     Editor
+     ========================================================= */
+  const SECTION_LABEL = { direct: 'Direct', prebase: 'Prebase', postbase: 'Postbase', modifiers: 'Modifiers', sequences: 'Sequences' };
+
+  function renderRail() {
+    const items = [
+      ['direct', 'Direct', '412', false],
+      ['prebase', 'Prebase', '38', true],
+      ['postbase', 'Postbase', '41', false],
+      ['modifiers', 'Modifiers', '2', false],
+      ['sequences', 'Sequences', '8', false, true],
+    ];
+    el('rail').innerHTML =
+      `<h4>Sections</h4>` +
+      items.map(([id, label, cnt, warn, legacy]) => `
+        <button class="rail-item ${legacy ? 'legacy' : ''}" type="button" data-section="${id}" aria-current="${state.section === id && state.view === 'table'}">
+          <span>${label}</span><span class="cnt ${warn ? 'warn' : ''}">${cnt}</span>
+        </button>`).join('') +
+      `<h4>View</h4>
+       <button class="rail-item" type="button" data-view="keyboard" aria-current="${state.view === 'keyboard'}"><span>Keyboard</span></button>
+       <button class="rail-item" type="button" data-view="output" aria-current="${state.view === 'output'}"><span>Output preview</span></button>`;
+  }
+
+  el('rail').addEventListener('click', (e) => {
+    const s = e.target.closest('[data-section]');
+    const v = e.target.closest('[data-view]');
+    if (s) { state.section = s.dataset.section; state.view = 'table'; state.selected = -1; closeTrayMenu(); renderAll(); return; }
+    if (v) { state.view = v.dataset.view; closeTrayMenu(); renderAll(); return; }
+  });
+
+  function filteredRows() {
+    const q = state.search.trim().toLowerCase();
+    const idx = [];
+    state.rows.forEach((r, i) => {
+      if (!q || r.key.toLowerCase().includes(q) || (r.glyph || '').toLowerCase().includes(q)) idx.push(i);
+    });
+    return idx;
+  }
+
+  function statusOf(row) {
+    if (!row.key) return 'empty';
+    if (!row.glyph) return 'empty';
+    if (PREBASE_KEYS.includes(row.key) && row.kind === 'direct') return 'warn';
+    return 'ok';
+  }
+
+  function renderSurface() {
+    if (state.view === 'keyboard') return renderKeyboard();
+    if (state.view === 'output') return renderOutput();
+    return renderTable();
+  }
+
+  function renderTable() {
+    const idx = filteredRows();
+    const head = `<div class="thead">
+      <span class="c-st"></span><span class="c-key">Key</span><span class="c-gly">Glyph</span>
+      <span class="c-prev">Preview</span><span class="c-kind">Kind</span></div>`;
+
+    if (!idx.length) {
+      const q = state.search.trim();
+      el('surface').innerHTML = `<div class="thead"><span class="c-st"></span><span class="c-key">Key</span><span class="c-gly">Glyph</span><span class="c-prev">Preview</span><span class="c-kind">Kind</span></div>
+        <div style="padding:26px 18px;text-align:center;color:var(--fg-muted);font-size:12.5px;">
+          <div style="font-weight:600;color:var(--fg);margin-bottom:5px;">No mappings match "${q}"</div>
+          <div>Clear the search to see all ${TOTAL} entries. Editing is disabled while a filter is active.</div>
+          <div style="margin-top:12px;"><button class="btn" type="button" id="clearSearch">Clear search</button></div>
+        </div>`;
+      const cs = el('clearSearch');
+      if (cs) cs.addEventListener('click', () => { state.search = ''; el('searchInput').value = ''; renderAll(); });
+      el('resultCount').textContent = `0 of ${TOTAL}`;
+      return;
+    }
+
+    el('surface').innerHTML = head + idx.map(i => {
+      const r = state.rows[i];
+      const st = statusOf(r);
+      const dot = st === 'ok' ? '<span class="dot ok"></span>' : (st === 'warn' ? '<span class="dot warn"></span>' : '<span class="dot empty"></span>');
+      return `<div class="trow ${state.selected === i ? 'sel' : ''}" tabindex="0" data-row="${i}" role="button" aria-pressed="${state.selected === i}">
+        <span class="c-st">${dot}</span>
+        <span class="c-key">${escapeHtml(r.key)}</span>
+        <span class="c-gly">${escapeHtml(r.glyph)}</span>
+        <span class="c-prev">${escapeHtml(r.glyph)}</span>
+        <span class="c-kind">${r.kind || '-'}</span>
+      </div>`;
+    }).join('');
+
+    el('resultCount').textContent = state.search.trim()
+      ? `${idx.length} of ${TOTAL}`
+      : `${TOTAL} entries`;
+  }
+
+  el('surface').addEventListener('click', (e) => {
+    const row = e.target.closest('[data-row]');
+    if (row) { state.selected = Number(row.dataset.row); renderAll(); }
+  });
+  el('surface').addEventListener('keydown', (e) => {
+    const row = e.target.closest('[data-row]');
+    if (row && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); state.selected = Number(row.dataset.row); renderAll(); }
+  });
+
+  /* --- virtual keyboard --- */
+  const KB_ROWS = [
+    ['1','2','3','4','5','6','7','8','9','0'],
+    ['Q','W','E','R','T','Y','U','I','O','P'],
+    ['A','S','D','F','G','H','J','K','L',';'],
+    ['Z','X','C','V','B','N','M',',','.'],
+  ];
+  const KB_GLYPH = {
+    Q:'क', W:'ख', E:'ग', R:'घ', T:'ङ', Y:'च', U:'छ', I:'ज', O:'झ', P:'ञ',
+    A:'ट', S:'ठ', D:'ड', F:'ि', G:'ण', H:'त', J:'थ', K:'द', L:'ध',
+    X:'ब', C:'ह', V:'म', B:'य', N:'न', M:'प', ',':'्', '.':'।',
+  };
+
+  function renderKeyboard() {
+    const rowsHtml = KB_ROWS.map((keys, ri) => {
+      const indent = 0;
+      return `<div class="krow" style="margin-left:${indent}px;">` + keys.map(k => {
+        const g = KB_GLYPH[k];
+        const conflict = g && ('F' === k && state.rows.some(r => r.key === k && r.kind === 'direct'));
+        const selected = state.selected >= 0 && state.rows[state.selected] && state.rows[state.selected].key === k;
+        const cls = ['key', g ? 'mapped' : '', conflict ? 'conflict' : '', selected ? 'sel' : ''].filter(Boolean).join(' ');
+        return `<button type="button" class="${cls}" data-key="${k}" style="width:46px;" aria-label="Key ${k}">
+          ${g ? `<span class="ph">${k}</span><span class="gly">${g}</span>` : `<span class="ph">${k}</span>`}
+        </button>`;
+      }).join('') + `</div>`;
+    }).join('');
+
+    el('surface').innerHTML = `<div class="kbdwrap">
+      <div class="klegend">
+        <span><i class="sw" style="background:#EAF6EC;border-color:#B4D9BC;"></i>mapped</span>
+        <span><i class="sw" style="background:#fff;"></i>unmapped</span>
+        <span><i class="sw" style="background:#FFF8C5;border-color:#E2CC7A;"></i>conflict</span>
+        <span><i class="sw" style="background:#fff;border-color:#0969DA;"></i>selected</span>
+        <span class="push"></span>
+      </div>
+      ${rowsHtml}
+      <div class="banner info">Selecting a key drives the inspector. Assigning over a prebase or postbase source warns before it shadows the mapping.</div>
+    </div>`;
+    el('resultCount').textContent = 'keyboard';
+  }
+
+  el('surface').addEventListener('click', (e) => {
+    const k = e.target.closest('[data-key]');
+    if (!k) return;
+    const key = k.dataset.key;
+    const i = state.rows.findIndex(r => r.key === key);
+    if (i >= 0) { state.selected = i; }
+    else {
+      state.rows.push({ key: key, glyph: KB_GLYPH[key] || '', kind: KB_GLYPH[key] ? 'direct' : '' });
+      state.selected = state.rows.length - 1;
+    }
+    renderAll();
+  });
+
+  /* --- output preview --- */
+  function renderOutput() {
+    el('surface').innerHTML = `<div class="out-wrap">
+      <div class="out-label">Type here to preview the layout</div>
+      <div class="out-line" id="outLine" tabindex="0" role="textbox" aria-label="Layout output preview">${escapeHtml(state.output)}<span class="caret"></span></div>
+      <div class="out-label">Resolved sources for the last six keystrokes</div>
+      <div class="srcrow">${state.lastSources.map(s => `<span class="src">${escapeHtml(s)}</span>`).join('')}</div>
+      <div class="banner ok">Every keystroke resolved. Nothing fell through to the native passthrough path.</div>
+      <div class="banner info">This surface replaces the old Preview tab, which drew a second copy of the mapping list in a 10-column tile grid and rebuilt every tile on each keystroke.</div>
+      <div class="out-label">Try it</div>
+      <div class="srcrow" id="outKeys">
+        ${['k','h','a','r','t','\\'].map(c => `<button class="btn" type="button" data-type="${c}">${c === '\\' ? 'halant' : c}</button>`).join('')}
+        <button class="btn" type="button" id="outClear">Clear</button>
+      </div>
+    </div>`;
+    el('resultCount').textContent = 'preview';
+  }
+
+  el('surface').addEventListener('click', (e) => {
+    const t = e.target.closest('[data-type]');
+    if (t) {
+      const ch = t.dataset.type;
+      const found = state.rows.find(r => r.key === ch);
+      state.output += found && found.glyph ? found.glyph : ch;
+      state.lastSources.push(`${ch} - ${found && found.glyph ? (found.kind || 'direct') : 'passthrough'}`);
+      if (state.lastSources.length > 6) state.lastSources.shift();
+      renderAll();
+      return;
+    }
+    if (e.target.closest('#outClear')) { state.output = ''; state.lastSources = []; renderAll(); }
+  });
+
+  /* --- inspector --- */
+  function renderInspector() {
+    const row = state.rows[state.selected];
+    if (!row) {
+      el('inspBody').innerHTML = `<div class="banner info" style="width:100%;">Select a key or a table row to edit its mapping.</div>`;
+      return;
+    }
+    const source = row.kind || 'not mapped';
+    const shadow = PREBASE_KEYS.includes(row.key) && row.kind === 'direct';
+    el('inspBody').innerHTML = `
+      <div><span class="lab">Key</span><span class="field" style="width:100%;font-family:var(--font-mono);">${escapeHtml(row.key)}</span></div>
+      <div><span class="lab">Output</span><input class="field" id="inpGlyph" style="width:100%;font-family:var(--font-mono);" value="${escapeHtml(row.glyph)}" aria-label="Output glyph"></div>
+      <div><span class="lab">Resolves from</span><span class="field" style="width:100%;${shadow ? 'color:var(--warning);' : ''}">${shadow ? 'Direct (overrides Prebase)' : source}</span></div>
+      <div><span class="lab">Preview in layout font</span><div class="glyphbox">${escapeHtml(row.glyph) || '-'}</div></div>
+      ${shadow ? `<div class="banner warn" style="width:100%;">Prebase also maps <b>${escapeHtml(row.key)}</b>. A direct entry takes precedence. <button class="btn" type="button" id="fixShadow" style="margin-top:7px;height:24px;">Remove direct entry</button></div>` : ''}
+      <div style="display:flex;gap:7px;width:100%;">
+        <button class="btn primary" type="button" id="inpApply">Apply</button>
+        <button class="btn" type="button" id="inpRevert">Revert</button>
+      </div>`;
+  }
+
+  el('inspBody').addEventListener('click', (e) => {
+    const row = state.rows[state.selected];
+    if (!row) return;
+    if (e.target.closest('#inpApply')) {
+      const v = el('inpGlyph').value;
+      state.undo.push(JSON.parse(JSON.stringify(state.rows)));
+      state.redo.length = 0;
+      row.glyph = v;
+      row.kind = v ? (row.kind || 'direct') : '';
+      markDirty();
+      renderAll();
+      toast(`Applied: ${row.key} to ${v || '(cleared)'}`);
+      return;
+    }
+    if (e.target.closest('#inpRevert')) {
+      el('inpGlyph').value = row.glyph;
+      toast('Reverted the field to the stored value');
+      return;
+    }
+    if (e.target.closest('#fixShadow')) {
+      state.undo.push(JSON.parse(JSON.stringify(state.rows)));
+      state.redo.length = 0;
+      row.kind = 'prebase';
+      markDirty();
+      state.section = 'prebase';
+      state.view = 'table';
+      renderAll();
+      toast('Direct entry removed - the key now resolves from Prebase');
+    }
+  });
+
+  el('inspBody').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.target.id === 'inpGlyph') { e.preventDefault(); el('inpApply').click(); }
+  });
+
+  function markDirty() {
+    state.dirty = true;
+    el('dirtyDot').classList.add('on');
+    el('stState').textContent = 'Modified';
+    el('winDoc').textContent = '- krutidev_010.json *';
+  }
+
+  function clearDirty() {
+    state.dirty = false;
+    el('dirtyDot').classList.remove('on');
+    el('stState').textContent = 'Ready';
+    el('winDoc').textContent = '- krutidev_010.json';
+  }
+
+  /* --- problems dock + validation --- */
+  function validate() {
+    const problems = [];
+    state.rows.forEach((r, i) => {
+      if (!r.glyph) problems.push({ row: i, severity: 'warn', text: `Key ${r.key} has no mapping in any section.`, tag: 'unmapped' });
+      if (PREBASE_KEYS.includes(r.key) && r.kind === 'direct') problems.push({ row: i, severity: 'warn', text: `Key ${r.key} is also defined as a prebase matra. The direct entry takes precedence.`, tag: 'shadowed' });
+    });
+    problems.push({ row: -1, severity: 'warn', text: 'Sequence key "ksha" is 4 characters. Sequences no longer execute at runtime.', tag: 'legacy' });
+    state.problems = problems;
+    state.problemsVisible = true;
+    renderAll();
+    toast(problems.length ? `${problems.length} issues found` : 'Layout is valid');
+  }
+
+  function renderProblems() {
+    const dock = el('problemsDock');
+    if (!state.problemsVisible) { dock.hidden = true; return; }
+    dock.hidden = false;
+    el('problemCount').textContent = String(state.problems.length);
+    el('problemCount').className = 'pill ' + (state.problems.some(p => p.severity === 'err') ? 'err' : (state.problems.length ? 'warn' : 'ok'));
+    el('problemCount').textContent = state.problems.length ? String(state.problems.length) : 'clean';
+    el('problemsBody').innerHTML = state.problems.length
+      ? state.problems.map((p, i) => `<div class="prob" tabindex="0" data-prob="${i}" role="button">
+          <span class="dot ${p.severity === 'err' ? 'empty' : 'warn'}"></span>
+          <span>${escapeHtml(p.text)}</span>
+          <span class="pill ${p.severity === 'err' ? 'err' : 'warn'} push">${p.tag}</span>
+        </div>`).join('')
+      : `<div class="prob" style="cursor:default;"><span class="dot ok"></span><span>No problems found. Every key resolves and nothing shadows another mapping.</span><span class="pill ok push">valid</span></div>`;
+    el('stIssues').textContent = state.problems.length ? `${state.problems.length} issues` : '0 issues';
+  }
+
+  el('problemsBody').addEventListener('click', (e) => {
+    const p = e.target.closest('[data-prob]');
+    if (!p) return;
+    const prob = state.problems[Number(p.dataset.prob)];
+    if (prob && prob.row >= 0) {
+      state.selected = prob.row;
+      state.view = 'table';
+      state.search = '';
+      el('searchInput').value = '';
+      renderAll();
+      const node = el('surface').querySelector(`[data-row="${prob.row}"]`);
+      if (node) node.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  });
+
+  /* --- command bar --- */
+  el('searchInput').addEventListener('input', (e) => {
+    state.search = e.target.value;
+    renderAll();
+  });
+
+  el('btnAddRow').addEventListener('click', () => {
+    state.undo.push(JSON.parse(JSON.stringify(state.rows)));
+    state.redo.length = 0;
+    state.rows.push({ key: 'newkey', glyph: '', kind: '' });
+    state.selected = state.rows.length - 1;
+    markDirty();
+    renderAll();
+    toast('Row added - set its output in the inspector');
+  });
+
+  el('btnValidate').addEventListener('click', validate);
+
+  function renderHistoryButtons() {
+    el('btnUndo').disabled = state.undo.length === 0;
+    el('btnRedo').disabled = state.redo.length === 0;
+    el('btnUndo').textContent = state.undo.length ? `Undo (${state.undo.length})` : 'Undo';
+    el('btnRedo').textContent = state.redo.length ? `Redo (${state.redo.length})` : 'Redo';
+  }
+
+  el('btnUndo').addEventListener('click', () => {
+    if (!state.undo.length) return;
+    state.redo.push(JSON.parse(JSON.stringify(state.rows)));
+    state.rows = state.undo.pop();
+    state.selected = Math.min(state.selected, state.rows.length - 1);
+    markDirty();
+    renderAll();
+  });
+
+  el('btnRedo').addEventListener('click', () => {
+    if (!state.redo.length) return;
+    state.undo.push(JSON.parse(JSON.stringify(state.rows)));
+    state.rows = state.redo.pop();
+    markDirty();
+    renderAll();
+  });
+
+  el('btnSave').addEventListener('click', () => {
+    if (state.search.trim()) {
+      toast('Saving the whole layout, not just the filtered rows');
+    } else {
+      toast('Saved krutidev_010.json');
+    }
+    clearDirty();
+    renderAll();
+  });
+
+  el('btnNew').addEventListener('click', () => {
+    if (state.dirty && !confirm('This layout has unsaved changes. Discard them and start a new one?')) return;
+    state.rows = [{ key: 'a', glyph: '', kind: '' }];
+    state.selected = 0;
+    state.dirty = false;
+    state.problems = [];
+    state.problemsVisible = false;
+    state.undo = []; state.redo = [];
+    el('docField').textContent = 'untitled.json';
+    el('stFile').textContent = 'untitled.json';
+    el('winDoc').textContent = '- untitled.json';
+    clearDirty();
+    renderAll();
+    toast('New layout created');
+  });
+
+  el('btnOpen').addEventListener('click', () => {
+    if (state.dirty && !confirm('This layout has unsaved changes. Discard them and open another?')) return;
+    toast('Open layout - the same guard runs here, and on Import');
+  });
+
+  document.querySelectorAll('.menubar button').forEach((b) => {
+    b.addEventListener('click', () => toast(`Menu: ${b.textContent}`));
+  });
+
+  /* --- status bar --- */
+  function renderStatus() {
+    el('stFile').textContent = el('docField').textContent;
+    const counts = {
+      direct: state.rows.filter(r => r.kind === 'direct').length,
+      prebase: state.rows.filter(r => r.kind === 'prebase').length,
+      postbase: state.rows.filter(r => r.kind === 'postbase').length,
+    };
+    el('stCounts').textContent = `Direct ${counts.direct} / 412 - Prebase ${counts.prebase} / 38 - Postbase ${counts.postbase} / 41`;
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  function renderAll() {
+    renderRail();
+    renderSurface();
+    renderInspector();
+    renderProblems();
+    renderStatus();
+    renderHistoryButtons();
+  }
+
+  renderTrayGlyph();
+  clearDirty();
+  state.selected = 1;
+  renderAll();
+})();
+</script>
+</body>
+</html>

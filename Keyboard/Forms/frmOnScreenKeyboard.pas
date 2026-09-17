@@ -1,4 +1,4 @@
-﻿unit frmOnScreenKeyboard;
+unit frmOnScreenKeyboard;
 
 interface
 
@@ -11,7 +11,9 @@ uses
   Vcl.StdCtrls,
   Vcl.ExtCtrls,
   Vcl.Buttons,
-  LayoutModel;
+  LayoutModel,
+  LayoutResolver,
+  VittixKeyboardView;
 
 type
   TfrmOnScreenKeyboard = class(TForm)
@@ -20,13 +22,11 @@ type
     pnlKeyboard: TScrollBox;
     pnlFooter: TPanel;
     lblKeyInfo: TLabel;
+    vkvKeyboard: TVittixKeyboardView;
     procedure FormCreate(Sender: TObject);
+    procedure vkvKeyboardKeySelect(Sender: TObject; const KeyName, CurrentGlyph: string);
   private
     FLayout: TKeyboardLayout;
-    procedure BuildKeyboard;
-    procedure BuildRow(const Keys: string; TopPos: Integer);
-    procedure KeyButtonClick(Sender: TObject);
-    function GetGlyphForKey(const AKey: string): string;
   public
     procedure LoadLayout(ALayout: TKeyboardLayout);
   end;
@@ -34,12 +34,6 @@ type
 implementation
 
 {$R *.dfm}
-
-const
-  ROW_NUMBERS = '1234567890';
-  ROW_1 = 'QWERTYUIOP';
-  ROW_2 = 'ASDFGHJKL';
-  ROW_3 = 'ZXCVBNM';
 
 procedure TfrmOnScreenKeyboard.FormCreate(Sender: TObject);
 begin
@@ -51,90 +45,38 @@ procedure TfrmOnScreenKeyboard.LoadLayout(ALayout: TKeyboardLayout);
 begin
   FLayout := ALayout;
 
-  // A nil layout means no layout is active. Clear the view instead of reading
-  // layout fields on a nil reference (see GetGlyphForKey's own nil guard).
+  // The shared keyboard view renders the layout itself, including glyphs in the
+  // layout font and DPI-correct key metrics. A nil layout means nothing active.
+  vkvKeyboard.Layout := ALayout;
+  vkvKeyboard.SelectedKey := '';
+  lblKeyInfo.Caption := '';
+
   if ALayout = nil then
   begin
     lblLayoutName.Caption := 'No layout loaded';
-    pnlKeyboard.DestroyComponents;
-    lblKeyInfo.Caption := '';
     Exit;
   end;
 
   lblLayoutName.Caption := ALayout.Name;
-  BuildKeyboard;
 end;
 
-procedure TfrmOnScreenKeyboard.BuildKeyboard;
-begin
-  pnlKeyboard.DestroyComponents;
-
-  BuildRow(ROW_NUMBERS, 10);
-  BuildRow(ROW_1, 60);
-  BuildRow(ROW_2, 110);
-  BuildRow(ROW_3, 160);
-end;
-
-procedure TfrmOnScreenKeyboard.BuildRow(const Keys: string; TopPos: Integer);
+procedure TfrmOnScreenKeyboard.vkvKeyboardKeySelect(Sender: TObject;
+  const KeyName, CurrentGlyph: string);
 var
-  I, LeftPos: Integer;
-  Btn: TSpeedButton;
+  Resolved: TResolvedGlyph;
 begin
-  LeftPos := 10;
-
-  for I := 1 to Length(Keys) do
-  begin
-    Btn := TSpeedButton.Create(Self);
-    Btn.Parent := pnlKeyboard;
-    Btn.SetBounds(LeftPos, TopPos, 42, 42);
-    Btn.Caption := Keys[I];
-    Btn.Tag := Ord(Keys[I]);
-    Btn.OnClick := KeyButtonClick;
-    Btn.Flat := True;
-
-    LeftPos := LeftPos + 44;
-  end;
-end;
-
-procedure TfrmOnScreenKeyboard.KeyButtonClick(Sender: TObject);
-var
-  Key, Glyph: string;
-begin
-  Key := Char(TSpeedButton(Sender).Tag);
-  Glyph := GetGlyphForKey(Key);
-
-  if Glyph = '' then
-    lblKeyInfo.Caption := Format('Key: %s → (no mapping)', [Key])
-  else
-    lblKeyInfo.Caption := Format('Key: %s  →  Glyph: %s', [Key, Glyph]);
-end;
-
-function TfrmOnScreenKeyboard.GetGlyphForKey(const AKey: string): string;
-var
-  Matra: TKeyMapping;
-
-begin
-  Result := '';
-
   if FLayout = nil then
+  begin
+    lblKeyInfo.Caption := '';
     Exit;
+  end;
 
-  if FLayout.DirectMap.ContainsKey(AKey) then
-    Exit(FLayout.DirectMap[AKey]);
-
-  if FLayout.PrebaseMap.TryGetValue(AKey, Matra) then
-    Exit(Matra.Glyph);
-
-  if FLayout.PostbaseMap.ContainsKey(AKey) then
-    Exit(FLayout.PostbaseMap[AKey]);
-
-  if FLayout.Modifiers.ContainsKey('halant') then
-    if AKey = FLayout.Modifiers['halant'].Key then
-      Exit(FLayout.Modifiers['halant'].Glyph);
-
-  if FLayout.Modifiers.ContainsKey('reph') then
-    if AKey = FLayout.Modifiers['reph'].Key then
-      Exit(FLayout.Modifiers['reph'].Glyph);
+  Resolved := TLayoutResolver.Resolve(FLayout, KeyName);
+  if not Resolved.Found then
+    lblKeyInfo.Caption := Format('Key: %s    no mapping', [KeyName])
+  else
+    lblKeyInfo.Caption := Format('Key: %s    glyph: %s    from %s',
+      [KeyName, CurrentGlyph, Resolved.SourceLabel]);
 end;
 
 end.
