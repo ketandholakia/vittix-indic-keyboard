@@ -46,6 +46,18 @@ type
     [Test]
     procedure LayoutSwitchToNil_FlushesPendingReph;
     [Test]
+    procedure Postbase_AfterConsonant_PostbaseGlyphWins;
+    [Test]
+    procedure Postbase_NoConsonant_DirectGlyphWins;
+    [Test]
+    procedure Postbase_MatraEndsTheClusterContext;
+    [Test]
+    procedure Postbase_LiteralFallbackClearsTheClusterContext;
+    [Test]
+    procedure Postbase_TabClearsTheClusterContext;
+    [Test]
+    procedure Postbase_BackspaceClearsTheClusterContext;
+    [Test]
     procedure EngineDisable_DoesNotEmitThroughBoundary;
   end;
 
@@ -67,8 +79,12 @@ begin
   Result.Name := AName;
   Result.DirectMap.Add('k', 'K');
   Result.DirectMap.Add('t', 'T');
+  // The key 'a' exists in BOTH maps with different glyphs, mirroring the legacy
+  // layouts (direct = standalone vowel glyph, postbase = matra glyph). Only the
+  // direct side is reachable today; the contextual postbase tests pin the fix.
+  Result.DirectMap.Add('a', 'AVowel');
   Result.PrebaseMap.Add('i', MakeMapping('i', 'I'));
-  Result.PostbaseMap.Add('a', 'A');
+  Result.PostbaseMap.Add('a', 'AMatra');
   Result.Modifiers.Add('halant', MakeMapping('-', 'H'));
   Result.Modifiers.Add('reph', MakeMapping('R', 'R'));
 end;
@@ -208,6 +224,75 @@ begin
     'pending reph must be flushed through the still-valid old layout before detach');
   Assert.AreEqual('R', FEvents[1], 'detaching must reset state through the boundary');
   Assert.IsFalse(gEngineState.PendingReph, 'no pending state may survive the detach');
+end;
+
+// Contextual postbase (item 2): after a consonant, a key present in both the
+// direct and the postbase map must produce the matra glyph, not the standalone
+// glyph. Unicode layouts keep the two maps disjoint, so they are unaffected.
+procedure TOutputBoundaryTests.Postbase_AfterConsonant_PostbaseGlyphWins;
+begin
+  ProcessKeyChar('k');   // K (consonant: cluster context active)
+  ProcessKeyChar('a');   // contextually: the aa-matra, not the standalone vowel
+
+  Assert.AreEqual(2, FEvents.Count);
+  Assert.AreEqual('T:K', FEvents[0]);
+  Assert.AreEqual('T:AMatra', FEvents[1],
+    'after a consonant the postbase (matra) glyph must win over the direct glyph');
+end;
+
+procedure TOutputBoundaryTests.Postbase_NoConsonant_DirectGlyphWins;
+begin
+  ProcessKeyChar('a');   // no consonant before it: plain standalone glyph
+
+  Assert.AreEqual(1, FEvents.Count);
+  Assert.AreEqual('T:AVowel', FEvents[0],
+    'without a preceding consonant the direct glyph must win');
+end;
+
+procedure TOutputBoundaryTests.Postbase_MatraEndsTheClusterContext;
+begin
+  ProcessKeyChar('k');   // K
+  ProcessKeyChar('a');   // AMatra (contextual)
+  ProcessKeyChar('a');   // the matra is not a consonant: back to the direct glyph
+
+  Assert.AreEqual(3, FEvents.Count);
+  Assert.AreEqual('T:AMatra', FEvents[1]);
+  Assert.AreEqual('T:AVowel', FEvents[2],
+    'emitting a matra must clear the cluster context');
+end;
+
+procedure TOutputBoundaryTests.Postbase_LiteralFallbackClearsTheClusterContext;
+begin
+  ProcessKeyChar('k');   // K
+  ProcessKeyChar(' ');   // literal fallback (space)
+  ProcessKeyChar('a');   // no longer contextual
+
+  Assert.AreEqual(4, FEvents.Count);
+  Assert.AreEqual('T:AVowel', FEvents[3],
+    'a literal fallback must clear the cluster context');
+end;
+
+procedure TOutputBoundaryTests.Postbase_TabClearsTheClusterContext;
+begin
+  ProcessKeyChar('k');   // K
+  ProcessKeyChar(#9);    // Tab
+  ProcessKeyChar('a');   // no longer contextual
+
+  Assert.AreEqual(3, FEvents.Count);
+  Assert.AreEqual('T:AVowel', FEvents[2],
+    'Tab must clear the cluster context');
+end;
+
+procedure TOutputBoundaryTests.Postbase_BackspaceClearsTheClusterContext;
+begin
+  ProcessKeyChar('k');   // K
+  ProcessKeyChar(#8);    // real backspace deletes the consonant
+  ProcessKeyChar('a');   // no longer contextual
+
+  Assert.AreEqual(4, FEvents.Count);
+  Assert.AreEqual('B', FEvents[1]);
+  Assert.AreEqual('T:AVowel', FEvents[3],
+    'a real backspace must clear the cluster context');
 end;
 
 procedure TOutputBoundaryTests.EngineDisable_DoesNotEmitThroughBoundary;

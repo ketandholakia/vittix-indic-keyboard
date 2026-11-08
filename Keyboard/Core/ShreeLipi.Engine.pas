@@ -128,7 +128,10 @@ begin
     // ---------------- BACKSPACE ----------------
     if AKey = #8 then
     begin
-      // Reset pending state first
+      // Reset pending state first. Cancelling a pending prebase/reph does NOT
+      // clear the cluster context: nothing was deleted from the screen, so the
+      // last emitted output is still the consonant and the next vowel key must
+      // stay contextual.
       if gEngineState.PendingPrebase <> '' then
       begin
         gEngineState.PendingPrebase := '';
@@ -141,6 +144,9 @@ begin
         Exit(ioSuccess);
       end;
 
+      // A real backspace deletes emitted output, so the "last output was a
+      // consonant" context can no longer be trusted.
+      gEngineState.CurrentCluster := '';
       // Send real backspace through the output boundary
       Outcome := CombineInjectionOutcomes(Outcome, EmitOutput(eoEmitBackspace, ''));
       EmitOutput(eoResetState, '');
@@ -153,7 +159,9 @@ begin
     begin
       // M1.1: commit any consumed pending matra/reph BEFORE the Tab/Enter so the
       // already-consumed keystroke is not silently lost on the control key.
+      // Tab/Enter leave the field's text flow, so the cluster context ends here.
       FlushPendingPreludes(Outcome);
+      gEngineState.CurrentCluster := '';
       EmitOutput(eoResetState, '');
       if Outcome <> ioSuccess then
         ResetEngineState;
@@ -183,6 +191,30 @@ begin
       Exit(ioSuccess);
     end;
 
+    { ---------------- CONTEXTUAL POSTBASE MATRA ---------------- }
+    // Item 2: legacy layouts (krutidev, shree-lipi, remington) put the same
+    // vowel key in both DirectMap and PostbaseMap with different glyphs —
+    // direct A = "vk" (standalone vowel), postbase A = "k" (aa-matra). After a
+    // consonant (CurrentCluster holds the last emitted consonant glyph) the
+    // matra reading must win, so the postbase map is consulted BEFORE the
+    // direct map. Unicode/phonetic layouts keep the two maps disjoint, so this
+    // reordering can never change their output.
+    // TODO(phonetic): the engine still has no inherent-vowel or auto-halant
+    // support, so a phonetic layout cannot suppress the inherent vowel of a
+    // consonant glyph or build half-consonant forms automatically. The
+    // validator emits a warning for phonetic layouts documenting this.
+    if (gEngineState.CurrentCluster <> '') and
+       ActiveLayout.PostbaseMap.TryGetValue(AKey, OutGlyph) then
+    begin
+      FlushPendingPreludes(Outcome);
+      Outcome := CombineInjectionOutcomes(Outcome, EmitOutput(eoEmitText, OutGlyph));
+      // A matra is not a consonant: the cluster context ends here.
+      gEngineState.CurrentCluster := '';
+      if Outcome <> ioSuccess then
+        ResetEngineState;
+      Exit(Outcome);
+    end;
+
     { ---------------- DIRECT CONSONANT ---------------- }
     if ActiveLayout.DirectMap.TryGetValue(AKey, OutGlyph) then
     begin
@@ -199,6 +231,8 @@ begin
     begin
       FlushPendingPreludes(Outcome);
       Outcome := CombineInjectionOutcomes(Outcome, EmitOutput(eoEmitText, OutGlyph));
+      // A matra is a non-consonant output: the cluster context ends here.
+      gEngineState.CurrentCluster := '';
       if Outcome <> ioSuccess then
         ResetEngineState;
       Exit(Outcome);
@@ -211,6 +245,8 @@ begin
       begin
         FlushPendingPreludes(Outcome);
         Outcome := CombineInjectionOutcomes(Outcome, EmitOutput(eoEmitText, ModRule.Glyph));
+        // The halant glyph is a non-consonant output: the cluster context ends.
+        gEngineState.CurrentCluster := '';
         if Outcome <> ioSuccess then
           ResetEngineState;
         Exit(Outcome);
@@ -221,6 +257,7 @@ begin
     // Place any consumed prebase/reph before sending the literal key; the hook
     // has already eaten the trigger key, so dropping it here would lose input.
     FlushPendingPreludes(Outcome);
+    gEngineState.CurrentCluster := '';
     EmitOutput(eoResetState, '');
     Outcome := CombineInjectionOutcomes(Outcome, EmitOutput(eoEmitText, AKey));
     if Outcome <> ioSuccess then

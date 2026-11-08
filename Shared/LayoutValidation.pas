@@ -364,6 +364,18 @@ begin
         CheckAndRegisterKey(PairProp.Key, 'Properties', PairProp.Key);
     end;
 
+    // ---------------- PHONETIC ENGINE LIMITATION ----------------
+    // The engine has no inherent-vowel or auto-halant support: a consonant key
+    // emits its glyph verbatim (with any inherent vowel the glyph carries) and
+    // a following consonant never gets an automatic halant, so phonetic
+    // layouts cannot produce half-consonant forms. Explicit halant input is
+    // required. This warning documents the limitation until the engine
+    // implements inherent-vowel/auto-halant handling for phonetic layouts.
+    if SameText(ALayout.LayoutType, 'phonetic') then
+      AddError(vsWarning, 'Layout', 'LayoutType',
+        'Phonetic layout: the engine has no inherent-vowel or auto-halant support; ' +
+        'half-consonant forms require explicit halant input.');
+
   finally
     SeenKeys.Free;
   end;

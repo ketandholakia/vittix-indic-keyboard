@@ -5,8 +5,11 @@ interface
 uses
   DUnitX.TestFramework,
   System.SysUtils,
+  System.Classes,
   System.IOUtils,
   System.Generics.Collections,
+  EngineState,
+  ShreeLipi.Engine,
   LayoutModel,
   LayoutJson,
   LayoutValidation;
@@ -50,9 +53,57 @@ type
 
     [Test]
     procedure ValidationResult_Ownership_NoLeaks;
+
+    // Contextual postbase matras (item 2): after a consonant, a vowel key that
+    // exists in both DirectMap and PostbaseMap must produce the matra glyph.
+    [Test]
+    procedure LegacyPostbase_MatraAfterConsonant_ShreeDev1076;
+    [Test]
+    procedure LegacyPostbase_StandaloneVowel_WithoutConsonant_ShreeDev1076;
+    [Test]
+    procedure LegacyPostbase_MatraAfterConsonant_Krutidev010;
   end;
 
 implementation
+
+var
+  GEngineEvents: TStringList = nil;
+
+procedure CaptureEngineAction(const AAction: TEngineOutputAction; const AText: string);
+begin
+  if not Assigned(GEngineEvents) then
+    Exit;
+  if AAction = eoEmitText then
+    GEngineEvents.Add(AText);
+end;
+
+// Runs one typed sequence against a real layout and returns the emitted text
+// as one concatenated string, with the engine fully reset afterwards.
+function TypeSequence(ALayout: TKeyboardLayout; const AKeys: string): string;
+var
+  Ch: Char;
+  I: Integer;
+begin
+  Result := '';
+  InitEngineState;
+  SetEngineEnabled(True);
+  GEngineEvents := TStringList.Create;
+  try
+    SetEngineOutputHandler(CaptureEngineAction);
+    SetActiveLayout(ALayout);
+    GEngineEvents.Clear;
+    for Ch in AKeys do
+      ProcessKeyChar(Ch);
+    for I := 0 to GEngineEvents.Count - 1 do
+      Result := Result + GEngineEvents[I];
+  finally
+    ResetEngineState;
+    SetActiveLayout(nil);
+    SetEngineOutputHandler(nil);
+    GEngineEvents.Free;
+    GEngineEvents := nil;
+  end;
+end;
 
 class function TRealLayoutTests.GetLayoutFiles: TArray<string>;
 begin
@@ -343,6 +394,49 @@ begin
     end;
 
     Assert.Pass('ValidationResult ownership test completed without leaks');
+  finally
+    Layout.Free;
+  end;
+end;
+
+// shree_dev_1076: direct A = "vk" (standalone vowel glyph), postbase A = "k"
+// (aa-matra). After a consonant the matra must win; alone, the direct glyph.
+procedure TRealLayoutTests.LegacyPostbase_MatraAfterConsonant_ShreeDev1076;
+var
+  Layout: TKeyboardLayout;
+begin
+  Layout := LayoutJson.LoadLayoutFromFile('layouts\devnagari\shree_dev_1076.json');
+  try
+    // 'd' emits the consonant glyph 'l'; the following 'A' must add the
+    // aa-matra 'k', not the standalone vowel glyph 'vk'.
+    Assert.AreEqual('lk', TypeSequence(Layout, 'dA'),
+      'consonant + A must produce the aa-matra glyph, not the standalone vowel');
+  finally
+    Layout.Free;
+  end;
+end;
+
+procedure TRealLayoutTests.LegacyPostbase_StandaloneVowel_WithoutConsonant_ShreeDev1076;
+var
+  Layout: TKeyboardLayout;
+begin
+  Layout := LayoutJson.LoadLayoutFromFile('layouts\devnagari\shree_dev_1076.json');
+  try
+    Assert.AreEqual('vk', TypeSequence(Layout, 'A'),
+      'A without a preceding consonant must produce the standalone vowel glyph');
+  finally
+    Layout.Free;
+  end;
+end;
+
+procedure TRealLayoutTests.LegacyPostbase_MatraAfterConsonant_Krutidev010;
+var
+  Layout: TKeyboardLayout;
+begin
+  Layout := LayoutJson.LoadLayoutFromFile('layouts\devnagari\krutidev_010.json');
+  try
+    Assert.AreEqual('lk', TypeSequence(Layout, 'dA'),
+      'krutidev: consonant + A must produce the aa-matra glyph');
   finally
     Layout.Free;
   end;
