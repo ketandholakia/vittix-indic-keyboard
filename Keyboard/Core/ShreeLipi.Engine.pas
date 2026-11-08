@@ -44,20 +44,57 @@ begin
   OnOutput := AHandler;
 end;
 
+{ --------------------------------------------------
+  Item 6: emitted-length bookkeeping. Legacy glyphs can span several UTF-16
+  code units ("vks", ",%#"), so one Backspace must delete the WHOLE last
+  emitted glyph. Every text emission records its unit length; a real backspace
+  pops the last length and deletes that many units.
+-------------------------------------------------- }
+procedure PushEmittedUnits(const AText: string);
+begin
+  if Length(AText) = 0 then
+    Exit;
+  SetLength(gEngineState.EmittedUnits, Length(gEngineState.EmittedUnits) + 1);
+  gEngineState.EmittedUnits[High(gEngineState.EmittedUnits)] := Length(AText);
+end;
+
+// Returns the unit length of the last emitted glyph, or 1 when nothing is
+// tracked (text typed before the engine was enabled, foreign text): fail
+// safe to the historical single-backspace behavior.
+function PopEmittedUnits: Integer;
+begin
+  if Length(gEngineState.EmittedUnits) = 0 then
+    Exit(1);
+  Result := gEngineState.EmittedUnits[High(gEngineState.EmittedUnits)];
+  SetLength(gEngineState.EmittedUnits, Length(gEngineState.EmittedUnits) - 1);
+end;
+
 // Route an output action through the boundary. With no injected handler the
 // actions are dispatched to the hardened SendInputHelper-backed output layer.
+// The eoEmitBackspace payload carries the backspace count ('' = one) so the
+// decision stays engine-owned while the physical layer stays generic.
 function EmitOutput(const AAction: TEngineOutputAction; const AText: string): TInjectionOutcome;
 begin
   Result := ioNoOutput;
   if Assigned(OnOutput) then
   begin
+    if AAction = eoEmitText then
+      PushEmittedUnits(AText);
     OnOutput(AAction, AText);
     Exit(ioSuccess);
   end
   else
   case AAction Of
-    eoEmitText:        Result := SendUnicodeText(AText);
-    eoEmitBackspace:   Result := SendBackspace;
+    eoEmitText:
+      begin
+        PushEmittedUnits(AText);
+        Result := SendUnicodeText(AText);
+      end;
+    eoEmitBackspace:
+      if AText = '' then
+        Result := SendBackspace
+      else
+        Result := SendBackspace(StrToIntDef(AText, 1));
     eoResetState:
       begin
         ResetEngineState;
@@ -136,6 +173,7 @@ var
   Matra: TKeyMapping;
   ModRule: TKeyMapping;
   Outcome: TInjectionOutcome;
+  Units: Integer;
 begin
   Outcome := ioNoOutput;
   try
@@ -161,9 +199,19 @@ begin
       // A real backspace deletes emitted output, so the "last output was a
       // consonant" context can no longer be trusted.
       gEngineState.CurrentCluster := '';
-      // Send real backspace through the output boundary
-      Outcome := CombineInjectionOutcomes(Outcome, EmitOutput(eoEmitBackspace, ''));
-      EmitOutput(eoResetState, '');
+      // Item 6: delete the whole last emitted glyph — one backspace per UTF-16
+      // unit of that glyph. The emitted-length stack deliberately SURVIVES the
+      // backspace (a full reset here would make a multi-unit glyph followed by
+      // single-unit glyphs undeleteable), so state is cleared field by field
+      // instead of through the eoResetState action. On injection failure the
+      // full reset still applies: what the target app received is unknown.
+      Units := PopEmittedUnits;
+      if Units > 1 then
+        Outcome := CombineInjectionOutcomes(Outcome, EmitOutput(eoEmitBackspace, IntToStr(Units)))
+      else
+        Outcome := CombineInjectionOutcomes(Outcome, EmitOutput(eoEmitBackspace, ''));
+      gEngineState.KeyBuffer := '';
+      gEngineState.LastOutput := '';
       if Outcome <> ioSuccess then
         ResetEngineState;
       Exit(Outcome);

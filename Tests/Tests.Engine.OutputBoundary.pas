@@ -33,9 +33,15 @@ type
     [Test]
     procedure DirectConsonant_EmitsSingleTextAction;
     [Test]
-    procedure Backspace_NoPending_EmitsBackspaceThenReset;
+    procedure Backspace_NoPending_EmitsBackspaceThroughBoundary;
     [Test]
     procedure Backspace_WithPending_Cancels_EmitsNothing;
+    [Test]
+    procedure Backspace_MultiUnitGlyph_SendsUnitCount;
+    [Test]
+    procedure Backspace_Chain_PopsEachGlyphInOrder;
+    [Test]
+    procedure Backspace_AfterNavigationClearsStack_SendsSingleBackspace;
     [Test]
     procedure Tab_NoPending_EmitsResetOnly;
     [Test]
@@ -92,6 +98,9 @@ begin
   Result.Name := AName;
   Result.DirectMap.Add('k', 'K');
   Result.DirectMap.Add('t', 'T');
+  // 's' emits a three-unit glyph, mirroring the legacy layouts where one key
+  // produces a multi-character legacy-font sequence (item 6).
+  Result.DirectMap.Add('s', 'SSS');
   // The key 'a' exists in BOTH maps with different glyphs, mirroring the legacy
   // layouts (direct = standalone vowel glyph, postbase = matra glyph). Only the
   // direct side is reachable today; the contextual postbase tests pin the fix.
@@ -109,8 +118,13 @@ begin
 
   case AAction Of
     eoEmitText:      GEvents.Add('T:' + AText);
-      eoEmitBackspace:   GEvents.Add('B');
-      eoResetState:       GEvents.Add('R');
+    eoEmitBackspace:
+      // '' = single backspace; a numeric payload carries the multi-unit count.
+      if AText = '' then
+        GEvents.Add('B')
+      else
+        GEvents.Add('B' + AText);
+    eoResetState:       GEvents.Add('R');
     end;
 end;
 
@@ -149,15 +163,62 @@ begin
   Assert.AreEqual('T:K', FEvents[0], 'the action must be Emit Unicode text');
 end;
 
-procedure TOutputBoundaryTests.Backspace_NoPending_EmitsBackspaceThenReset;
+// A single-unit glyph deletes with one backspace, and the backspace decision
+// crosses the boundary. No reset event: the emitted-length stack must survive
+// a backspace chain (item 6), so the per-backspace reset was replaced by
+// targeted state clears.
+procedure TOutputBoundaryTests.Backspace_NoPending_EmitsBackspaceThroughBoundary;
 begin
   ProcessKeyChar('k');   // establish a cluster
   FEvents.Clear;
   ProcessKeyChar(#8);    // no pending → real backspace through the boundary
 
+  Assert.AreEqual(1, FEvents.Count);
+  Assert.AreEqual('B', FEvents[0],
+    'a one-unit glyph must delete with a single backspace');
+end;
+
+// Item 6: a glyph spanning several UTF-16 units must delete with one
+// backspace per unit — the boundary carries the count in the payload.
+procedure TOutputBoundaryTests.Backspace_MultiUnitGlyph_SendsUnitCount;
+begin
+  ProcessKeyChar('s');   // emits the three-unit glyph SSS
+  FEvents.Clear;
+  ProcessKeyChar(#8);
+
+  Assert.AreEqual(1, FEvents.Count);
+  Assert.AreEqual('B3', FEvents[0],
+    'a three-unit glyph must delete with three backspaces');
+end;
+
+// The stack pops in emission order and survives individual backspaces, so a
+// multi-unit glyph followed by a single-unit glyph deletes correctly in both
+// directions.
+procedure TOutputBoundaryTests.Backspace_Chain_PopsEachGlyphInOrder;
+begin
+  ProcessKeyChar('s');   // SSS (3 units)
+  ProcessKeyChar('k');   // K   (1 unit)
+  FEvents.Clear;
+  ProcessKeyChar(#8);    // deletes K: one backspace
+  ProcessKeyChar(#8);    // deletes SSS: three backspaces
+
   Assert.AreEqual(2, FEvents.Count);
-  Assert.AreEqual('B', FEvents[0], 'backspace decision must cross the boundary');
-  Assert.AreEqual('R', FEvents[1], 'state reset must follow the backspace');
+  Assert.AreEqual('B', FEvents[0], 'the single-unit glyph deletes with 1');
+  Assert.AreEqual('B3', FEvents[1], 'the three-unit glyph deletes with 3');
+end;
+
+// Navigation/foreground resets clear the emitted-length stack; the next
+// backspace then falls back to the safe single backspace.
+procedure TOutputBoundaryTests.Backspace_AfterNavigationClearsStack_SendsSingleBackspace;
+begin
+  ProcessKeyChar('s');   // SSS (3 units)
+  ResetPendingOnPassThrough;
+  FEvents.Clear;
+  ProcessKeyChar(#8);
+
+  Assert.AreEqual(1, FEvents.Count);
+  Assert.AreEqual('B', FEvents[0],
+    'after a stack reset the backspace count is unknown: fail-safe 1');
 end;
 
 procedure TOutputBoundaryTests.Backspace_WithPending_Cancels_EmitsNothing;
@@ -305,9 +366,9 @@ begin
   ProcessKeyChar(#8);    // real backspace deletes the consonant
   ProcessKeyChar('a');   // no longer contextual
 
-  Assert.AreEqual(4, FEvents.Count);
+  Assert.AreEqual(3, FEvents.Count);
   Assert.AreEqual('B', FEvents[1]);
-  Assert.AreEqual('T:AVowel', FEvents[3],
+  Assert.AreEqual('T:AVowel', FEvents[2],
     'a real backspace must clear the cluster context');
 end;
 

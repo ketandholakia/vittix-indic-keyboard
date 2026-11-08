@@ -32,6 +32,8 @@ type
     procedure Combine_PassThroughWithEmitted_EmittedWins;
     [Test]
     procedure Combine_PassThroughWithFailure_FailureWins;
+    [Test]
+    procedure Backspace_MultiUnitGlyph_SubmitsSixBackspaceRecords;
   end;
 
 implementation
@@ -39,9 +41,14 @@ implementation
 var
   GReturns: TArray<UINT>;
   GCallIndex: Integer;
+  GCapturedCount: UINT = 0;
+  GCapturedFirstVK: Word = 0;
 
 function FakeSendInput(cInputs: UINT; pInputs: PInput; cbSize: Integer): UINT; stdcall;
 begin
+  GCapturedCount := cInputs;
+  if (cInputs > 0) and (pInputs <> nil) then
+    GCapturedFirstVK := PInput(pInputs)^.ki.wVk;
   if GCallIndex <= High(GReturns) then
     Result := GReturns[GCallIndex]
   else
@@ -62,6 +69,8 @@ begin
   SetEngineEnabled(True);
   SetLength(GReturns, 0);
   GCallIndex := 0;
+  GCapturedCount := 0;
+  GCapturedFirstVK := 0;
   SetSendInputHook(FakeSendInput);
   SetEngineOutputHandler(nil);
   FLayout := TKeyboardLayout.Create;
@@ -132,6 +141,22 @@ procedure TEngineInjectionOutcomeTests.Combine_PassThroughWithFailure_FailureWin
 begin
   Assert.AreEqual(ioPartialAccepted, CombineInjectionOutcomes(ioPassThrough, ioPartialAccepted));
   Assert.AreEqual(ioPartialAccepted, CombineInjectionOutcomes(ioPartialAccepted, ioPassThrough));
+end;
+
+// Item 6, physical level: a three-unit glyph followed by one Backspace must
+// submit SendBackspace(3) — six VK_BACK records through the boundary.
+procedure TEngineInjectionOutcomeTests.Backspace_MultiUnitGlyph_SubmitsSixBackspaceRecords;
+begin
+  FLayout.DirectMap.Add('s', 'SSS');
+  Assert.AreEqual(ioSuccess, ProcessKeyChar('s'));
+
+  GCapturedCount := 0;
+  GCapturedFirstVK := 0;
+  Assert.AreEqual(ioSuccess, ProcessKeyChar(#8));
+  Assert.AreEqual(6, Integer(GCapturedCount),
+    'SendBackspace(3) submits three down/up pairs');
+  Assert.AreEqual(Word(VK_BACK), GCapturedFirstVK,
+    'the submitted records are backspaces');
 end;
 
 initialization
