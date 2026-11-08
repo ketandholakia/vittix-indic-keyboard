@@ -26,6 +26,12 @@ type
     procedure BackspacePartialAcceptance_ResetsEngineState;
     [Test]
     procedure PendingPrelude_SuccessThenZero_IsPartialEquivalent;
+    [Test]
+    procedure Combine_PassThroughAlone_StaysPassThrough;
+    [Test]
+    procedure Combine_PassThroughWithEmitted_EmittedWins;
+    [Test]
+    procedure Combine_PassThroughWithFailure_FailureWins;
   end;
 
 implementation
@@ -102,6 +108,30 @@ begin
   Assert.IsFalse(InjectionOK);
   Assert.AreEqual('', gEngineState.PendingPrebase);
   Assert.AreEqual('', gEngineState.CurrentCluster);
+end;
+
+// Item 4: ioPassThrough means "let the original physical key through". It only
+// survives a combination when nothing was emitted and nothing failed.
+procedure TEngineInjectionOutcomeTests.Combine_PassThroughAlone_StaysPassThrough;
+begin
+  Assert.AreEqual(ioPassThrough, CombineInjectionOutcomes(ioNoOutput, ioPassThrough));
+  Assert.AreEqual(ioPassThrough, CombineInjectionOutcomes(ioPassThrough, ioNoOutput));
+  Assert.AreEqual(ioPassThrough, CombineInjectionOutcomes(ioPassThrough, ioPassThrough));
+end;
+
+procedure TEngineInjectionOutcomeTests.Combine_PassThroughWithEmitted_EmittedWins;
+begin
+  // Once output exists the original key can no longer pass through natively.
+  Assert.AreEqual(ioSuccess, CombineInjectionOutcomes(ioPassThrough, ioSuccess));
+  Assert.AreEqual(ioSuccess, CombineInjectionOutcomes(ioSuccess, ioPassThrough));
+  Assert.AreEqual(ioZeroAccepted, CombineInjectionOutcomes(ioPassThrough, ioZeroAccepted));
+  Assert.AreEqual(ioZeroAccepted, CombineInjectionOutcomes(ioZeroAccepted, ioPassThrough));
+end;
+
+procedure TEngineInjectionOutcomeTests.Combine_PassThroughWithFailure_FailureWins;
+begin
+  Assert.AreEqual(ioPartialAccepted, CombineInjectionOutcomes(ioPassThrough, ioPartialAccepted));
+  Assert.AreEqual(ioPartialAccepted, CombineInjectionOutcomes(ioPartialAccepted, ioPassThrough));
 end;
 
 initialization

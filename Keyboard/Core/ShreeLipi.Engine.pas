@@ -174,7 +174,17 @@ begin
       // M1.1: commit any consumed pending matra/reph BEFORE the Tab/Enter so the
       // already-consumed keystroke is not silently lost on the control key.
       // Tab/Enter leave the field's text flow, so the cluster context ends here.
+      // Item 4: with nothing pending and nothing emitted the original control
+      // key passes through natively — the hook must not re-inject it, and the
+      // pass-through emits nothing through the boundary (state is cleared
+      // directly; in production that is exactly what the eoResetState handler
+      // would do).
       FlushPendingPreludes(Outcome);
+      if Outcome = ioNoOutput then
+      begin
+        ResetEngineState;
+        Exit(ioPassThrough);
+      end;
       gEngineState.CurrentCluster := '';
       EmitOutput(eoResetState, '');
       if Outcome <> ioSuccess then
@@ -183,10 +193,10 @@ begin
     end;
 
     if not EngineEnabled then
-      Exit(ioSuccess);
+      Exit(ioPassThrough);
 
     if ActiveLayout = nil then
-      Exit(ioSuccess);
+      Exit(ioPassThrough);
 
     { ---------------- REPH ---------------- }
     if ActiveLayout.Modifiers.TryGetValue('reph', ModRule) then
@@ -270,7 +280,16 @@ begin
     { ---------------- FALLBACK (English / Symbols) ---------------- }
     // Place any consumed prebase/reph before sending the literal key; the hook
     // has already eaten the trigger key, so dropping it here would lose input.
+    // Item 4: when nothing was pending, the engine consumed nothing — report
+    // pass-through so the original key goes through natively instead of being
+    // re-injected as a Unicode event. The pass-through itself emits nothing
+    // through the boundary; state is cleared directly.
     FlushPendingPreludes(Outcome);
+    if Outcome = ioNoOutput then
+    begin
+      ResetEngineState;
+      Exit(ioPassThrough);
+    end;
     gEngineState.CurrentCluster := '';
     EmitOutput(eoResetState, '');
     Outcome := CombineInjectionOutcomes(Outcome, EmitOutput(eoEmitText, AKey));

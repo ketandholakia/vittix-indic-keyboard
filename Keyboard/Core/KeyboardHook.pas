@@ -365,12 +365,19 @@ begin
         Outcome := KeyHandler(#13);
     end;
 
+    // Item 4: pass-through (nothing pending, nothing emitted) means the
+    // original control key goes through natively — do not re-inject it.
+    if Outcome = ioPassThrough then
+      Exit(False);
+
+    // A flush actually emitted text, so the physical control key — consumed
+    // by the translation — must be re-injected.
     if AKey.VKCode = VK_TAB then
       Outcome := CombineInjectionOutcomes(Outcome, SendVirtualKey(VK_TAB))
     else
       Outcome := CombineInjectionOutcomes(Outcome, SendVirtualKey(VK_RETURN));
 
-    Result := Outcome <> ioZeroAccepted;
+    Result := (Outcome <> ioZeroAccepted) and (Outcome <> ioPassThrough);
     Exit;
   end;
 
@@ -380,7 +387,7 @@ begin
     if Assigned(KeyHandler) then
     begin
       Outcome := KeyHandler(#8);  // ASCII Backspace
-      Result := Outcome <> ioZeroAccepted;
+      Result := (Outcome <> ioZeroAccepted) and (Outcome <> ioPassThrough);
       Exit;
     end;
   end;
@@ -400,9 +407,11 @@ begin
   if Assigned(KeyHandler) then
   begin
     Outcome := KeyHandler(Ch);
-    // Zero accepted records are safe to pass through.  Partial acceptance is
-    // deliberately consumed because some synthetic input may already exist.
-    Result := Outcome <> ioZeroAccepted;
+    // Zero accepted records and explicit pass-through outcomes are safe to
+    // pass through (ioPassThrough means the engine emitted and consumed
+    // nothing, so the original key goes through natively). Partial acceptance
+    // is deliberately consumed because some synthetic input may already exist.
+    Result := (Outcome <> ioZeroAccepted) and (Outcome <> ioPassThrough);
     Exit;
   end;
 

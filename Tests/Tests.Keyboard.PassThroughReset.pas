@@ -14,11 +14,14 @@ uses
   LayoutModel;
 
 type
-  // Item 3 regression coverage: keys that pass through the hook must clear the
-  // engine's pending prebase/reph/cluster state, so a stale matra can never be
-  // emitted into the next field. End-to-end through HandleKeyEvent with the
-  // real engine wired as the key handler: no real hook, no foreground app, no
-  // real keystrokes (working rule #4).
+  // Items 3 & 4 regression coverage. Item 3: keys that pass through the hook
+  // must clear the engine's pending prebase/reph/cluster state, so a stale
+  // matra can never be emitted into the next field. Item 4: unmapped keys
+  // (space, digits, Tab/Enter with nothing pending) pass through natively with
+  // no SendInput call at all, while a pending prebase is flushed and then
+  // re-injected. End-to-end through HandleKeyEvent with the real engine wired
+  // as the key handler: no real hook, no foreground app, no real keystrokes
+  // (working rule #4).
   [TestFixture]
   TPassThroughResetTests = class
   strict private
@@ -46,6 +49,18 @@ type
     procedure ForegroundChange_CancelsPending;
     [Test]
     procedure DeleteKey_CancelsPending;
+    [Test]
+    procedure Space_NoPending_PassesThrough_WithoutSendInput;
+    [Test]
+    procedure Digit_NoPending_PassesThrough_WithoutSendInput;
+    [Test]
+    procedure Tab_NoPending_PassesThrough_WithoutSendInput;
+    [Test]
+    procedure Enter_NoPending_PassesThrough_WithoutSendInput;
+    [Test]
+    procedure Space_WithPendingPrebase_FlushesThenReinjects;
+    [Test]
+    procedure Tab_WithPendingPrebase_FlushesThenReinjects;
   end;
 
 implementation
@@ -54,6 +69,7 @@ var
   GFakeProcess: string;
   GFakeModifiers: TKeyModifierState;
   GFakeVKChar: string;
+  GSendInputCalls: Integer;
   GEvents: TStringList = nil;
 
 function FakeForegroundProcess: string;
@@ -77,6 +93,7 @@ end;
 function FakeSendInput(cInputs: UINT; pInputs: PInput;
   cbSize: Integer): UINT; stdcall;
 begin
+  Inc(GSendInputCalls);
   Result := cInputs;   // always fully accepted
 end;
 
@@ -144,6 +161,7 @@ begin
   SetHookPolicyDependencies(Deps);
 
   GFakeVKChar := '';
+  GSendInputCalls := 0;
   SetSendInputHook(FakeSendInput);
   ResetInjectionStatus;
   FEvents.Clear;
@@ -275,6 +293,78 @@ begin
     'Delete passes through');
   Assert.AreEqual('', gEngineState.PendingPrebase,
     'Delete must cancel the pending prebase');
+end;
+
+// Item 4: with no pending state, an unmapped key (space, digits) and
+// Tab/Enter must pass through NATIVELY — no emission, no reinjection, zero
+// SendInput calls.
+procedure TPassThroughResetTests.Space_NoPending_PassesThrough_WithoutSendInput;
+begin
+  GFakeVKChar := ' ';
+  Assert.IsFalse(HandleKeyEvent(MakeKey(VK_SPACE, True)),
+    'space with nothing pending must pass through');
+  Assert.AreEqual(0, GSendInputCalls, 'pass-through must not call SendInput');
+  Assert.AreEqual(0, FEvents.Count, 'pass-through must not emit anything');
+end;
+
+procedure TPassThroughResetTests.Digit_NoPending_PassesThrough_WithoutSendInput;
+begin
+  GFakeVKChar := '5';
+  Assert.IsFalse(HandleKeyEvent(MakeKey($35, True)),
+    'an unmapped digit with nothing pending must pass through');
+  Assert.AreEqual(0, GSendInputCalls, 'pass-through must not call SendInput');
+  Assert.AreEqual(0, FEvents.Count, 'pass-through must not emit anything');
+end;
+
+procedure TPassThroughResetTests.Tab_NoPending_PassesThrough_WithoutSendInput;
+begin
+  Assert.IsFalse(HandleKeyEvent(MakeKey(VK_TAB, True)),
+    'Tab with nothing pending must pass through natively');
+  Assert.AreEqual(0, GSendInputCalls,
+    'the original Tab must go through, not be re-injected');
+  Assert.AreEqual(0, FEvents.Count, 'nothing to flush means nothing to emit');
+end;
+
+procedure TPassThroughResetTests.Enter_NoPending_PassesThrough_WithoutSendInput;
+begin
+  Assert.IsFalse(HandleKeyEvent(MakeKey(VK_RETURN, True)),
+    'Enter with nothing pending must pass through natively');
+  Assert.AreEqual(0, GSendInputCalls,
+    'the original Enter must go through, not be re-injected');
+end;
+
+// With a pending prebase the flush emits text, and the physical key —
+// consumed by the translation — is re-injected afterwards (space re-emitted
+// as literal text through the engine, Tab re-injected as a virtual key).
+// The capture handler is detached so every emission reaches the (faked)
+// SendInput and can be counted.
+procedure TPassThroughResetTests.Space_WithPendingPrebase_FlushesThenReinjects;
+begin
+  SetEngineOutputHandler(nil);
+
+  GFakeVKChar := 'i';
+  Assert.IsTrue(HandleKeyEvent(MakeKey($49, True)), 'the prebase key is consumed');
+  Assert.AreEqual(0, GSendInputCalls, 'storing the prebase injects nothing');
+
+  GFakeVKChar := ' ';
+  Assert.IsTrue(HandleKeyEvent(MakeKey(VK_SPACE, True)),
+    'the space is consumed because the flush already emitted text');
+  Assert.AreEqual(2, GSendInputCalls,
+    'the flushed prebase and the literal space must have been injected');
+end;
+
+procedure TPassThroughResetTests.Tab_WithPendingPrebase_FlushesThenReinjects;
+begin
+  SetEngineOutputHandler(nil);
+
+  GFakeVKChar := 'i';
+  Assert.IsTrue(HandleKeyEvent(MakeKey($49, True)), 'the prebase key is consumed');
+  Assert.AreEqual(0, GSendInputCalls, 'storing the prebase injects nothing');
+
+  Assert.IsTrue(HandleKeyEvent(MakeKey(VK_TAB, True)),
+    'Tab is consumed because the flush emitted text');
+  Assert.AreEqual(2, GSendInputCalls,
+    'the flushed prebase and the reinjected Tab must have been injected');
 end;
 
 initialization

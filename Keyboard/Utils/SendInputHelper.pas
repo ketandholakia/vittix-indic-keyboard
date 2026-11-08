@@ -15,7 +15,10 @@ type
     ioNoOutput,
     ioSuccess,
     ioZeroAccepted,
-    ioPartialAccepted
+    ioPartialAccepted,
+    // Item 4: the engine produced nothing and consumed nothing, so the
+    // original physical key should go through natively — no reinjection.
+    ioPassThrough
   );
 
   // Injectable boundary for the Win32 SendInput call (M1.2). By default the
@@ -99,6 +102,13 @@ begin
   if ACurrent = ioNoOutput then
     Exit(ANext);
   if ANext = ioNoOutput then
+    Exit(ACurrent);
+  // ioPassThrough only survives when nothing was emitted and nothing failed:
+  // any real outcome supersedes it, because once output exists the original
+  // physical key can no longer pass through natively.
+  if ACurrent = ioPassThrough then
+    Exit(ANext);
+  if ANext = ioPassThrough then
     Exit(ACurrent);
   if ACurrent = ioSuccess then
   begin

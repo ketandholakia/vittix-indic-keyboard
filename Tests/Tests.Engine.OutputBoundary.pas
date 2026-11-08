@@ -8,6 +8,7 @@ uses
   System.Classes,
   System.Generics.Collections,
   EngineState,
+  SendInputHelper,
   ShreeLipi.Engine,
   LayoutModel;
 
@@ -59,6 +60,16 @@ type
     procedure Postbase_BackspaceClearsTheClusterContext;
     [Test]
     procedure ResetPendingOnPassThrough_ClearsPendingWithoutEmitting;
+    [Test]
+    procedure EngineDisabled_ReturnsPassThrough;
+    [Test]
+    procedure NoActiveLayout_ReturnsPassThrough;
+    [Test]
+    procedure LiteralFallback_NoPending_PassesThrough_WithoutEmitting;
+    [Test]
+    procedure Tab_NoPending_ReturnsPassThrough;
+    [Test]
+    procedure Enter_NoPending_ReturnsPassThrough;
     [Test]
     procedure EngineDisable_DoesNotEmitThroughBoundary;
   end;
@@ -165,10 +176,13 @@ procedure TOutputBoundaryTests.Tab_NoPending_EmitsResetOnly;
 begin
   ProcessKeyChar('k');
   FEvents.Clear;
-  ProcessKeyChar(#9);
-
-  Assert.AreEqual(1, FEvents.Count);
-  Assert.AreEqual('R', FEvents[0], 'Tab must reset state through the boundary');
+  // Item 4: Tab with nothing pending passes through natively — and a
+  // pass-through emits NOTHING through the boundary. State (including the
+  // cluster context) is cleared directly.
+  Assert.AreEqual(ioPassThrough, ProcessKeyChar(#9));
+  Assert.AreEqual(0, FEvents.Count);
+  Assert.AreEqual('', gEngineState.CurrentCluster,
+    'Tab must still clear the cluster context');
 end;
 
 procedure TOutputBoundaryTests.Tab_WithPending_FlushesTextThenReset;
@@ -266,22 +280,22 @@ end;
 procedure TOutputBoundaryTests.Postbase_LiteralFallbackClearsTheClusterContext;
 begin
   ProcessKeyChar('k');   // K
-  ProcessKeyChar(' ');   // literal fallback (space)
+  ProcessKeyChar(' ');   // literal fallback: nothing pending -> pass-through, no events
   ProcessKeyChar('a');   // no longer contextual
 
-  Assert.AreEqual(4, FEvents.Count);
-  Assert.AreEqual('T:AVowel', FEvents[3],
+  Assert.AreEqual(2, FEvents.Count);
+  Assert.AreEqual('T:AVowel', FEvents[1],
     'a literal fallback must clear the cluster context');
 end;
 
 procedure TOutputBoundaryTests.Postbase_TabClearsTheClusterContext;
 begin
   ProcessKeyChar('k');   // K
-  ProcessKeyChar(#9);    // Tab
+  ProcessKeyChar(#9);    // Tab: nothing pending -> pass-through, no events
   ProcessKeyChar('a');   // no longer contextual
 
-  Assert.AreEqual(3, FEvents.Count);
-  Assert.AreEqual('T:AVowel', FEvents[2],
+  Assert.AreEqual(2, FEvents.Count);
+  Assert.AreEqual('T:AVowel', FEvents[1],
     'Tab must clear the cluster context');
 end;
 
@@ -312,6 +326,48 @@ begin
   Assert.AreEqual('', gEngineState.PendingPrebase, 'pending prebase must be cleared');
   Assert.IsFalse(gEngineState.PendingReph, 'pending reph must be cleared');
   Assert.AreEqual('', gEngineState.CurrentCluster, 'the cluster context must be cleared');
+end;
+
+// Item 4a: a disabled engine or a missing layout must NOT report success —
+// that made the hook consume the key with no output. Fail open instead.
+procedure TOutputBoundaryTests.EngineDisabled_ReturnsPassThrough;
+begin
+  SetEngineEnabled(False);
+  Assert.AreEqual(ioPassThrough, ProcessKeyChar('k'),
+    'a disabled engine must return pass-through, not success');
+end;
+
+procedure TOutputBoundaryTests.NoActiveLayout_ReturnsPassThrough;
+begin
+  SetActiveLayout(nil);
+  Assert.AreEqual(ioPassThrough, ProcessKeyChar('k'),
+    'a missing layout must return pass-through, not success');
+end;
+
+// Item 4b: with nothing pending and nothing emitted, the literal fallback must
+// not re-inject the character — the original key passes through natively.
+procedure TOutputBoundaryTests.LiteralFallback_NoPending_PassesThrough_WithoutEmitting;
+begin
+  Assert.AreEqual(ioPassThrough, ProcessKeyChar('x'),
+    'an unmapped key with no pending state must pass through');
+  Assert.AreEqual(0, FEvents.Count,
+    'pass-through must not emit anything through the boundary');
+end;
+
+procedure TOutputBoundaryTests.Tab_NoPending_ReturnsPassThrough;
+begin
+  Assert.AreEqual(ioPassThrough, ProcessKeyChar(#9),
+    'Tab with nothing pending must pass through natively');
+  Assert.AreEqual(0, FEvents.Count,
+    'a pass-through emits nothing through the boundary');
+end;
+
+procedure TOutputBoundaryTests.Enter_NoPending_ReturnsPassThrough;
+begin
+  Assert.AreEqual(ioPassThrough, ProcessKeyChar(#13),
+    'Enter with nothing pending must pass through natively');
+  Assert.AreEqual(0, FEvents.Count,
+    'a pass-through emits nothing through the boundary');
 end;
 
 procedure TOutputBoundaryTests.EngineDisable_DoesNotEmitThroughBoundary;
