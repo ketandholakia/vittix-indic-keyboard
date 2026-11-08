@@ -279,3 +279,44 @@ This retains the current VCL and Delphi architecture while enabling deterministi
 ## 14. Conclusion
 
 The repository has a viable foundation and recent safety improvements, but the primary keyboard behavior is still protected mostly by manual testing. The next development milestone should focus on correctness, testability, contract alignment, and packaging—not new editor or keyboard features. Detailed execution phases and acceptance gates are defined in `docs/DEVELOPMENT_PLAN.md`.
+## 15. Resolved — 2026-11-08 audit follow-up
+
+The eight follow-up items were fixed in separate commits, each preceded by
+failing DUnitX tests that use the existing injectable seams
+(`SetEngineOutputHandler`, `SetHookPolicyDependencies`, `SetSendInputHook`).
+The suite grew from 161 to 210 tests, all passing; all three projects build
+from a clean state.
+
+Architecture notes that changed since section 1 was written:
+
+- `SendInputHelper.TInjectionOutcome` gained `ioPassThrough`: the engine and
+  hook now distinguish "produced nothing, let the key through natively" from
+  "consumed with no output". Unmapped keys, Tab/Enter with no pending state,
+  disabled engine and missing layouts all pass through with zero SendInput
+  calls; reinjection happens only after a real flush.
+- The engine owns a `ResetPendingOnPassThrough` seam so the hook can cancel
+  pending prebase/reph/cluster state on navigation and foreground changes
+  without emitting; the hook additionally installs
+  `SetWinEventHook(EVENT_SYSTEM_FOREGROUND)` alongside the keyboard hook.
+- The engine tracks emitted UTF-16 unit lengths (`TEngineState.EmittedUnits`),
+  so Backspace deletes the whole last legacy glyph, not one code unit.
+- `KeyboardHook` maps VK codes through a cached fixed US layout
+  (`ProductionVKToUnicode`, exported for tests) and recognizes its own
+  SendInput output via the `VITTIX_SENDINPUT_TAG` in `dwExtraInfo`; foreign
+  injected input handling is configurable (`SetIgnoreInjectedInput`).
+- `TLayoutManager.Initialize` swaps a fully loaded list in only on success, so
+  a failed reload can never leave the engine pointing at freed layouts.
+- Contextual postbase lookup (PostbaseMap before DirectMap while a consonant
+  cluster is active) makes the shipped legacy layouts behave as authored;
+  unicode/phonetic layouts are unaffected (their maps are disjoint).
+- Layout JSON ships as UTF-8 without BOM (loader retains UTF-16 support), and
+  no longer contains the dead `sequences` section (validator warns; editor
+  shows a deprecation notice).
+
+Known limitations recorded rather than fixed: phonetic layouts still get no
+inherent-vowel/auto-halant engine support (validator warning added), the
+`behavior` metadata (`move_to_cluster_start`, `join_next`) is documented as
+engine-ignored future work, mouse clicks are not visible to a keyboard hook
+(so a caret move inside one window can still strand a stale matra until the
+next reset point), and `SetIgnoreInjectedInput` is not yet exposed in the
+settings UI.
