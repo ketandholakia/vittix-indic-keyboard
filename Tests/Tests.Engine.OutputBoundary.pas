@@ -44,6 +44,8 @@ type
     [Test]
     procedure LayoutSwitch_FlushesTextThenReset;
     [Test]
+    procedure LayoutSwitchToNil_FlushesPendingReph;
+    [Test]
     procedure EngineDisable_DoesNotEmitThroughBoundary;
   end;
 
@@ -187,6 +189,25 @@ begin
   Assert.AreEqual('T:I', FEvents[0], 'pending prebase must be flushed on layout switch');
   Assert.AreEqual('R', FEvents[1], 'layout switch must reset state through the boundary');
   Assert.AreEqual('', gEngineState.PendingPrebase);
+end;
+
+// Regression (reload use-after-free): the tray detaches the engine with
+// SetActiveLayout(nil) BEFORE the layout manager frees the old layout objects.
+// The flush must run while the old layout is still alive, and afterwards no
+// pending state may survive on a nil layout.
+procedure TOutputBoundaryTests.LayoutSwitchToNil_FlushesPendingReph;
+begin
+  ProcessKeyChar('k');   // K
+  ProcessKeyChar('R');   // pending reph (layout1)
+  Assert.IsTrue(gEngineState.PendingReph, 'setup: reph must be pending');
+  FEvents.Clear;
+  SetActiveLayout(nil);
+
+  Assert.AreEqual(2, FEvents.Count);
+  Assert.AreEqual('T:R', FEvents[0],
+    'pending reph must be flushed through the still-valid old layout before detach');
+  Assert.AreEqual('R', FEvents[1], 'detaching must reset state through the boundary');
+  Assert.IsFalse(gEngineState.PendingReph, 'no pending state may survive the detach');
 end;
 
 procedure TOutputBoundaryTests.EngineDisable_DoesNotEmitThroughBoundary;

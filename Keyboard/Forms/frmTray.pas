@@ -234,8 +234,17 @@ begin
   SetAllowedProcessNames(GAppSettings.AllowedProcessesText);
   if Trim(GAppSettings.AllowedProcessesText) = '' then
     AddStartupNotice('No allowed apps are configured. Interception stays disabled except for the primary target process.');
-  // Load layouts
-  gLayoutManager.Initialize(GAppSettings.LayoutsPath);
+  // Load layouts. Detach the engine first (no-op at startup, but kept symmetric
+  // with the reload paths) and guard the load: a failed load must degrade to
+  // "no layouts" (hook fails open) instead of an unhandled exception in
+  // FormCreate.
+  SetActiveLayout(nil);
+  try
+    gLayoutManager.Initialize(GAppSettings.LayoutsPath);
+  except
+    on E: Exception do
+      AddStartupNotice('Layouts could not be loaded: ' + E.Message);
+  end;
 
   // Notify user if some layouts failed to load. Show only a bounded preview so
   // a directory with many invalid files cannot produce an unusable dialog; the
@@ -796,7 +805,14 @@ begin
     except
       on E: Exception do
       begin
-        ApplyRuntimeSettings(PreviousSettings);
+        // Restoring must not raise out of the click handler either; if even the
+        // previous settings fail to apply, the balloon carries the reason.
+        try
+          ApplyRuntimeSettings(PreviousSettings);
+        except
+          on E2: Exception do
+            Notify('Restoring previous settings failed: ' + E2.Message);
+        end;
         MessageBox(
           Handle,
           PChar('Settings could not be applied:'#13#10 + E.Message),
@@ -902,6 +918,10 @@ begin
   GAppSettings.FallbackFont := Settings.FallbackFont;
   GAppSettings.PreviewFontSize := Settings.PreviewFontSize;
 
+  // Detach the engine before the manager frees the old layout objects, so the
+  // flush inside SetActiveLayout below can never run on a freed layout
+  // (same ordering rule as ReloadLayoutsClick).
+  SetActiveLayout(nil);
   gLayoutManager.Initialize(GAppSettings.LayoutsPath);
   if GAppSettings.DefaultLayoutID <> '' then
     gLayoutManager.SetActiveLayoutByID(GAppSettings.DefaultLayoutID);
@@ -953,25 +973,43 @@ procedure TfrmTray.ReloadLayoutsClick(Sender: TObject);
 begin
   // Layout JSON is hand-editable, so there has to be a way to pick up changes
   // without restarting the application.
-  gLayoutManager.Initialize(GAppSettings.LayoutsPath);
-  if GAppSettings.DefaultLayoutID <> '' then
-    gLayoutManager.SetActiveLayoutByID(GAppSettings.DefaultLayoutID);
+  //
+  // The engine is detached BEFORE the manager reloads: SetActiveLayout(nil)
+  // flushes any pending prebase/reph through the still-valid old layout and
+  // then drops the engine's pointer, so nothing below can flush through a
+  // freed layout object. The whole reload is guarded — a failure is reported
+  // as a balloon, never raised out of the click handler.
+  try
+    SetActiveLayout(nil);
 
-  SetActiveLayout(gLayoutManager.ActiveLayout);
-  ResetEngineState;
+    gLayoutManager.Initialize(GAppSettings.LayoutsPath);
+    if GAppSettings.DefaultLayoutID <> '' then
+      gLayoutManager.SetActiveLayoutByID(GAppSettings.DefaultLayoutID);
 
-  UpdateLayoutHeader;
-  InvalidateTrayMenus;
-  UpdateTrayIcon;
+    SetActiveLayout(gLayoutManager.ActiveLayout);
+    ResetEngineState;
 
-  if Assigned(FOSK) then
-    FOSK.LoadLayout(gLayoutManager.ActiveLayout);
+    UpdateLayoutHeader;
+    InvalidateTrayMenus;
+    UpdateTrayIcon;
 
-  if gLayoutManager.LoadErrors.Count > 0 then
-    Notify(Format('Reloaded %d layout(s), %d failed. See the log for details.',
-      [gLayoutManager.LayoutCount, gLayoutManager.LoadErrors.Count]))
-  else
-    Notify(Format('Reloaded %d layout(s).', [gLayoutManager.LayoutCount]));
+    if Assigned(FOSK) then
+      FOSK.LoadLayout(gLayoutManager.ActiveLayout);
+
+    if gLayoutManager.LoadErrors.Count > 0 then
+      Notify(Format('Reloaded %d layout(s), %d failed. See the log for details.',
+        [gLayoutManager.LayoutCount, gLayoutManager.LoadErrors.Count]))
+    else
+      Notify(Format('Reloaded %d layout(s).', [gLayoutManager.LayoutCount]));
+  except
+    on E: Exception do
+    begin
+      // The manager keeps the previous layout set on a failed reload, so the
+      // engine can be re-attached to it and typing continues unaffected.
+      SetActiveLayout(gLayoutManager.ActiveLayout);
+      Notify('Reloading layouts failed: ' + E.Message);
+    end;
+  end;
 end;
 
 procedure TfrmTray.OpenLogFolderClick(Sender: TObject);
