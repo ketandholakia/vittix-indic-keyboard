@@ -72,6 +72,12 @@ procedure SetHookPolicyDependencies(
 // window station; the WinEvent callback delegates to it.
 procedure HandleForegroundChanged;
 
+// The production VK-to-character conversion, mapping through a fixed US
+// layout (item 5). Exported so tests can pin the deterministic mapping; the
+// hook policy still overrides it via THookPolicyDependencies.VKToUnicode.
+function ProductionVKToUnicode(VKCode: DWORD; ScanCode: DWORD;
+  const Modifiers: TKeyModifierState): string;
+
 // The consume/pass-through decision for one key event, kept separate from
 // CallNextHookEx so it can be unit tested (M2.2). Returns True when the event
 // has been consumed (the hook reports it handled); False when it must be
@@ -167,7 +173,23 @@ begin
   Result.CtrlDown := Down(VK_CONTROL) or Down(VK_LCONTROL) or Down(VK_RCONTROL);
   Result.AltDown := Down(VK_MENU) or Down(VK_LMENU) or Down(VK_RMENU);
   Result.WinDown := Down(VK_LWIN) or Down(VK_RWIN);
-  Result.CapsLockOn := GetKeyState(VK_CAPITAL) > 0;
+  // The toggle bit (bit 0) is the Caps Lock state; the high bit only says the
+  // key is currently held down and made the old "> 0" check wrong while the
+  // key was pressed.
+  Result.CapsLockOn := (GetKeyState(VK_CAPITAL) and 1) <> 0;
+end;
+
+var
+  // Cached fixed US layout (item 5): mapping must not depend on the user's
+  // default input language. Loaded once, without activating it for this
+  // thread or notifying the shell; 0 on failure (fail-open fallback below).
+  gUSLayoutHKL: HKL = 0;
+
+function GetUSLayoutHKL: HKL;
+begin
+  if gUSLayoutHKL = 0 then
+    gUSLayoutHKL := LoadKeyboardLayout('00000409', KLF_NOTELLSHELL);
+  Result := gUSLayoutHKL;
 end;
 
 function ProductionVKToUnicode(VKCode: DWORD; ScanCode: DWORD;
@@ -176,6 +198,7 @@ var
   KeyboardState: TKeyboardState;
   WideBuf: array[0..3] of WideChar;
   Len: Integer;
+  LayoutHKL: HKL;
 begin
   Result := '';
 
@@ -192,21 +215,24 @@ begin
   if Modifiers.CapsLockOn then
     KeyboardState[VK_CAPITAL] := 1;
 
-  Len := ToUnicode(VKCode, ScanCode, KeyboardState, WideBuf, Length(WideBuf), 0);
+  // Map through the fixed US layout so results are deterministic regardless
+  // of the user's default input language. Flag $4 leaves the dead-key state
+  // untouched, so no throwaway second call is needed.
+  LayoutHKL := GetUSLayoutHKL;
+  if LayoutHKL <> 0 then
+    Len := ToUnicodeEx(VKCode, ScanCode, KeyboardState, WideBuf,
+      Length(WideBuf), $4, LayoutHKL)
+  else
+    Len := ToUnicode(VKCode, ScanCode, KeyboardState, WideBuf,
+      Length(WideBuf), $4);
 
   // Handle surrogate pairs (Len can be 2 for SMP characters)
   if Len = 1 then
     Result := WideBuf[0]
   else if Len > 1 then
-    SetString(Result, PWideChar(@WideBuf[0]), Len)
-  else if Len < 0 then
-  begin
-    // This key is a dead key. ToUnicode mutated this thread dead-key residue,
-    // which would corrupt the NEXT unrelated key translation. Issue one
-    // throwaway call to clear the residue. The dead key itself is passed
-    // through (Result = '').
-    ToUnicode(VKCode, ScanCode, KeyboardState, WideBuf, Length(WideBuf), 0);
-  end;
+    SetString(Result, PWideChar(@WideBuf[0]), Len);
+  // Len < 0: this key is a dead key. The dead key itself is passed through
+  // (Result = '') and its residue was not modified (flag $4).
 end;
 
 function ProductionInjectionHealthy: Boolean;

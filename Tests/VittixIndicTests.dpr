@@ -38,6 +38,7 @@ uses
   Tests.Utils.SendInputHelper in 'Tests.Utils.SendInputHelper.pas',
   Tests.Keyboard.HookPolicy in 'Tests.Keyboard.HookPolicy.pas',
   Tests.Keyboard.PassThroughReset in 'Tests.Keyboard.PassThroughReset.pas',
+  Tests.Keyboard.VKMapping in 'Tests.Keyboard.VKMapping.pas',
   Tests.Keyboard.AppSettings in 'Tests.Keyboard.AppSettings.pas',
   Tests.Engine.State in 'Tests.Engine.State.pas',
   Tests.Keyboard.Hotkeys in 'Tests.Keyboard.Hotkeys.pas',
