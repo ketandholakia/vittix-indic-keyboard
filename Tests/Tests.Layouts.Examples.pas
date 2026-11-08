@@ -64,10 +64,12 @@ begin
   GEvents := FEvents;
   SetEngineOutputHandler(CaptureAction);
 
-  FLayouts[0] := LoadLayoutFromFile('D:\ketan\github\vittix-indic-keyboard\layouts\gujarati\gujarati_phonetic.json');
-  FLayouts[1] := LoadLayoutFromFile('D:\ketan\github\vittix-indic-keyboard\layouts\gujarati\gujarati_inscript.json');
-  FLayouts[2] := LoadLayoutFromFile('D:\ketan\github\vittix-indic-keyboard\layouts\hindi\hindi_phonetic.json');
-  FLayouts[3] := LoadLayoutFromFile('D:\ketan\github\vittix-indic-keyboard\layouts\hindi\hindi_inscript.json');
+  // Relative to the repository root, matching the other layout test fixtures;
+  // an absolute developer-machine path breaks every other checkout.
+  FLayouts[0] := LoadLayoutFromFile('layouts\gujarati\gujarati_phonetic.json');
+  FLayouts[1] := LoadLayoutFromFile('layouts\gujarati\gujarati_inscript.json');
+  FLayouts[2] := LoadLayoutFromFile('layouts\hindi\hindi_phonetic.json');
+  FLayouts[3] := LoadLayoutFromFile('layouts\hindi\hindi_inscript.json');
   ResetEngineState;
   FEvents.Clear;
 end;
