@@ -100,3 +100,8 @@ MEMORY.md
 
 # Scratch space used for local checks and one-off build scripts
 tmp/
+
+# Build/test artifacts that must never be committed (audit item 8)
+*.rar
+*.log
+Tests/*.res

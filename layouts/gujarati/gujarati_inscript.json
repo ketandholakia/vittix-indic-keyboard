@@ -1,4 +1,4 @@
-﻿{
+{
   "layout_id": "gujarati_inscript",
   "name": "Gujarati InScript",
   "script": "Gujarati",
@@ -80,6 +80,5 @@
   },
   "prebase": {},
   "postbase": {},
-  "sequences": {},
   "properties": {}
 }

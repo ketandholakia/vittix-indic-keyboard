@@ -30,7 +30,14 @@ type
     Key: string;
     Glyph: string;
     MapType: string; // e.g. direct, prebase, postbase, modifier, sequence, extra
-    Metadata: TDictionary<string, string>; // extensible
+    // Extensible metadata. Known values the ENGINE DOES NOT EXECUTE yet:
+    //   - "behavior": "move_to_cluster_start" (reph ra must be emitted before
+    //     the consonant it attaches to) and "behavior": "join_next" (halant
+    //     joins the following consonant). The current engine emits reph before
+    //     the next consonant implicitly and emits the halant glyph verbatim,
+    //     so these flags are preserved as authoring metadata only. Implementing
+    //     them is future work; see docs/CODEBASE_ANALYSIS.md.
+    Metadata: TDictionary<string, string>;
     procedure InitMetadata;
     procedure FreeMetadata;
   end;

@@ -233,7 +233,7 @@ object frmEditorMain: TfrmEditorMain
             Left = 0
             Top = 0
             Width = 612
-            Height = 40
+            Height = 58
             Align = alTop
             BevelOuter = bvNone
             Color = 16316664
@@ -250,12 +250,23 @@ object frmEditorMain: TfrmEditorMain
               TextHint = 'Search sequences...'
               OnChange = edtSearchSequencesChange
             end
+            object lblSequencesNotice: TLabel
+              Left = 12
+              Top = 37
+              Width = 590
+              Height = 15
+              AutoSize = False
+              Caption =
+                'Deprecated: the engine does not execute multi-key sequences. Use halant-based conjunct input instead (e.g. k \ s for ksha).'
+              ParentColor = False
+              Transparent = True
+            end
           end
           object grdSequences: TStringGrid
             Left = 0
-            Top = 40
+            Top = 58
             Width = 612
-            Height = 611
+            Height = 593
             Align = alClient
             ColCount = 2
             DefaultColWidth = 180

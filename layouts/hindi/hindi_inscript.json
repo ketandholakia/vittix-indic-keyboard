@@ -1,4 +1,4 @@
-﻿{
+{
   "layout_id": "hindi_inscript",
   "name": "Hindi InScript",
   "script": "Devanagari",
@@ -80,6 +80,5 @@
   },
   "prebase": {},
   "postbase": {},
-  "sequences": {},
   "properties": {}
 }
