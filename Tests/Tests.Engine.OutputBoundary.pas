@@ -58,6 +58,8 @@ type
     [Test]
     procedure Postbase_BackspaceClearsTheClusterContext;
     [Test]
+    procedure ResetPendingOnPassThrough_ClearsPendingWithoutEmitting;
+    [Test]
     procedure EngineDisable_DoesNotEmitThroughBoundary;
   end;
 
@@ -293,6 +295,23 @@ begin
   Assert.AreEqual('B', FEvents[1]);
   Assert.AreEqual('T:AVowel', FEvents[3],
     'a real backspace must clear the cluster context');
+end;
+
+// Item 3: keys that pass through the hook (navigation, shortcuts, foreground
+// changes) must clear pending state WITHOUT emitting anything, so a stale
+// matra/reph can never leak into unrelated input.
+procedure TOutputBoundaryTests.ResetPendingOnPassThrough_ClearsPendingWithoutEmitting;
+begin
+  ProcessKeyChar('k');   // K
+  ProcessKeyChar('R');   // pending reph
+  ProcessKeyChar('i');   // pending prebase (reph stays pending behind it)
+  FEvents.Clear;
+  ResetPendingOnPassThrough;
+
+  Assert.AreEqual(0, FEvents.Count, 'the reset must not emit anything');
+  Assert.AreEqual('', gEngineState.PendingPrebase, 'pending prebase must be cleared');
+  Assert.IsFalse(gEngineState.PendingReph, 'pending reph must be cleared');
+  Assert.AreEqual('', gEngineState.CurrentCluster, 'the cluster context must be cleared');
 end;
 
 procedure TOutputBoundaryTests.EngineDisable_DoesNotEmitThroughBoundary;

@@ -37,6 +37,7 @@ uses
   Tests.Engine.InjectionOutcome in 'Tests.Engine.InjectionOutcome.pas',
   Tests.Utils.SendInputHelper in 'Tests.Utils.SendInputHelper.pas',
   Tests.Keyboard.HookPolicy in 'Tests.Keyboard.HookPolicy.pas',
+  Tests.Keyboard.PassThroughReset in 'Tests.Keyboard.PassThroughReset.pas',
   Tests.Keyboard.AppSettings in 'Tests.Keyboard.AppSettings.pas',
   Tests.Engine.State in 'Tests.Engine.State.pas',
   Tests.Keyboard.Hotkeys in 'Tests.Keyboard.Hotkeys.pas',

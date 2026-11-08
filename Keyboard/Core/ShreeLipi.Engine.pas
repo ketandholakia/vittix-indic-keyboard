@@ -29,6 +29,7 @@ type
 
 procedure SetActiveLayout(ALayout: TKeyboardLayout);
 function ProcessKeyChar(const AKey: string): TInjectionOutcome;
+procedure ResetPendingOnPassThrough;
 procedure SetEngineOutputHandler(AHandler: TEngineOutputHandler);
 
 implementation
@@ -111,6 +112,19 @@ begin
   SetEngineHasActiveLayout(ALayout <> nil);
   EmitOutput(eoResetState, '');
   ResetInjectionStatus;
+end;
+
+{ --------------------------------------------------
+  Item 3: keys that pass through the hook (navigation keys, application
+  shortcuts) and foreground-window changes clear ALL consumed-but-unemitted
+  state without emitting anything, so a stale matra/reph can never leak into
+  the next field. The engine owns this reset (rather than the hook clearing
+  EngineState directly) because the engine owns whatever auxiliary state
+  belongs to pending output.
+-------------------------------------------------- }
+procedure ResetPendingOnPassThrough;
+begin
+  ResetEngineState;
 end;
 
 { --------------------------------------------------

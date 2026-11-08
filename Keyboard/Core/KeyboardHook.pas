@@ -9,6 +9,7 @@ uses
   System.StrUtils,
   System.SysUtils,
   EngineState,
+  ShreeLipi.Engine,
   SendInputHelper,
   Logger;
 
@@ -65,6 +66,11 @@ procedure SetTargetProcessName(const AProcessName: string);
 procedure SetAllowedProcessNames(const AProcessNames: string);
 procedure SetHookPolicyDependencies(
   const ADependencies: THookPolicyDependencies);
+// The EVENT_SYSTEM_FOREGROUND sink: a foreground-window change cancels the
+// engine's pending state so a stale matra never lands in the new field.
+// Exposed as a plain procedure so tests can exercise it without a live
+// window station; the WinEvent callback delegates to it.
+procedure HandleForegroundChanged;
 
 // The consume/pass-through decision for one key event, kept separate from
 // CallNextHookEx so it can be unit tested (M2.2). Returns True when the event
@@ -86,6 +92,7 @@ type
 
 var
   KBHook: HHOOK = 0;
+  ForegroundEventHook: THandle = 0;
   KeyHandler: TOnKeyChar = nil;
   TargetProcessName: string = '';
   AllowedProcessNames: string = '';
@@ -316,22 +323,37 @@ begin
     Exit;
 
   if not AKey.IsKeyDown then
-    Exit;
+    Exit;   // key-up: no reset. Its own key-down was consumed a moment ago and
+            // the pending matra belongs to the typing flow that continues with
+            // the NEXT key; resetting here would lose it.
 
-  // Ignore modifier & control keys
+  // Ignore modifier & control keys. Plain modifier presses (Shift/Ctrl/Alt/
+  // Win/Caps alone) must NOT reset pending state: Shift happens between every
+  // capital keystroke and would kill the cluster context mid-word.
   case AKey.VKCode of
     VK_SHIFT, VK_LSHIFT, VK_RSHIFT,
     VK_CONTROL, VK_LCONTROL, VK_RCONTROL,
     VK_MENU, VK_LMENU, VK_RMENU,
-    VK_CAPITAL, VK_ESCAPE:
+    VK_CAPITAL:
       Exit;
+    VK_ESCAPE:
+      begin
+        // Esc cancels the current input flow (menus, dialogs); the pending
+        // matra/reph belongs to it and must not leak anywhere else.
+        ResetPendingOnPassThrough;
+        Exit;
+      end;
   end;
 
   Modifiers := CurrentModifierState;
 
-  // Let Ctrl/Alt/Win combos (app shortcuts) pass through untouched.
+  // Let Ctrl/Alt/Win combos (app shortcuts) pass through untouched. The
+  // shortcut ends the typing flow: cancel pending state so it cannot leak.
   if IsModifierComboActive(Modifiers) then
+  begin
+    ResetPendingOnPassThrough;
     Exit;
+  end;
 
   if (AKey.VKCode = VK_TAB) or (AKey.VKCode = VK_RETURN) then
   begin
@@ -363,10 +385,16 @@ begin
     end;
   end;
 
-  // Convert VK to Unicode character
+  // Convert VK to Unicode character. An empty conversion is a navigation or
+  // non-text key (arrows, Home/End, Delete, F-keys, dead keys): it moves the
+  // caret or leaves the flow, so pending state is cancelled rather than
+  // emitted into wherever the caret lands next.
   Ch := VKToChar(AKey.VKCode, AKey.ScanCode, Modifiers);
   if Ch = '' then
+  begin
+    ResetPendingOnPassThrough;
     Exit;
+  end;
 
   // Pass to engine
   if Assigned(KeyHandler) then
@@ -444,6 +472,37 @@ begin
   Policy := ADependencies;
 end;
 
+procedure HandleForegroundChanged;
+begin
+  // The typing flow does not survive a foreground switch: whatever was
+  // consumed but not yet emitted belongs to the old field, so cancel it
+  // without emitting. ResetPendingOnPassThrough never emits and touches no
+  // external state, so this is safe to run inside the WinEvent callback.
+  try
+    ResetPendingOnPassThrough;
+  except
+    on E: Exception do
+      LogError('Foreground-change reset failed: ' + E.Message);
+  end;
+end;
+
+// WinEvent callback. Both hooks are installed on the main thread, so this
+// serializes with the keyboard hook callback; the work below is a state
+// clear with no I/O or allocation, keeping the callback fast.
+procedure ForegroundWinEventProc(
+  hWinEventHook: THandle;
+  Event: DWORD;
+  hwnd: HWND;
+  idObject: LONG;
+  idChild: LONG;
+  idEventThread: DWORD;
+  dwmsEventTime: DWORD
+); stdcall;
+begin
+  if Event = EVENT_SYSTEM_FOREGROUND then
+    HandleForegroundChanged;
+end;
+
 procedure InstallKeyboardHook;
 begin
   if KBHook <> 0 then
@@ -462,10 +521,31 @@ begin
     LogError('Keyboard hook installation failed');
     RaiseLastOSError;
   end;
+
+  // Foreground-window changes cancel pending engine state (item 3). Installed
+  // and removed together with the keyboard hook; failures are logged, not
+  // fatal — the stale-state reset is an extra guard, not a safety requirement.
+  ForegroundEventHook := SetWinEventHook(
+    EVENT_SYSTEM_FOREGROUND,
+    EVENT_SYSTEM_FOREGROUND,
+    0,
+    @ForegroundWinEventProc,
+    0,
+    0,
+    WINEVENT_OUTOFCONTEXT
+  );
+  if ForegroundEventHook = 0 then
+    LogError('Foreground event hook installation failed');
 end;
 
 procedure RemoveKeyboardHook;
 begin
+  if ForegroundEventHook <> 0 then
+  begin
+    UnhookWinEvent(ForegroundEventHook);
+    ForegroundEventHook := 0;
+  end;
+
   if KBHook <> 0 then
   begin
     LogInfo('Removing keyboard hook');
