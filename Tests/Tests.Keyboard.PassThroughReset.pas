@@ -115,6 +115,7 @@ end;
 
 function MakeKey(VK: DWORD; AKeyDown: Boolean): TKeyContext;
 begin
+  Result := Default(TKeyContext);
   Result.VKCode := VK;
   Result.ScanCode := 0;
   Result.IsKeyDown := AKeyDown;

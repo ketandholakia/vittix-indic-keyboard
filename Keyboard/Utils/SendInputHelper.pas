@@ -7,6 +7,14 @@ uses
   System.SysUtils,
   Logger;
 
+const
+  // Item 7: magic value written to INPUT.ki.dwExtraInfo for EVERY event this
+  // helper injects. The keyboard hook ignores only events carrying it, so our
+  // own output can never re-enter the translation pipeline, while injected
+  // input from other tools (on-screen keyboards, remote desktop) stays
+  // configurable (KeyboardHook.SetIgnoreInjectedInput).
+  VITTIX_SENDINPUT_TAG: ULONG_PTR = ULONG_PTR($564B4559); // 'VKEY'
+
 type
   // Semantic result for one SendInput batch.  Callers deliberately receive no
   // record counts: they only need to know whether it is safe to pass through
@@ -161,6 +169,7 @@ begin
   Inp.Itype := INPUT_KEYBOARD;
   Inp.ki.wScan := AScanCode;
   Inp.ki.dwFlags := AFlags or KEYEVENTF_UNICODE;
+  Inp.ki.dwExtraInfo := VITTIX_SENDINPUT_TAG;
   Result := DoSendInput(1, @Inp, SizeOf(Inp));
 end;
 
@@ -180,12 +189,14 @@ begin
   Inputs[0].Itype := INPUT_KEYBOARD;
   Inputs[0].ki.wScan := Ord(AChar);
   Inputs[0].ki.dwFlags := KEYEVENTF_UNICODE;
+  Inputs[0].ki.dwExtraInfo := VITTIX_SENDINPUT_TAG;
 
   // key up
   ZeroMemory(@Inputs[1], SizeOf(TInput));
   Inputs[1].Itype := INPUT_KEYBOARD;
   Inputs[1].ki.wScan := Ord(AChar);
   Inputs[1].ki.dwFlags := KEYEVENTF_UNICODE or KEYEVENTF_KEYUP;
+  Inputs[1].ki.dwExtraInfo := VITTIX_SENDINPUT_TAG;
 
   Result := SubmitInputs(Inputs, 'SendUnicodeChar');
 end;
@@ -213,11 +224,13 @@ begin
     Inputs[I * 2].Itype := INPUT_KEYBOARD;
     Inputs[I * 2].ki.wScan := Ord(S[I + 1]);
     Inputs[I * 2].ki.dwFlags := KEYEVENTF_UNICODE;
+    Inputs[I * 2].ki.dwExtraInfo := VITTIX_SENDINPUT_TAG;
 
     ZeroMemory(@Inputs[I * 2 + 1], SizeOf(TInput));
     Inputs[I * 2 + 1].Itype := INPUT_KEYBOARD;
     Inputs[I * 2 + 1].ki.wScan := Ord(S[I + 1]);
     Inputs[I * 2 + 1].ki.dwFlags := KEYEVENTF_UNICODE or KEYEVENTF_KEYUP;
+    Inputs[I * 2 + 1].ki.dwExtraInfo := VITTIX_SENDINPUT_TAG;
   end;
 
   Result := SubmitInputs(Inputs, 'SendUnicodeText');
@@ -243,11 +256,13 @@ begin
     ZeroMemory(@Inputs[I * 2], SizeOf(TInput));
     Inputs[I * 2].Itype := INPUT_KEYBOARD;
     Inputs[I * 2].ki.wVk := VK_BACK;
+    Inputs[I * 2].ki.dwExtraInfo := VITTIX_SENDINPUT_TAG;
 
     ZeroMemory(@Inputs[I * 2 + 1], SizeOf(TInput));
     Inputs[I * 2 + 1].Itype := INPUT_KEYBOARD;
     Inputs[I * 2 + 1].ki.wVk := VK_BACK;
     Inputs[I * 2 + 1].ki.dwFlags := KEYEVENTF_KEYUP;
+    Inputs[I * 2 + 1].ki.dwExtraInfo := VITTIX_SENDINPUT_TAG;
   end;
 
   Result := SubmitInputs(Inputs, 'SendBackspace');
@@ -265,11 +280,13 @@ begin
   ZeroMemory(@Inputs[0], SizeOf(TInput));
   Inputs[0].Itype := INPUT_KEYBOARD;
   Inputs[0].ki.wVk := VK;
+  Inputs[0].ki.dwExtraInfo := VITTIX_SENDINPUT_TAG;
 
   ZeroMemory(@Inputs[1], SizeOf(TInput));
   Inputs[1].Itype := INPUT_KEYBOARD;
   Inputs[1].ki.wVk := VK;
   Inputs[1].ki.dwFlags := KEYEVENTF_KEYUP;
+  Inputs[1].ki.dwExtraInfo := VITTIX_SENDINPUT_TAG;
 
   Result := SubmitInputs(Inputs, 'SendVirtualKey');
 end;

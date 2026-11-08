@@ -43,6 +43,10 @@ type
     [Test]
     procedure InjectedEvent_PassesThrough_EvenWhenEligible;
     [Test]
+    procedure OwnTaggedEvent_AlwaysIgnored;
+    [Test]
+    procedure OtherInjectedInput_TranslatedWhenConfigured;
+    [Test]
     procedure NonKeyDown_PassesThrough;
     [Test]
     procedure ModifierVirtualKeys_PassThrough;
@@ -108,12 +112,13 @@ begin
 end;
 
 function MakeKey(VK: DWORD; AKeyDown: Boolean;
-  AInjected: Boolean = False): TKeyContext;
+  AInjected: Boolean = False; AIsOurs: Boolean = False): TKeyContext;
 begin
   Result.VKCode := VK;
   Result.ScanCode := 0;
   Result.IsKeyDown := AKeyDown;
   Result.IsInjected := AInjected;
+  Result.IsOurs := AIsOurs;
 end;
 
 function THookPolicyTests.CaptureKey(const AChar: string): TInjectionOutcome;
@@ -213,6 +218,35 @@ begin
   Assert.IsFalse(HandleKeyEvent(MakeKey($41, True, True)),
     'injected events must never be reprocessed');
   Assert.AreEqual(0, FKeys.Count);
+end;
+
+// Item 7: events carrying our own dwExtraInfo tag are ignored regardless of
+// configuration — reprocessing them would create an infinite loop.
+procedure THookPolicyTests.OwnTaggedEvent_AlwaysIgnored;
+begin
+  SetIgnoreInjectedInput(False);
+  try
+    Assert.IsFalse(HandleKeyEvent(MakeKey($41, True, True, True)),
+      'our own tagged events must never be reprocessed');
+    Assert.AreEqual(0, FKeys.Count);
+  finally
+    SetIgnoreInjectedInput(True);
+  end;
+end;
+
+// Item 7: with the configurable ignore switched off, injected input from other
+// tools (on-screen keyboards, remote desktop) is translated like real input.
+procedure THookPolicyTests.OtherInjectedInput_TranslatedWhenConfigured;
+begin
+  SetIgnoreInjectedInput(False);
+  try
+    Assert.IsTrue(HandleKeyEvent(MakeKey($41, True, True)),
+      'foreign injected input must be translated when configured');
+    Assert.AreEqual(1, FKeys.Count);
+    Assert.AreEqual('x', FKeys[0]);
+  finally
+    SetIgnoreInjectedInput(True);
+  end;
 end;
 
 procedure THookPolicyTests.NonKeyDown_PassesThrough;
@@ -340,7 +374,42 @@ begin
   Assert.AreEqual(1, FKeys.Count);
 end;
 
+type
+  // Item 7: the production foreground-process lookup uses
+  // QueryFullProcessImageName with a per-foreground-HWND/PID cache that the
+  // WinEvent hook invalidates. Only the observable contract is asserted here:
+  // the name stays stable across cached calls and remains correct right after
+  // an explicit invalidation. No real hook is installed.
+  [TestFixture]
+  TForegroundCacheTests = class
+  public
+    [Test]
+    procedure ForegroundName_StableAcrossCalls_AndValidAfterInvalidation;
+  end;
+
+procedure TForegroundCacheTests.ForegroundName_StableAcrossCalls_AndValidAfterInvalidation;
+var
+  FirstName, SecondName, AfterInvalidate: string;
+begin
+  if GetForegroundWindow = 0 then
+  begin
+    Assert.Pass('no foreground window on this session');
+    Exit;
+  end;
+
+  FirstName := ProductionForegroundProcessName;
+  SecondName := ProductionForegroundProcessName;   // served from the cache
+  Assert.AreEqual(FirstName, SecondName,
+    'repeated lookups for the same foreground window must agree');
+
+  InvalidateForegroundCache;
+  AfterInvalidate := ProductionForegroundProcessName;
+  Assert.AreEqual(FirstName, AfterInvalidate,
+    'after invalidation the same window must resolve to the same name');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(THookPolicyTests);
+  TDUnitX.RegisterTestFixture(TForegroundCacheTests);
 
 end.

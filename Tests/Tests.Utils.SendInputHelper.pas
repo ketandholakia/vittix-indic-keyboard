@@ -41,21 +41,33 @@ type
     procedure LaterSuccess_DoesNotReArmAfterFailure;
     [Test]
     procedure ExplicitReset_RestoresInjection;
+    [Test]
+    procedure AllEvents_CarryTheOwnInjectionTag;
   end;
 
 implementation
 
+type
+  TInputArray = array[0..1023] of TInput;
+  PInputArray = ^TInputArray;
+
 var
   GLastRequested: Integer;
   GReturn: UINT;
+  GAllTagged: Boolean;
 
 function FakeSendInput(
   cInputs: UINT;
   pInputs: PInput;
   cbSize: Integer
 ): UINT; stdcall;
+var
+  I: Integer;
 begin
   GLastRequested := Integer(cInputs);
+  for I := 0 to Integer(cInputs) - 1 do
+    if PInputArray(pInputs)^[I].ki.dwExtraInfo <> VITTIX_SENDINPUT_TAG then
+      GAllTagged := False;
   Result := GReturn;
 end;
 
@@ -63,6 +75,7 @@ procedure TSendInputHelperTests.Setup;
 begin
   GLastRequested := -1;
   GReturn := 0;
+  GAllTagged := True;
   ResetInjectionStatus;
   SetSendInputHook(FakeSendInput);
 end;
@@ -157,6 +170,18 @@ begin
 
   ResetInjectionStatus;
   Assert.IsTrue(InjectionOK, 'only an explicit reset re-arms injection');
+end;
+
+// Item 7: every INPUT record this helper submits must carry the magic
+// dwExtraInfo tag so the keyboard hook can tell our own injections apart from
+// foreign injected input and never reprocess them.
+procedure TSendInputHelperTests.AllEvents_CarryTheOwnInjectionTag;
+begin
+  GReturn := 6;
+  SendUnicodeText('ABC');   // 6 records
+  SendVirtualKey(VK_TAB);   // 2 records
+  SendBackspace(2);         // 4 records
+  Assert.IsTrue(GAllTagged, 'every submitted INPUT record must carry the tag');
 end;
 
 initialization

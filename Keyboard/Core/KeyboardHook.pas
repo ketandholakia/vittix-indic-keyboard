@@ -5,7 +5,6 @@ interface
 uses
   Winapi.Windows,
   Winapi.Messages,
-  Winapi.PsAPI,
   System.StrUtils,
   System.SysUtils,
   EngineState,
@@ -57,6 +56,7 @@ type
     ScanCode: DWORD;
     IsKeyDown: Boolean;    // WM_KEYDOWN or WM_SYSKEYDOWN
     IsInjected: Boolean;   // LLKHF_INJECTED
+    IsOurs: Boolean;       // carries VITTIX_SENDINPUT_TAG (our own output)
   end;
 
 procedure InstallKeyboardHook;
@@ -66,6 +66,11 @@ procedure SetTargetProcessName(const AProcessName: string);
 procedure SetAllowedProcessNames(const AProcessNames: string);
 procedure SetHookPolicyDependencies(
   const ADependencies: THookPolicyDependencies);
+// Item 7: whether events injected by OTHER tools (on-screen keyboards, remote
+// desktop) are translated. Default True = the historical behavior (all
+// injected input passes through). Our own tagged events are always ignored,
+// regardless of this setting.
+procedure SetIgnoreInjectedInput(AValue: Boolean);
 // The EVENT_SYSTEM_FOREGROUND sink: a foreground-window change cancels the
 // engine's pending state so a stale matra never lands in the new field.
 // Exposed as a plain procedure so tests can exercise it without a live
@@ -77,6 +82,11 @@ procedure HandleForegroundChanged;
 // hook policy still overrides it via THookPolicyDependencies.VKToUnicode.
 function ProductionVKToUnicode(VKCode: DWORD; ScanCode: DWORD;
   const Modifiers: TKeyModifierState): string;
+
+// Item 7 production dependencies, exported for tests only; production callers
+// go through THookPolicyDependencies.GetForegroundProcessName.
+function ProductionForegroundProcessName: string;
+procedure InvalidateForegroundCache;
 
 // The consume/pass-through decision for one key event, kept separate from
 // CallNextHookEx so it can be unit tested (M2.2). Returns True when the event
@@ -103,6 +113,10 @@ var
   TargetProcessName: string = '';
   AllowedProcessNames: string = '';
   Policy: THookPolicyDependencies;
+  // Item 7: default True preserves the historical fail-open behavior (ignore
+  // ALL injected input). Flipping it lets other tools' injected keys reach the
+  // translation pipeline; our own tagged events are always excluded.
+  IgnoreInjectedInput: Boolean = True;
 
 const
   PROCESS_QUERY_LIMITED_INFORMATION = $1000;
@@ -111,35 +125,73 @@ const
   // SendInput/keybd_event (ours or anyone else's) rather than real hardware.
   LLKHF_INJECTED = $10;
 
+{ Item 7: kernel32's QueryFullProcessImageName is not declared in the RTL. It
+  works with PROCESS_QUERY_LIMITED_INFORMATION and resolves image paths across
+  32/64-bit process boundaries, unlike GetModuleFileNameEx. }
+function QueryFullProcessImageNameW(
+  ProcessHandle: THandle;
+  dwFlags: DWORD;
+  lpExeName: PChar;
+  var lpdwSize: DWORD
+): BOOL; stdcall; external kernel32 name 'QueryFullProcessImageNameW';
+
 { --------------------------------------------------
   Production dependency implementations (Win32-backed)
 -------------------------------------------------- }
+
+var
+  // Item 7: per-keystroke cache of the foreground process name. The LL hook
+  // runs for every key event; OpenProcess + a full image query per keystroke
+  // is measurable. Same foreground HWND/PID -> same name, so the pair is the
+  // cache key and the EVENT_SYSTEM_FOREGROUND hook (which fires exactly when
+  // the foreground window changes) invalidates it.
+  CachedForegroundWnd: HWND = 0;
+  CachedForegroundPid: DWORD = 0;
+  CachedForegroundName: string = '';
+
+procedure InvalidateForegroundCache;
+begin
+  CachedForegroundWnd := 0;
+  CachedForegroundPid := 0;
+  CachedForegroundName := '';
+end;
 
 function ProductionForegroundProcessName: string;
 var
   ForegroundWnd: HWND;
   ProcessId: DWORD;
   ProcessHandle: THandle;
-  Buffer: array[0..MAX_PATH - 1] of Char;
+  Buffer: array[0..1023] of Char;
   Len: DWORD;
 begin
-  Result := '';
   ForegroundWnd := GetForegroundWindow;
   if ForegroundWnd = 0 then
-    Exit;
+    Exit('');
 
   GetWindowThreadProcessId(ForegroundWnd, ProcessId);
   if ProcessId = 0 then
-    Exit;
+    Exit('');
+
+  if (ForegroundWnd = CachedForegroundWnd) and
+     (ProcessId = CachedForegroundPid) and
+     (CachedForegroundName <> '') then
+    Exit(CachedForegroundName);
 
   ProcessHandle := OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, ProcessId);
   if ProcessHandle = 0 then
-    Exit;
+    Exit('');
 
   try
-    Len := GetModuleFileNameEx(ProcessHandle, 0, Buffer, Length(Buffer));
-    if Len > 0 then
-      Result := ExtractFileName(Buffer);
+    Len := Length(Buffer);
+    if QueryFullProcessImageNameW(ProcessHandle, 0, Buffer, Len) and (Len > 0) then
+    begin
+      CachedForegroundWnd := ForegroundWnd;
+      CachedForegroundPid := ProcessId;
+      CachedForegroundName := ExtractFileName(Buffer);
+      Result := CachedForegroundName;
+    end
+    else
+      Result := '';   // fail open: unresolvable name -> pass keys through
   finally
     CloseHandle(ProcessHandle);
   end;
@@ -324,11 +376,16 @@ begin
   Result := False;   // default: pass through
   Outcome := ioNoOutput;
 
-  // Never reprocess our own (or anyone else's) synthetic key events. Every key
-  // injected below comes back through this same global hook; without this
-  // check, injecting a real VK_TAB/VK_RETURN/VK_BACK to pass a key through
-  // feeds it straight back into the handler that injected it, forever.
-  if AKey.IsInjected then
+  // Item 7: never reprocess events injected by THIS process. Every key we
+  // inject below comes back through this same global hook; without this check,
+  // injecting a real VK_TAB/VK_RETURN/VK_BACK to pass a key through feeds it
+  // straight back into the handler that injected it, forever. The dwExtraInfo
+  // tag makes the distinction exact: events from OTHER tools (on-screen
+  // keyboards, remote desktop) are filtered only by IgnoreInjectedInput.
+  if AKey.IsOurs then
+    Exit;
+
+  if AKey.IsInjected and IgnoreInjectedInput then
     Exit;
 
   if not EngineEnabled then
@@ -463,10 +520,14 @@ begin
   KBD := PKBDLLHookStruct(lParam);
 
   try
+    Key := Default(TKeyContext);
     Key.VKCode := KBD^.vkCode;
     Key.ScanCode := KBD^.scanCode;
     Key.IsKeyDown := (wParam = WM_KEYDOWN) or (wParam = WM_SYSKEYDOWN);
     Key.IsInjected := (KBD^.flags and LLKHF_INJECTED) <> 0;
+    // One comparison per event, no allocation: our SendInput helper tags every
+    // record with VITTIX_SENDINPUT_TAG, so our own output is recognized exactly.
+    Key.IsOurs := KBD^.dwExtraInfo = VITTIX_SENDINPUT_TAG;
 
     if HandleKeyEvent(Key) then
       Result := 1   // consumed: do NOT call CallNextHookEx
@@ -490,6 +551,11 @@ begin
   KeyHandler := AHandler;
 end;
 
+procedure SetIgnoreInjectedInput(AValue: Boolean);
+begin
+  IgnoreInjectedInput := AValue;
+end;
+
 procedure SetTargetProcessName(const AProcessName: string);
 begin
   TargetProcessName := Trim(AProcessName);
@@ -511,8 +577,10 @@ procedure HandleForegroundChanged;
 begin
   // The typing flow does not survive a foreground switch: whatever was
   // consumed but not yet emitted belongs to the old field, so cancel it
-  // without emitting. ResetPendingOnPassThrough never emits and touches no
-  // external state, so this is safe to run inside the WinEvent callback.
+  // without emitting. Also drops the cached foreground process name (item 7),
+  // which belongs to the old foreground window. Both operations clear state
+  // with no I/O or allocation, keeping the callback fast.
+  InvalidateForegroundCache;
   try
     ResetPendingOnPassThrough;
   except

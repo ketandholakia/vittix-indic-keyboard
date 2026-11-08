@@ -72,6 +72,7 @@ end;
 
 function MakeKey: TKeyContext;
 begin
+  Result := Default(TKeyContext);
   Result.VKCode := $41; // A
   Result.ScanCode := 0;
   Result.IsKeyDown := True;

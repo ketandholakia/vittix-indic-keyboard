@@ -251,16 +251,22 @@ begin
     begin
       if AKey = ModRule.Key then
       begin
+        // Item 7: a reph key pressed while pending state exists flushes the
+        // FIRST one instead of silently overwriting it.
+        FlushPendingPreludes(Outcome);
         gEngineState.PendingReph := True;
-        Exit(ioSuccess);
+        Exit(Outcome);
       end;
     end;
 
     { ---------------- PREBASE MATRA (િ) ---------------- }
     if ActiveLayout.PrebaseMap.TryGetValue(AKey, Matra) then
     begin
+      // Item 7: a prebase key pressed while pending state exists flushes the
+      // FIRST one instead of silently overwriting it.
+      FlushPendingPreludes(Outcome);
       gEngineState.PendingPrebase := Matra.Glyph;
-      Exit(ioSuccess);
+      Exit(Outcome);
     end;
 
     { ---------------- CONTEXTUAL POSTBASE MATRA ---------------- }

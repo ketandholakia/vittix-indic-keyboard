@@ -67,6 +67,12 @@ type
     [Test]
     procedure ResetPendingOnPassThrough_ClearsPendingWithoutEmitting;
     [Test]
+    procedure Reph_WhileRephPending_FlushesFirst;
+    [Test]
+    procedure Prebase_WhilePrebasePending_FlushesFirst;
+    [Test]
+    procedure Prebase_WhileRephPending_FlushesReph;
+    [Test]
     procedure EngineDisabled_ReturnsPassThrough;
     [Test]
     procedure NoActiveLayout_ReturnsPassThrough;
@@ -391,6 +397,38 @@ end;
 
 // Item 4a: a disabled engine or a missing layout must NOT report success —
 // that made the hook consume the key with no output. Fail open instead.
+// Item 7: pressing a prebase/reph key while one is already pending must flush
+// the FIRST one instead of silently overwriting it.
+procedure TOutputBoundaryTests.Reph_WhileRephPending_FlushesFirst;
+begin
+  ProcessKeyChar('R');   // pending reph
+  ProcessKeyChar('R');   // second press: flush the first, then pend again
+
+  Assert.AreEqual(1, FEvents.Count);
+  Assert.AreEqual('T:R', FEvents[0], 'the first pending reph must be flushed');
+  Assert.IsTrue(gEngineState.PendingReph, 'the second press stays pending');
+end;
+
+procedure TOutputBoundaryTests.Prebase_WhilePrebasePending_FlushesFirst;
+begin
+  ProcessKeyChar('i');   // pending prebase I
+  ProcessKeyChar('i');   // second press: flush the first, then pend again
+
+  Assert.AreEqual(1, FEvents.Count);
+  Assert.AreEqual('T:I', FEvents[0], 'the first pending prebase must be flushed');
+  Assert.AreEqual('I', gEngineState.PendingPrebase, 'the second press stays pending');
+end;
+
+procedure TOutputBoundaryTests.Prebase_WhileRephPending_FlushesReph;
+begin
+  ProcessKeyChar('R');   // pending reph
+  ProcessKeyChar('i');   // prebase key: flush the reph, then pend the prebase
+
+  Assert.AreEqual(1, FEvents.Count);
+  Assert.AreEqual('T:R', FEvents[0], 'the pending reph must be flushed first');
+  Assert.AreEqual('I', gEngineState.PendingPrebase, 'the prebase stays pending');
+end;
+
 procedure TOutputBoundaryTests.EngineDisabled_ReturnsPassThrough;
 begin
   SetEngineEnabled(False);
