@@ -5,6 +5,13 @@ interface
 uses
   System.SysUtils;
 
+const
+  // Item 9.1: the emitted-length stack is bounded so long pass-through runs
+  // (digits, punctuation, foreign text) cannot grow it without bound; the
+  // oldest entries are dropped. Deep backspacing into text typed before the
+  // window covered by the stack fails safe to single-unit deletion.
+  MAX_EMITTED_UNITS = 256;
+
 type
   TEngineState = record
     Enabled: Boolean;
@@ -15,11 +22,13 @@ type
     PendingReph: Boolean;
     CurrentCluster: string;
     LastOutput: string; // Added to resolve E2003 error
-    // Item 6: UTF-16 code-unit lengths of the glyphs this engine emitted,
-    // most recent last. One Backspace deletes the last emitted glyph, which
-    // can span several units ("vks", ",%#"). Survives individual backspaces;
-    // cleared by every full reset (disable, layout switch, Tab/Enter,
-    // navigation/focus pass-throughs).
+    // Item 6: UTF-16 code-unit lengths of what this engine (or a native
+    // pass-through key) put on screen, most recent last. One Backspace deletes
+    // the last glyph, which can span several units ("vks", ",%#"). Survives
+    // individual backspaces and natively-passed printable keys (item 9.1);
+    // cleared only by events that may move the caret or change the field:
+    // disable, layout switch, Tab/Enter, navigation/shortcut/foreground
+    // resets, and injection failure. Bounded by MAX_EMITTED_UNITS.
     EmittedUnits: TArray<Integer>;
   end;
 

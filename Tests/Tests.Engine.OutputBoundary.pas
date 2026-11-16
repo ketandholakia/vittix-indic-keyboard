@@ -43,6 +43,12 @@ type
     [Test]
     procedure Backspace_AfterNavigationClearsStack_SendsSingleBackspace;
     [Test]
+    procedure Backspace_AcrossWordBoundary_AfterPassThroughSpace;
+    [Test]
+    procedure PassThrough_SpaceKeepsClusterMeaning_ButNotTheStack;
+    [Test]
+    procedure PassThroughStack_IsCappedAt256;
+    [Test]
     procedure Tab_NoPending_EmitsResetOnly;
     [Test]
     procedure Tab_WithPending_FlushesTextThenReset;
@@ -225,6 +231,49 @@ begin
   Assert.AreEqual(1, FEvents.Count);
   Assert.AreEqual('B', FEvents[0],
     'after a stack reset the backspace count is unknown: fail-safe 1');
+end;
+
+// Item 9.1: a printable key that passes through natively still lands on
+// screen, so its length joins the stack. Backspacing across the word boundary
+// must remove the space (1) and then the previous word's 3-unit glyph whole.
+procedure TOutputBoundaryTests.Backspace_AcrossWordBoundary_AfterPassThroughSpace;
+begin
+  ProcessKeyChar('s');   // SSS (3 units)
+  Assert.AreEqual(ioPassThrough, ProcessKeyChar(' '), 'space passes through');
+  FEvents.Clear;
+  ProcessKeyChar(#8);    // deletes the space
+  ProcessKeyChar(#8);    // deletes the SSS glyph
+
+  Assert.AreEqual(2, FEvents.Count);
+  Assert.AreEqual('B', FEvents[0], 'the pass-through space is one unit');
+  Assert.AreEqual('B3', FEvents[1],
+    'the previous word''s 3-unit glyph must still delete whole');
+end;
+
+// The pass-through key ends the cluster context exactly as before (a vowel
+// key after a space is standalone again) while the length stack survives.
+procedure TOutputBoundaryTests.PassThrough_SpaceKeepsClusterMeaning_ButNotTheStack;
+begin
+  ProcessKeyChar('k');   // K (cluster active)
+  ProcessKeyChar(' ');   // pass-through
+  Assert.AreEqual('', gEngineState.CurrentCluster,
+    'space still ends the cluster context');
+  Assert.AreEqual(2, Length(gEngineState.EmittedUnits),
+    'the length stack survives the pass-through (K + space)');
+  Assert.AreEqual(1, gEngineState.EmittedUnits[1],
+    'the pass-through key is recorded as one unit');
+end;
+
+procedure TOutputBoundaryTests.PassThroughStack_IsCappedAt256;
+var
+  I: Integer;
+begin
+  for I := 1 to 300 do
+    Assert.AreEqual(ioPassThrough, ProcessKeyChar(' '));
+  Assert.AreEqual(256, Length(gEngineState.EmittedUnits),
+    'the emitted-length stack must be bounded');
+  // The oldest entries were dropped; the newest unit is still correct.
+  Assert.AreEqual(1, gEngineState.EmittedUnits[High(gEngineState.EmittedUnits)]);
 end;
 
 procedure TOutputBoundaryTests.Backspace_WithPending_Cancels_EmitsNothing;

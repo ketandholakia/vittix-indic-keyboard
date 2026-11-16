@@ -30,6 +30,7 @@ type
 procedure SetActiveLayout(ALayout: TKeyboardLayout);
 function ProcessKeyChar(const AKey: string): TInjectionOutcome;
 procedure ResetPendingOnPassThrough;
+procedure ResetClusterContext;
 procedure SetEngineOutputHandler(AHandler: TEngineOutputHandler);
 
 implementation
@@ -54,7 +55,16 @@ procedure PushEmittedUnits(const AText: string);
 begin
   if Length(AText) = 0 then
     Exit;
-  SetLength(gEngineState.EmittedUnits, Length(gEngineState.EmittedUnits) + 1);
+  // Item 9.1: bounded stack — when full, drop the OLDEST entry so the newest
+  // glyphs (and pass-through keys) stay backspace-able with correct counts.
+  if Length(gEngineState.EmittedUnits) >= MAX_EMITTED_UNITS then
+  begin
+    Move(gEngineState.EmittedUnits[1], gEngineState.EmittedUnits[0],
+      (MAX_EMITTED_UNITS - 1) * SizeOf(Integer));
+    SetLength(gEngineState.EmittedUnits, MAX_EMITTED_UNITS);
+  end
+  else
+    SetLength(gEngineState.EmittedUnits, Length(gEngineState.EmittedUnits) + 1);
   gEngineState.EmittedUnits[High(gEngineState.EmittedUnits)] := Length(AText);
 end;
 
@@ -162,6 +172,27 @@ end;
 procedure ResetPendingOnPassThrough;
 begin
   ResetEngineState;
+end;
+
+{ --------------------------------------------------
+  Item 9.1: clears ONLY the consonant-cluster context, leaving the
+  emitted-length stack intact. A printable key that passes through natively
+  still ends the cluster context (a vowel key after a space is standalone
+  again) — but what that key put on screen must stay backspace-able with its
+  true unit count, so the stack is kept and extended instead of cleared.
+
+  Which events call which:
+  - ResetClusterContext: natively-passed printable keys (engine ioPassThrough
+    fallback) — caret stays where it is; the screen gained Length(AKey) units.
+  - ResetPendingOnPassThrough / ResetEngineState: events where the caret or
+    the field may have changed — Esc, Ctrl/Alt/Win shortcuts, empty-conversion
+    keys (arrows, Home/End, Delete, F-keys), foreground change, Tab/Enter,
+    layout switch, engine disable, and injection failure. These drop the
+    stack: the next Backspace fails safe to one unit.
+-------------------------------------------------- }
+procedure ResetClusterContext;
+begin
+  gEngineState.CurrentCluster := '';
 end;
 
 { --------------------------------------------------
@@ -337,11 +368,17 @@ begin
     // Item 4: when nothing was pending, the engine consumed nothing — report
     // pass-through so the original key goes through natively instead of being
     // re-injected as a Unicode event. The pass-through itself emits nothing
-    // through the boundary; state is cleared directly.
+    // through the boundary.
+    // Item 9.1: the original key still lands on screen (typically one UTF-16
+    // unit; a surrogate-pair conversion puts two), so its length joins the
+    // emitted-length stack and the cluster context ends — but the stack is
+    // NOT cleared: backspacing across the word boundary must still delete the
+    // previous word's legacy glyph whole.
     FlushPendingPreludes(Outcome);
     if Outcome = ioNoOutput then
     begin
-      ResetEngineState;
+      ResetClusterContext;
+      PushEmittedUnits(AKey);
       Exit(ioPassThrough);
     end;
     gEngineState.CurrentCluster := '';
