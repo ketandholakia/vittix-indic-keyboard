@@ -35,6 +35,8 @@ type
     [Test]
     procedure ProductionVKToUnicode_UsesScanCodeNotIncomingVK;
     [Test]
+    procedure ProductionVKToUnicode_AcceptsFullExtendedScan;
+    [Test]
     procedure PreloadUSLayout_CachesHandle_AndIsIdempotent;
   end;
 
@@ -202,6 +204,25 @@ begin
   PreloadUSLayout;
   Second := GetUSLayoutHKL;
   Assert.AreEqual(First, Second, 'the cached handle must be stable');
+end;
+
+// Review fix (issue 4): the FULL scan code — including the $E0 extended
+// prefix — flows through the entire production conversion pipeline
+// (scan-to-VK AND ToUnicodeEx) instead of being truncated to its low byte
+// before ToUnicodeEx. The conversion result for an extended navigation key
+// is empty either way, so the argument-level pin for what the conversion
+// receives lives at the seam
+// (THookPolicyTests.ExtendedKey_PassesEmbeddedScanPrefix asserts $E026);
+// this test pins the production path accepting a prefixed scan unchanged
+// and the plain-letter path being unaffected.
+procedure TVKMappingTests.ProductionVKToUnicode_AcceptsFullExtendedScan;
+begin
+  Assert.AreEqual(DWORD($26), ProductionScanToVK($E048, 0),
+    'the prefixed extended scan still resolves positionally');
+  Assert.AreEqual('', ProductionVKToUnicode($26, $E048, NoShift),
+    'an extended navigation key converts to no text');
+  Assert.AreEqual('z', ProductionVKToUnicode($5A, $2C, NoShift),
+    'plain (non-prefixed) scans are unaffected');
 end;
 
 initialization

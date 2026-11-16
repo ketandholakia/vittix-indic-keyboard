@@ -367,12 +367,17 @@ begin
   // Map through the fixed US layout so results are deterministic regardless
   // of the user's default input language. Flag $4 leaves the dead-key state
   // untouched, so no throwaway second call is needed.
+  // Review fix (issue 4): the scan code is passed through UN-truncated — the
+  // $E0 extended prefix that HandleKeyEvent embeds for extended keys (and
+  // that KBDLLHOOKSTRUCT.scanCode may already carry) reaches ToUnicodeEx
+  // just as it reaches MapVirtualKeyEx above, instead of being stripped by
+  // an "and $FF" mask.
   LayoutHKL := GetUSLayoutHKL;
   if LayoutHKL <> 0 then
-    Len := ToUnicodeEx(EffectiveVK, ScanCode and $FF, KeyboardState, WideBuf,
+    Len := ToUnicodeEx(EffectiveVK, ScanCode, KeyboardState, WideBuf,
       Length(WideBuf), $4, LayoutHKL)
   else
-    Len := ToUnicode(EffectiveVK, ScanCode and $FF, KeyboardState, WideBuf,
+    Len := ToUnicode(EffectiveVK, ScanCode, KeyboardState, WideBuf,
       Length(WideBuf), $4);
 
   // Handle surrogate pairs (Len can be 2 for SMP characters)
