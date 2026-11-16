@@ -64,6 +64,25 @@ Application settings are stored in `%APPDATA%\Vittix\settings.ini`; logs are
 stored under `%LOCALAPPDATA%\Vittix\Logs\`. Target applications are controlled
 through the application whitelist.
 
+### Layouts folder resolution
+
+The layouts folder is resolved in this order at startup and whenever settings
+are applied:
+
+1. The configured path (`[Layouts] Path` in `settings.ini`), when it exists
+   and is writable.
+2. `%APPDATA%\Vittix\layouts` — created on demand. When it is first created,
+   the installed default layouts are copied into it from the application
+   folder's `layouts` directory, so the copy is complete and up to date.
+3. The application folder's `layouts` directory, as a read-only last resort.
+
+When Vittix is installed under Program Files, the exe-relative layouts folder
+is not writable, so the engine loads (and the Layout Editor saves) from the
+per-user copy in `%APPDATA%\Vittix\layouts`. Edits made in the Layout Editor
+therefore survive application updates and do not require administrative
+rights. The resolved path is persisted in `settings.ini`, so later runs find
+it directly.
+
 ## Limitations
 
 Elevated target applications may reject injection from a standard-user

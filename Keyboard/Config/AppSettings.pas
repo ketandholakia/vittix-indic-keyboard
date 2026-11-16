@@ -64,7 +64,116 @@ type
 var
   GAppSettings: TAppSettings;
 
+// Review fix (issue 6): resolve the layouts folder the engine should load
+// from and the Layout Editor should save to.
+//   1. The configured path, when it exists AND is writable.
+//   2. <app-data>\Vittix\layouts — created on demand; when it is first
+//      created, the installed defaults are copied recursively from
+//      AFallbackLayoutsDir (the exe-relative 'layouts' folder), so a copy
+//      installed under Program Files gets a writable per-user layouts home.
+//   3. AFallbackLayoutsDir itself, as a read-only last resort.
+// The two-argument form supplies the app-data root from the settings location
+// (the SettingsPathProvider seam in test hosts, else the per-user profile)
+// and the exe-relative fallback folder.
+function ResolveLayoutsPath(const AConfiguredPath, AAppDataRoot,
+  AFallbackLayoutsDir: string): string; overload;
+function ResolveLayoutsPath(const AConfiguredPath: string): string; overload;
+
 implementation
+
+// A directory is considered writable when a probe file can be created in it.
+// Called on startup / settings apply only — never per keystroke.
+function IsWritableDirectory(const ADir: string): Boolean;
+var
+  Probe: string;
+begin
+  Result := False;
+  if (Trim(ADir) = '') or (not TDirectory.Exists(ADir)) then
+    Exit;
+
+  Probe := TPath.Combine(ADir, 'vittix-write-probe.tmp');
+  try
+    TFile.WriteAllText(Probe, 'probe');
+    Result := True;
+  except
+    Result := False;
+  end;
+  if TFile.Exists(Probe) then
+    try
+      TFile.Delete(Probe);
+    except
+      // A probe that cannot be deleted is still proof the directory accepts
+      // writes; leave it — it will be overwritten next run.
+    end;
+end;
+
+function ResolveLayoutsPath(const AConfiguredPath, AAppDataRoot,
+  AFallbackLayoutsDir: string): string;
+var
+  Configured: string;
+  AppDataLayouts: string;
+begin
+  // (1) Configured + exists + writable.
+  Configured := ExcludeTrailingPathDelimiter(Trim(AConfiguredPath));
+  if IsWritableDirectory(Configured) then
+    Exit(Configured);
+
+  // (2) App-data layouts, created on demand and seeded once.
+  AppDataLayouts := '';
+  if Trim(AAppDataRoot) <> '' then
+    AppDataLayouts := TPath.Combine(IncludeTrailingPathDelimiter(Trim(AAppDataRoot)), 'layouts');
+
+  if (AppDataLayouts <> '') and (not TDirectory.Exists(AppDataLayouts)) then
+  begin
+    try
+      if TDirectory.Exists(AFallbackLayoutsDir) then
+      begin
+        // First run of an installed copy: seed the per-user copy with the
+        // shipped defaults (recursive — layouts live in script subfolders).
+        ForceDirectories(AppDataLayouts);
+        TDirectory.Copy(AFallbackLayoutsDir, AppDataLayouts);
+      end
+      else
+        ForceDirectories(AppDataLayouts);
+    except
+      // Creation or seeding failed (read-only profile, blocked path, ...):
+      // do not leave a broken empty folder posing as the layouts home —
+      // fall through to (3).
+      if TDirectory.Exists(AppDataLayouts) then
+        try
+          TDirectory.Delete(AppDataLayouts, True);
+        except
+        end;
+    end;
+  end;
+
+  if (AppDataLayouts <> '') and TDirectory.Exists(AppDataLayouts) then
+    Exit(AppDataLayouts);
+
+  // (3) Exe-relative fallback, read-only under an installed copy.
+  Result := ExcludeTrailingPathDelimiter(Trim(AFallbackLayoutsDir));
+end;
+
+function ResolveLayoutsPath(const AConfiguredPath: string): string;
+var
+  Provider: TSettingsPathProvider;
+  LegacyPath: string;
+  AppDataPath: array[0..MAX_PATH] of Char;
+  AppDataRoot: string;
+begin
+  // The app-data root follows the same location rules as settings.ini: a
+  // test provider owns the location completely, else the per-user profile.
+  Provider := GetSettingsPathProvider();
+  if Assigned(Provider) then
+    AppDataRoot := ExtractFileDir(Provider(LegacyPath))
+  else if SHGetFolderPath(0, CSIDL_APPDATA, 0, 0, AppDataPath) = S_OK then
+    AppDataRoot := TPath.Combine(string(AppDataPath), 'Vittix')
+  else
+    AppDataRoot := TPath.Combine(TPath.GetHomePath, 'Vittix');
+
+  Result := ResolveLayoutsPath(AConfiguredPath, AppDataRoot,
+    IncludeTrailingPathDelimiter(ExtractFilePath(Application.ExeName)) + 'layouts');
+end;
 
 constructor TAppSettings.Create;
 var

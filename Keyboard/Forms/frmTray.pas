@@ -235,7 +235,13 @@ begin
   SetAllowedProcessNames(GAppSettings.AllowedProcessesText);
   if Trim(GAppSettings.AllowedProcessesText) = '' then
     AddStartupNotice('No allowed apps are configured. Interception stays disabled except for the primary target process.');
-  // Load layouts. Detach the engine first (no-op at startup, but kept symmetric
+  // Load layouts. Resolve the layouts folder first (review fix, issue 6): an
+  // installed copy under Program Files cannot write to its exe-relative
+  // layouts folder, so the engine loads (and the editor saves) from the
+  // per-user copy created and seeded on first run.
+  GAppSettings.LayoutsPath := ResolveLayoutsPath(GAppSettings.LayoutsPath);
+
+  // Detach the engine first (no-op at startup, but kept symmetric
   // with the reload paths) and guard the load: a failed load must degrade to
   // "no layouts" (hook fails open) instead of an unhandled exception in
   // FormCreate.
@@ -905,9 +911,6 @@ begin
   if Trim(Settings.LayoutsPath) = '' then
     raise Exception.Create('Layouts path cannot be empty.');
 
-  if not DirectoryExists(Settings.LayoutsPath) then
-    raise Exception.Create('Layouts folder not found: ' + Settings.LayoutsPath);
-
   GAppSettings.EnableKeyboard := Settings.EnableKeyboard;
   GAppSettings.StartWithWindows := Settings.StartWithWindows;
   GAppSettings.LayoutsPath := IncludeTrailingPathDelimiter(Settings.LayoutsPath);
@@ -918,6 +921,13 @@ begin
   GAppSettings.ActionHotkeyText := Settings.ActionHotkeyText;
   GAppSettings.FallbackFont := Settings.FallbackFont;
   GAppSettings.PreviewFontSize := Settings.PreviewFontSize;
+
+  // Review fix (issue 6): a configured path that does not exist or is not
+  // writable (installed copy under Program Files) resolves to the per-user
+  // layouts folder instead of failing the whole settings apply. The resolved
+  // path is persisted with the settings below, so subsequent runs take the
+  // fast path (1) directly.
+  GAppSettings.LayoutsPath := ResolveLayoutsPath(Settings.LayoutsPath);
 
   // Reload layouts and re-attach the engine (item 9.5): on a failed reload
   // the helper re-attaches the previously active layout before re-raising,
