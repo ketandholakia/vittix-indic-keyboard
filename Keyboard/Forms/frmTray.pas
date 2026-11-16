@@ -287,7 +287,20 @@ begin
 
   BuildLayoutMenu;
 
-  InstallKeyboardHook;
+  // Review fix (issue 8): a hook installation failure (another LL hook
+  // refusing us, security software, desktop-less session) must not escape
+  // FormCreate and kill the startup. Degrade to "not translating" — the
+  // engine is fail-open anyway — and tell the user via the startup balloon,
+  // exactly like the layout-load guard above.
+  try
+    InstallKeyboardHook;
+  except
+    on E: Exception do
+    begin
+      LogError('Keyboard hook installation failed: ' + E.Message);
+      AddStartupNotice('Keyboard hook could not be installed; keystrokes will not be translated.');
+    end;
+  end;
 
   RegisterConfiguredHotkeys;
 
