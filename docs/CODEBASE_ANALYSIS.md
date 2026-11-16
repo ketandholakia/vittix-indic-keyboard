@@ -320,3 +320,47 @@ engine-ignored future work, mouse clicks are not visible to a keyboard hook
 (so a caret move inside one window can still strand a stale matra until the
 next reset point), and `SetIgnoreInjectedInput` is not yet exposed in the
 settings UI.
+
+## 16. Resolved — Round 2 (2026-11-16)
+
+Five follow-up items were fixed in separate commits, again test-first against
+the injectable seams (suite now 228 tests, all passing; clean builds verified
+for the test project, the keyboard app, and the editor).
+
+- **9.1 Backspace across word boundaries** (`6bd1326`): natively passed
+  printable keys now push their UTF-16 unit length onto `EmittedUnits` (via
+  the new engine `ResetClusterContext`, which ends the cluster context but
+  keeps the stack), so Backspace still deletes the previous word's multi-unit
+  legacy glyph whole. Stack capped at 256 entries, oldest dropped; cleared
+  only by caret/field-changing events.
+- **9.2 Positional mapping by scan code** (`08dd5bb`): the production
+  conversion re-derives the VK from the scan code through the fixed US
+  layout (`MapVirtualKeyEx`, `MAPVK_VSC_TO_VK_EX`), with the extended-key
+  `$E0` prefix embedded by `HandleKeyEvent` (new `TKeyContext.IsExtended`)
+  and a fail-open fallback to the incoming VK. Injected as
+  `THookPolicyDependencies.ScanToVK`; verified against real US and German
+  HKLs via MapVirtualKeyEx probes.
+- **9.3 US layout preload** (`51d1425`): exported `PreloadUSLayout` runs once
+  in `InstallKeyboardHook` before `SetWindowsHookEx`; the lazy fallback in
+  `GetUSLayoutHKL` stays but is never the first call in normal use.
+- **9.4 Consonant-only cluster context** (`b5d777a`): optional top-level
+  `direct_classes` section (`consonant`/`vowel`/`other`) on the layout model,
+  JSON layer, validator (stale-entry warning) and engine; only consonant-
+  class direct outputs open the cluster, so consonant + standalone vowel
+  sequences finally work in legacy layouts. Classification added to
+  krutidev_010, shreelipi_0708, shree_dev_1076 and gujarati/remington
+  (listed in the commit message; the uncertain Kruti Dev keys `m`, `q`, `Q`
+  are deliberately left unlisted and keep today's behavior).
+- **9.5 Re-attach on failed reload** (`9d22ca5`): the detach/reload/re-attach
+  decision moved into non-visual `Keyboard/Layout/LayoutReload.pas`;
+  `ApplyRuntimeSettings` and `ReloadLayoutsClick` report the original error
+  exactly once while the engine ends attached to the exact same active
+  layout. Engine gains a read-only `EngineActiveLayout` getter.
+
+Data-quality finding recorded, not fixed (outside this round): the glyphs of
+`layouts/gujarati/remington.json` and the anusvara/visarga/reph modifier
+glyphs of the three Devanagari layouts are mojibake — UTF-8 bytes mis-decoded
+through cp437 when the files were authored (present before this round, e.g.
+commit `214e333`). The decode recipe is
+`storedGlyph.encode('cp437').decode('utf-8')`; fixing the stored glyphs
+changes engine output for those keys and needs its own decision.
