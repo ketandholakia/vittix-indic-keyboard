@@ -168,6 +168,8 @@ end;
 -------------------------------------------------- }
 
 procedure TfrmTray.FormCreate(Sender: TObject);
+var
+  ResolvedLayoutsPath: string;
 begin
   Application.Title := 'Vittix Indic Keyboard';
 
@@ -225,6 +227,24 @@ begin
   BuildAppWhitelistMenu;
   FMenusDirty := False;
 
+  // Review fix (issue 6) follow-up: resolve the layouts folder BEFORE the
+  // startup log, so the logged `layouts=` path reflects the folder actually
+  // used. An installed copy under Program Files cannot write to its
+  // exe-relative layouts folder, so resolution lands on the per-user copy
+  // created and seeded on first run. When the resolution changed the path
+  // (first run), persist it immediately so settings.ini records the writable
+  // per-user folder without waiting for the user to open Settings. FormCreate
+  // runs only in the production app, so this Save never touches the test
+  // sandbox; TAppSettings tests construct their own instances with explicit
+  // paths and are unaffected.
+  ResolvedLayoutsPath := ResolveLayoutsPath(GAppSettings.LayoutsPath);
+  if not SameText(ExcludeTrailingPathDelimiter(ResolvedLayoutsPath),
+    ExcludeTrailingPathDelimiter(GAppSettings.LayoutsPath)) then
+  begin
+    GAppSettings.LayoutsPath := ResolvedLayoutsPath;
+    GAppSettings.Save;
+  end;
+
   // Confirms the support actions have what they need without waiting for a click.
   LogInfo(Format('Support actions ready: version=%s layouts=%s logs=%s',
     [ApplicationVersion, GAppSettings.LayoutsPath, FLogDir]));
@@ -235,11 +255,7 @@ begin
   SetAllowedProcessNames(GAppSettings.AllowedProcessesText);
   if Trim(GAppSettings.AllowedProcessesText) = '' then
     AddStartupNotice('No allowed apps are configured. Interception stays disabled except for the primary target process.');
-  // Load layouts. Resolve the layouts folder first (review fix, issue 6): an
-  // installed copy under Program Files cannot write to its exe-relative
-  // layouts folder, so the engine loads (and the editor saves) from the
-  // per-user copy created and seeded on first run.
-  GAppSettings.LayoutsPath := ResolveLayoutsPath(GAppSettings.LayoutsPath);
+  // Load layouts from the resolved folder (see above).
 
   // Detach the engine first (no-op at startup, but kept symmetric
   // with the reload paths) and guard the load: a failed load must degrade to

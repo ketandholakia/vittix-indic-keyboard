@@ -18,6 +18,7 @@ uses
   LayoutModel in '..\Shared\LayoutModel.pas',
   LayoutJson in '..\Shared\LayoutJson.pas',
   LayoutValidation in '..\Shared\LayoutValidation.pas',
+  LayoutsPathResolver in '..\Shared\LayoutsPathResolver.pas',
   LayoutLoader in '..\Keyboard\Layout\LayoutLoader.pas',
 
   // ---- UI helpers ----

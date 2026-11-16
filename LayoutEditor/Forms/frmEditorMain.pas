@@ -6,6 +6,7 @@ uses
   Winapi.Windows,
   System.SysUtils,
   System.Classes,
+  System.IOUtils,
   Vcl.Forms,
   Vcl.Controls,
   Vcl.StdCtrls,
@@ -21,6 +22,7 @@ uses
 
   LayoutModel,
   LayoutResolver,
+  LayoutsPathResolver,
   LayoutLoader,
   LayoutJson,
   LayoutValidation,
@@ -228,6 +230,9 @@ type
     FThemeBackup: TList<TEditorThemeEntry>;
     FLayout: TKeyboardLayout;
     FCurrentFileName: string;
+    // Review follow-up (issue 6): the resolved writable layouts folder -
+    // where a standalone Start Menu launch defaults its Open/Save dialogs.
+    FDefaultLayoutsDir: string;
     FUndoStack: TStack<string>;
     FRedoStack: TStack<string>;
     FIsModified: Boolean;
@@ -461,6 +466,22 @@ begin
 
   FCurrentFileName := '';
   UpdateWindowCaption;
+
+  // Review follow-up (issue 6): a standalone launch (no tray-passed file
+  // argument) should default its Open/Save dialogs to the same writable
+  // per-user layouts folder the tray app uses - the configured path from
+  // %APPDATA%\Vittix\settings.ini when present and usable, else the
+  // per-user copy (created and seeded on first run), else the exe-relative
+  // folder. The dialog objects are themed/unthemed freely elsewhere, so the
+  // InitialDir assignments here are the single source for the start folder.
+  FDefaultLayoutsDir := LayoutsPathResolver.ResolveLayoutsPath(
+    LayoutsPathResolver.ReadConfiguredLayoutsPath(
+      TPath.Combine(LayoutsPathResolver.DefaultAppDataRoot, 'settings.ini'),
+      ExtractFilePath(Application.ExeName)),
+    LayoutsPathResolver.DefaultAppDataRoot,
+    IncludeTrailingPathDelimiter(ExtractFilePath(Application.ExeName)) + 'layouts');
+  OpenDialog.InitialDir := FDefaultLayoutsDir;
+  SaveDialog.InitialDir := FDefaultLayoutsDir;
 
   ClearGrids;
 
