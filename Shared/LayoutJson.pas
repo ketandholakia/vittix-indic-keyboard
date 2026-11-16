@@ -8,6 +8,7 @@ uses
   System.JSON,
   System.IOUtils,
   System.Generics.Collections,
+  Winapi.Windows,
   LayoutModel;
 
 function LayoutToJson(const ALayout: TKeyboardLayout): string;
@@ -17,6 +18,36 @@ procedure SaveLayoutToFile(const ALayout: TKeyboardLayout; const FileName: strin
 function LoadLayoutFromFile(const FileName: string): TKeyboardLayout;
 
 implementation
+
+{ Review fix (issue 7): encoding validation helpers.
+
+  A layout file saved in a legacy ANSI code page used to fail with an opaque
+  EEncodingError ("No mapping for the Unicode character exists...") or, worse,
+  load as silent mojibake. Both paths below reject such input with one clear
+  error before the JSON is ever parsed. }
+
+// The OS does strict UTF-8 validation: MB_ERR_INVALID_CHARS makes
+// MultiByteToWideChar fail on any malformed byte sequence, which the RTL's
+// lenient TEncoding.UTF8 decode would silently replace.
+function IsValidUTF8Bytes(const Bytes: TBytes): Boolean;
+begin
+  if Length(Bytes) = 0 then
+    Exit(True);
+  Result := MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
+    PAnsiChar(@Bytes[0]), Length(Bytes), nil, 0) > 0;
+end;
+
+// U+FFFD anywhere in decoded text means a lossy decode happened (the RTL
+// replaces bytes it cannot map with the replacement character).
+function ContainsReplacementChar(const S: string): Boolean;
+var
+  Ch: Char;
+begin
+  for Ch in S do
+    if Ch = #$FFFD then
+      Exit(True);
+  Result := False;
+end;
 
 function ReadScalarJsonValue(AValue: TJSONValue): string;
 begin
@@ -367,9 +398,22 @@ begin
     end;
   end;
 
+  // Review fix (issue 7): reject files that are not valid UTF-8 with one
+  // clear error instead of an opaque EEncodingError or silent mojibake.
+  // The UTF-16 BOM paths decode losslessly, so only they get the
+  // replacement-character scan; the UTF-8 paths get strict byte validation.
+  if Encoding = TEncoding.UTF8 then
+  begin
+    if not IsValidUTF8Bytes(Bytes) then
+      raise Exception.Create('Layout file is not valid UTF-8: ' + FileName);
+  end;
+
   JSONText := Trim(Encoding.GetString(Bytes));
   if JSONText = '' then
     raise Exception.Create('Layout file is empty');
+
+  if ContainsReplacementChar(JSONText) then
+    raise Exception.Create('Layout file is not valid UTF-8: ' + FileName);
 
   Result := LayoutFromJson(JSONText);
 end;

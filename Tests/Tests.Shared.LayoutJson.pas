@@ -37,6 +37,14 @@ type
     procedure LoadLayoutFromFile_UTF8_NoBOM_Works;
 
     [Test]
+    procedure LoadLayoutFromFile_UTF16BE_WithBOM_Works;
+
+    // Review fix (issue 7): legacy-encoding (ANSI-saved) files must fail with
+    // a clear error instead of loading as silent mojibake.
+    [Test]
+    procedure LoadLayoutFromFile_InvalidUTF8_RaisesFriendlyError;
+
+    [Test]
     procedure LayoutFromJson_DuplicatePrebaseKey_RaisesException;
 
     [Test]
@@ -382,6 +390,82 @@ begin
     Exception,
     'Duplicate modifier key should raise exception'
   );
+end;
+
+procedure TLayoutJsonTests.LoadLayoutFromFile_UTF16BE_WithBOM_Works;
+var
+  TempFile: string;
+  Layout, LoadedLayout: TKeyboardLayout;
+  UTF16Bytes, Preamble, AllBytes: TBytes;
+begin
+  Layout := CreateTestLayout;
+  try
+    TempFile := TestTempFile('vittix_test_utf16be_');
+    try
+      UTF16Bytes := TEncoding.BigEndianUnicode.GetBytes(LayoutToJson(Layout));
+      Preamble := TEncoding.BigEndianUnicode.GetPreamble; // FE FF
+      SetLength(AllBytes, Length(Preamble) + Length(UTF16Bytes));
+      Move(Preamble[0], AllBytes[0], Length(Preamble));
+      Move(UTF16Bytes[0], AllBytes[Length(Preamble)], Length(UTF16Bytes));
+
+      TFile.WriteAllBytes(TempFile, AllBytes);
+
+      LoadedLayout := LoadLayoutFromFile(TempFile);
+      try
+        Assert.AreEqual(Layout.LayoutID, LoadedLayout.LayoutID);
+        Assert.AreEqual('क', LoadedLayout.DirectMap['k'],
+          'the Big-Endian code points must decode exactly');
+      finally
+        LoadedLayout.Free;
+      end;
+    finally
+      if TFile.Exists(TempFile) then
+        TFile.Delete(TempFile);
+    end;
+  finally
+    Layout.Free;
+  end;
+end;
+
+// A file saved in a legacy ANSI code page (any byte sequence that is not
+// valid UTF-8) must be rejected with a clear error instead of silently
+// loading mojibake.
+procedure TLayoutJsonTests.LoadLayoutFromFile_InvalidUTF8_RaisesFriendlyError;
+var
+  TempFile: string;
+  JsonBytes, AllBytes: TBytes;
+begin
+  // Plain-ASCII JSON followed by a lone $E9 byte: valid cp1252-ish text,
+  // INVALID UTF-8 (a 3-byte lead byte followed by a non-continuation byte).
+  JsonBytes := TEncoding.ASCII.GetBytes('{"layout_id":"x","name":"y"}');
+  SetLength(AllBytes, Length(JsonBytes) + 1);
+  Move(JsonBytes[0], AllBytes[0], Length(JsonBytes));
+  AllBytes[High(AllBytes)] := $E9;
+
+  TempFile := TestTempFile('vittix_test_ansi_');
+  try
+    TFile.WriteAllBytes(TempFile, AllBytes);
+
+    Assert.WillRaise(
+      procedure
+      begin
+        LoadLayoutFromFile(TempFile);
+      end,
+      Exception,
+      'an invalid-UTF-8 layout file must be rejected');
+
+    try
+      LoadLayoutFromFile(TempFile);
+      Assert.Fail('the invalid file must not load');
+    except
+      on E: Exception do
+        Assert.IsTrue(E.Message.Contains('not valid UTF-8'),
+          'the error must name the encoding problem, got: ' + E.Message);
+    end;
+  finally
+    if TFile.Exists(TempFile) then
+      TFile.Delete(TempFile);
+  end;
 end;
 
 initialization
