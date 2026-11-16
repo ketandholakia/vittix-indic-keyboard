@@ -63,6 +63,8 @@ type
     [Test]
     procedure EmptyKeyConversion_PassesThrough;
     [Test]
+    procedure ExtendedKey_PassesEmbeddedScanPrefix;
+    [Test]
     procedure Tab_KeyDown_Consumed_NotifiesEngine;
     [Test]
     procedure Backspace_KeyDown_Consumed_NotifiesEngine;
@@ -78,6 +80,7 @@ var
   GFakeProcess: string;
   GFakeModifiers: TKeyModifierState;
   GLastModifiers: TKeyModifierState;
+  GLastScanCode: DWORD;
   GFakeVKChar: string;
   GFakeInjectionHealthy: Boolean;
   GFakeSendReturn: UINT;
@@ -97,6 +100,7 @@ function FakeVKToUnicode(VKCode: DWORD; ScanCode: DWORD;
   const Modifiers: TKeyModifierState): string;
 begin
   GLastModifiers := Modifiers;
+  GLastScanCode := ScanCode;
   Result := GFakeVKChar;
 end;
 
@@ -112,13 +116,18 @@ begin
 end;
 
 function MakeKey(VK: DWORD; AKeyDown: Boolean;
-  AInjected: Boolean = False; AIsOurs: Boolean = False): TKeyContext;
+  AInjected: Boolean = False; AIsOurs: Boolean = False;
+  AIsExtended: Boolean = False): TKeyContext;
 begin
+  // Default() first: any field the helper does not set must be False, not
+  // stale stack memory (bit us when the IsOurs field was added).
+  Result := Default(TKeyContext);
   Result.VKCode := VK;
   Result.ScanCode := 0;
   Result.IsKeyDown := AKeyDown;
   Result.IsInjected := AInjected;
   Result.IsOurs := AIsOurs;
+  Result.IsExtended := AIsExtended;
 end;
 
 function THookPolicyTests.CaptureKey(const AChar: string): TInjectionOutcome;
@@ -141,6 +150,7 @@ begin
   GFakeProcess := 'notepad.exe';
   GFakeModifiers := Default(TKeyModifierState);
   GLastModifiers := Default(TKeyModifierState);
+  GLastScanCode := 0;
   GFakeVKChar := 'x';
   GFakeInjectionHealthy := True;
 
@@ -324,6 +334,27 @@ begin
   Assert.IsFalse(HandleKeyEvent(MakeKey($41, True)),
     'an empty conversion result must pass the key through');
   Assert.AreEqual(0, FKeys.Count);
+end;
+
+// Item 9.2: extended keys (KBDLLHOOKSTRUCT flags bit 0) must reach the VK
+// conversion with the $E0 prefix embedded in the scan code, so the
+// scan-to-VK translation through MapVirtualKeyEx can resolve the correct
+// extended key. Non-extended scans pass through unmodified.
+procedure THookPolicyTests.ExtendedKey_PassesEmbeddedScanPrefix;
+var
+  Key: TKeyContext;
+begin
+  Key := MakeKey($26, True, False, False, True);
+  Key.ScanCode := $26;   // a real scan, so the prefix lands in the high byte
+  Assert.IsTrue(HandleKeyEvent(Key), 'extended key reaches the conversion');
+  Assert.AreEqual(DWORD($E026), GLastScanCode,
+    'the scan code must carry the $E0 extended-key prefix');
+
+  Key := MakeKey($41, True);
+  Key.ScanCode := $1E;
+  Assert.IsTrue(HandleKeyEvent(Key), 'regular key reaches the conversion');
+  Assert.AreEqual(DWORD($1E), GLastScanCode,
+    'a regular key must not carry the prefix');
 end;
 
 procedure THookPolicyTests.Tab_KeyDown_Consumed_NotifiesEngine;
