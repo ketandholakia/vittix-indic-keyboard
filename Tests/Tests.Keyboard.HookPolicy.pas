@@ -43,6 +43,8 @@ type
     [Test]
     procedure InjectedEvent_PassesThrough_EvenWhenEligible;
     [Test]
+    procedure DecodeKeyContext_TreatsLowerILInjectionAsInjected;
+    [Test]
     procedure OwnTaggedEvent_AlwaysIgnored;
     [Test]
     procedure OtherInjectedInput_TranslatedWhenConfigured;
@@ -234,6 +236,41 @@ end;
 
 // Item 7: events carrying our own dwExtraInfo tag are ignored regardless of
 // configuration — reprocessing them would create an infinite loop.
+// Review fix (issue 3): the raw flag decoding must treat LLKHF_INJECTED
+// ($10, same-integrity injection) AND LLKHF_LOWER_IL_INJECTED ($02,
+// injection from a lower-integrity process) as synthetic input, so the
+// injected filter covers everything. Extended and ours-tag decoding are
+// pinned alongside.
+procedure THookPolicyTests.DecodeKeyContext_TreatsLowerILInjectionAsInjected;
+var
+  KBD: TKBDLLHookStruct;
+begin
+  KBD := Default(TKBDLLHookStruct);
+  KBD.vkCode := $41;
+  KBD.scanCode := $1E;
+  KBD.dwExtraInfo := 12345;
+
+  KBD.flags := $10;
+  Assert.IsTrue(DecodeKeyContext(KBD, True).IsInjected, 'LLKHF_INJECTED ($10)');
+  KBD.flags := $02;
+  Assert.IsTrue(DecodeKeyContext(KBD, True).IsInjected,
+    'LLKHF_LOWER_IL_INJECTED ($02) is synthetic too');
+  KBD.flags := $12;
+  Assert.IsTrue(DecodeKeyContext(KBD, True).IsInjected, 'both bits set');
+  KBD.flags := $00;
+  Assert.IsFalse(DecodeKeyContext(KBD, True).IsInjected, 'plain hardware event');
+  KBD.flags := $01;
+  Assert.IsTrue(DecodeKeyContext(KBD, True).IsExtended, 'extended bit decodes');
+  Assert.IsFalse(DecodeKeyContext(KBD, True).IsInjected,
+    'the extended bit alone is NOT injected');
+  KBD.flags := $10;
+  KBD.dwExtraInfo := VITTIX_SENDINPUT_TAG;
+  Assert.IsTrue(DecodeKeyContext(KBD, True).IsOurs, 'our dwExtraInfo tag');
+  Assert.IsTrue(DecodeKeyContext(KBD, True).IsInjected);
+  Assert.AreEqual(DWORD($41), DecodeKeyContext(KBD, True).VKCode);
+  Assert.AreEqual(DWORD($1E), DecodeKeyContext(KBD, True).ScanCode);
+end;
+
 procedure THookPolicyTests.OwnTaggedEvent_AlwaysIgnored;
 begin
   SetIgnoreInjectedInput(False);
