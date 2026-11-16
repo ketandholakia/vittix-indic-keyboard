@@ -307,6 +307,7 @@ type
     procedure ShowValidationErrors(const Errors: TValidationErrors);
     procedure SyncUIToModel;
     procedure SaveUIToLayout;
+    procedure RefreshKeyboardView;
     procedure ClearLayout;
     procedure UpdateMappingInspector(const Grid: TStringGrid; ARow: Integer);
     function GetGridCellText(Grid: TStringGrid; ARow, ACol: Integer): string;
@@ -986,6 +987,7 @@ begin
   UpdateWindowCaption;
   FSelectedKeyboardKey := '';
   vkvKeyboard.Layout := nil;
+  vkvKeyboard.GlyphFontName := '';
   edtInspectorKey.Clear;
   edtInspectorValue.Clear;
   UpdateLayoutPreview;
@@ -1280,7 +1282,7 @@ begin
   // be assigned from the preview builder, which meant the Keyboard tab only
   // worked as a side effect of the Preview tab.
   vkvKeyboard.Layout := FLayout;
-  vkvKeyboard.Invalidate;
+  RefreshKeyboardView;
 
   edtLayoutName.Text := FLayout.Name;
 
@@ -2083,11 +2085,22 @@ procedure TfrmEditorMain.btnInspectorClearClick(Sender: TObject);
 var
   Grid: TStringGrid;
   Row: Integer;
+  Key: string;
 begin
+  // Mirrors Apply: the inspector owns the edit, and with no grid row selected
+  // the edit belongs to Direct, which is where a keyboard selection lands.
+  // The old version bailed out whenever focus was not on a grid, so Clear did
+  // nothing at all from the Keyboard tab.
+  Key := Trim(edtInspectorKey.Text);
+  if Key = '' then Exit;
+
   Grid := GetSelectedGrid;
-  if Grid = nil then Exit;
-  Row := Grid.Row;
-  if Row < Grid.FixedRows then Exit;
+  if (Grid = nil) or (Grid.Row < Grid.FixedRows) then
+    Grid := grdDirect;
+
+  Row := FindRowByKey(Grid, Key);
+  if Row < 0 then Exit;
+
   PushUndo;
   Grid.Rows[Row].Clear;
   Grid.Invalidate;
@@ -2366,11 +2379,32 @@ begin
       end;
     end;
   end;
+
+  // Every model write funnels through here, and the Keyboard tab paints from
+  // the model on demand only. Without this the key that was just applied keeps
+  // showing its previous glyph until some unrelated repaint happens to run
+  // (clicking another key, switching tabs, resizing the window).
+  RefreshKeyboardView;
 end;
 
 procedure TfrmEditorMain.SaveUIToLayout;
 begin
   SyncUIToModel;
+end;
+
+procedure TfrmEditorMain.RefreshKeyboardView;
+begin
+  if not Assigned(vkvKeyboard) then
+    Exit;
+
+  // Keep the key glyphs in the layout's own font, the same one the Preview
+  // column and the typing preview use, so all three surfaces agree.
+  if Assigned(FLayout) then
+    vkvKeyboard.GlyphFontName := FLayout.FontFamily
+  else
+    vkvKeyboard.GlyphFontName := '';
+
+  vkvKeyboard.Invalidate;
 end;
 
 procedure TfrmEditorMain.ComboBox1Change(Sender: TObject);

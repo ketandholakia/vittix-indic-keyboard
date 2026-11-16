@@ -47,6 +47,9 @@ begin
 
   // The shared keyboard view renders the layout itself, including glyphs in the
   // layout font and DPI-correct key metrics. A nil layout means nothing active.
+  vkvKeyboard.GlyphFontName := '';
+  if ALayout <> nil then
+    vkvKeyboard.GlyphFontName := ALayout.FontFamily;
   vkvKeyboard.Layout := ALayout;
   vkvKeyboard.SelectedKey := '';
   lblKeyInfo.Caption := '';

@@ -8,6 +8,10 @@ unit VittixKeyboardView;
   assign a new one.
 
   This revision:
+    * GlyphFontName: the mapped glyph is drawn in the layout's font (the same
+      one the editor Preview column uses), while the physical key label stays
+      in Font. Legacy layouts map ASCII code points to a legacy Indic font, so
+      a label drawn in the layout font would appear as an unrelated glyph.
     * FHits is pre-sized instead of concatenated (O(n^2) -> O(n) per Paint).
     * CurrentMapping now reports the *effective* glyph (same lookup Paint
       uses), so OnKeySelect can no longer disagree with what's on screen
@@ -92,6 +96,7 @@ type
     FMappedColor: TColor;
     FUnmappedColor: TColor;
     FSelectedColor: TColor;
+    FGlyphFontName: string;
     FHits: TArray<TKeyboardKeyHit>;
     FRows: TArray<TKeyRowDef>;
     FOnKeySelect: TVittixKeySelectEvent;
@@ -106,6 +111,7 @@ type
     procedure SetMappedColor(const Value: TColor);
     procedure SetUnmappedColor(const Value: TColor);
     procedure SetSelectedColor(const Value: TColor);
+    procedure SetGlyphFontName(const Value: string);
 
     function  GetGlyphForKey(const Key: string): string;
     function  KeyPixelWidth(const KeyDef: TKeyDef): Integer;
@@ -165,6 +171,15 @@ type
       write SetUnmappedColor default $F8F8F8;
     property SelectedColor: TColor read FSelectedColor
       write SetSelectedColor default clHighlight;
+
+    // Font used for the mapped glyph drawn on a key. The physical key label
+    // stays in Font: legacy layouts name ASCII-mapped Indic fonts (Kruti Dev
+    // 010, SHREE-DEV-0708, Gopika...), and the Latin label drawn in one of
+    // those would come out as whatever glyph that code point carries.
+    // Empty means "use Font", which is the fallback for a layout that names
+    // no family.
+    property GlyphFontName: string read FGlyphFontName
+      write SetGlyphFontName;
 
     property OnKeySelect: TVittixKeySelectEvent
       read FOnKeySelect write FOnKeySelect;
@@ -556,6 +571,15 @@ begin
   end;
 end;
 
+procedure TVittixKeyboardView.SetGlyphFontName(const Value: string);
+begin
+  if not SameText(FGlyphFontName, Value) then
+  begin
+    FGlyphFontName := Value;
+    Invalidate;
+  end;
+end;
+
 { -------------------------------------------------
   Painting
 ------------------------------------------------- }
@@ -644,6 +668,7 @@ var
   BorderWidth: Integer;
   IsMapped: Boolean;
   IsStyled: Boolean;
+  GlyphFont: string;
 begin
   IsMapped := (Glyph <> '') and not KeyDef.IsSpecial;
   IsStyled := TStyleManager.IsCustomStyleActive;
@@ -715,6 +740,7 @@ begin
 
   if KeyDef.IsSpecial then
   begin
+    Canvas.Font.Name := Font.Name;
     Canvas.Font.Color := TextColor;
     Canvas.Font.Style := [];
     Canvas.TextOut(
@@ -724,14 +750,22 @@ begin
     Exit;
   end;
 
+  // The label is always the control font, the glyph is the layout font.
+  Canvas.Font.Name := Font.Name;
+
   // Physical key label, top-left.
   Canvas.Font.Color := TextColor;
   Canvas.Font.Style := [];
   Canvas.TextOut(R.Left + 4, R.Top + 4, KeyDef.KeyName);
 
-  // Mapped glyph, centered and bold.
+  // Mapped glyph, centered and bold, in the layout's own font -- the same one
+  // the editor's Preview column and typing preview use.
   if Glyph <> '' then
   begin
+    GlyphFont := Trim(FGlyphFontName);
+    if GlyphFont = '' then
+      GlyphFont := Font.Name;
+    Canvas.Font.Name := GlyphFont;
     Canvas.Font.Style := [fsBold];
     Canvas.TextOut(
       R.Left + (R.Width  div 2) - (Canvas.TextWidth (Glyph) div 2),
