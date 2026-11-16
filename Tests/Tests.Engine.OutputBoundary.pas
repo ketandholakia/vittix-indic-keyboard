@@ -71,6 +71,12 @@ type
     [Test]
     procedure Postbase_BackspaceClearsTheClusterContext;
     [Test]
+    procedure DirectClasses_VowelThenVowel_GivesStandaloneVowel;
+    [Test]
+    procedure DirectClasses_ConsonantThenVowel_GivesMatra;
+    [Test]
+    procedure NoDirectClasses_BehavesAsBefore;
+    [Test]
     procedure ResetPendingOnPassThrough_ClearsPendingWithoutEmitting;
     [Test]
     procedure Reph_WhileRephPending_FlushesFirst;
@@ -430,6 +436,84 @@ end;
 // Item 3: keys that pass through the hook (navigation, shortcuts, foreground
 // changes) must clear pending state WITHOUT emitting anything, so a stale
 // matra/reph can never leak into unrelated input.
+// Item 9.4 layouts: same shape as CreateAsciiLayout, plus an explicit
+// direct_classes section. Kept separate so the default fixture keeps
+// exercising the "no direct_classes" (legacy) behavior.
+function CreateClassifiedLayout: TKeyboardLayout;
+begin
+  Result := TKeyboardLayout.Create;
+  Result.Name := 'ClassifiedLayout';
+  Result.DirectMap.Add('k', 'K');
+  Result.DirectMap.Add('a', 'AVowel');
+  Result.PrebaseMap.Add('i', MakeMapping('i', 'I'));
+  Result.PostbaseMap.Add('a', 'AMatra');
+  // Item 9.4: only a consonant-class direct output opens the cluster context.
+  Result.DirectClasses.Add('k', 'consonant');
+  Result.DirectClasses.Add('a', 'vowel');
+end;
+
+// Item 9.4: after a standalone vowel (class 'vowel'), the cluster context
+// must NOT be set, so a following vowel key is standalone again — the bug
+// this fixes is being unable to type two standalone vowels in a row.
+procedure TOutputBoundaryTests.DirectClasses_VowelThenVowel_GivesStandaloneVowel;
+begin
+  SetActiveLayout(CreateClassifiedLayout);
+  try
+    FEvents.Clear;   // SetActiveLayout emits a reset; keep the assertions clean
+    ProcessKeyChar('a');   // standalone vowel
+    ProcessKeyChar('a');   // must be standalone again, not the matra
+
+    Assert.AreEqual(2, FEvents.Count);
+    Assert.AreEqual('T:AVowel', FEvents[0]);
+    Assert.AreEqual('T:AVowel', FEvents[1],
+      'after a vowel-class direct output the next vowel key is standalone again');
+    Assert.AreEqual('', gEngineState.CurrentCluster,
+      'a vowel-class direct output must not set the cluster context');
+  finally
+    SetActiveLayout(nil);
+    ResetEngineState;
+  end;
+end;
+
+procedure TOutputBoundaryTests.DirectClasses_ConsonantThenVowel_GivesMatra;
+begin
+  SetActiveLayout(CreateClassifiedLayout);
+  try
+    FEvents.Clear;   // SetActiveLayout emits a reset; keep the assertions clean
+    ProcessKeyChar('k');   // consonant-class direct output
+    ProcessKeyChar('a');   // contextually the matra
+
+    Assert.AreEqual(2, FEvents.Count);
+    Assert.AreEqual('T:K', FEvents[0]);
+    Assert.AreEqual('T:AMatra', FEvents[1],
+      'a consonant-class direct output still opens the cluster context');
+  finally
+    SetActiveLayout(nil);
+    ResetEngineState;
+  end;
+end;
+
+// A layout without direct_classes keeps the item-2 behavior exactly: every
+// direct output sets the cluster context, so vowel then vowel gives
+// standalone then matra.
+procedure TOutputBoundaryTests.NoDirectClasses_BehavesAsBefore;
+begin
+  SetActiveLayout(CreateAsciiLayout('NoClassesLayout'));
+  try
+    FEvents.Clear;   // SetActiveLayout emits a reset; keep the assertions clean
+    ProcessKeyChar('a');   // AVowel (cluster set: legacy behavior)
+    ProcessKeyChar('a');   // contextually the matra
+
+    Assert.AreEqual(2, FEvents.Count);
+    Assert.AreEqual('T:AVowel', FEvents[0]);
+    Assert.AreEqual('T:AMatra', FEvents[1],
+      'without direct_classes every direct output still opens the cluster');
+  finally
+    SetActiveLayout(nil);
+    ResetEngineState;
+  end;
+end;
+
 procedure TOutputBoundaryTests.ResetPendingOnPassThrough_ClearsPendingWithoutEmitting;
 begin
   ProcessKeyChar('k');   // K

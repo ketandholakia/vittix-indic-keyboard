@@ -265,6 +265,18 @@ begin
         CheckAndRegisterKey(PairStr.Key, 'Postbase');
     end;
 
+    // ---------------- DIRECT CLASSES (item 9.4) ----------------
+    // Every direct_classes entry must reference a key that exists in the
+    // direct map; a stale entry silently changes nothing at runtime, so it is
+    // a warning, never an error.
+    for PairStr in ALayout.DirectClasses do
+    begin
+      if not ALayout.DirectMap.ContainsKey(PairStr.Key) then
+        AddError(vsWarning, 'DirectClasses', PairStr.Key,
+          Format('direct_classes key "%s" (%s) is missing from the direct map',
+            [PairStr.Key, PairStr.Value]));
+    end;
+
     // ---------------- MODIFIERS ----------------
     for PairMod in ALayout.Modifiers do
     begin

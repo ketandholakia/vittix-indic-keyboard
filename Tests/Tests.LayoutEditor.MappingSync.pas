@@ -40,6 +40,14 @@ type
     procedure VisibleKeyedSync_PreservesRichDataOfTouchedName;
     [Test]
     procedure VisibleKeyedSync_DeletesOwnedNameWithoutValue;
+
+    // Item 9.4: the direct_classes section must survive the editor's save and
+    // undo/redo serialization (LayoutToJson/LayoutFromJson) and a direct-grid
+    // sync performed in between, since the editor edits the model in place.
+    [Test]
+    procedure DirectClasses_JsonRoundTrip_Preserved;
+    [Test]
+    procedure DirectClasses_SurvivesVisibleGridSync_AndSave;
   end;
 
 implementation
@@ -431,6 +439,73 @@ begin
     for Mapping in Map.Values do
       Mapping.FreeMetadata;
     Map.Free;
+  end;
+end;
+
+procedure TLayoutEditorMappingSyncTests.DirectClasses_JsonRoundTrip_Preserved;
+var
+  Layout, Reloaded: TKeyboardLayout;
+  Json: string;
+begin
+  Layout := TKeyboardLayout.Create;
+  try
+    Layout.DirectMap.Add('k', 'K');
+    Layout.DirectMap.Add('a', 'AVowel');
+    Layout.DirectClasses.Add('k', 'consonant');
+    Layout.DirectClasses.Add('a', 'vowel');
+
+    Json := LayoutToJson(Layout);
+    Reloaded := LayoutFromJson(Json);
+    try
+      Assert.AreEqual('consonant', Reloaded.DirectClasses['k'],
+        'direct_classes must survive LayoutToJson/LayoutFromJson');
+      Assert.AreEqual('vowel', Reloaded.DirectClasses['a']);
+      Assert.AreEqual(2, Reloaded.DirectClasses.Count);
+    finally
+      Reloaded.Free;
+    end;
+  finally
+    Layout.Free;
+  end;
+end;
+
+// The editor keeps the layout object in memory, syncs the visible grid rows
+// into it, and serializes the WHOLE model on save — so an unrelated grid edit
+// must not disturb the direct_classes metadata.
+procedure TLayoutEditorMappingSyncTests.DirectClasses_SurvivesVisibleGridSync_AndSave;
+var
+  Layout, Reloaded: TKeyboardLayout;
+  Rows: TArray<TStringMappingRow>;
+  Owned: TArray<string>;
+  Json: string;
+begin
+  Layout := TKeyboardLayout.Create;
+  try
+    Layout.DirectMap.Add('k', 'K');
+    Layout.DirectMap.Add('a', 'AVowel');
+    Layout.DirectClasses.Add('k', 'consonant');
+    Layout.DirectClasses.Add('a', 'vowel');
+
+    // The user edits the 'k' row in the Direct grid (filtered view).
+    SetLength(Rows, 1);
+    Rows[0].Key := 'k';
+    Rows[0].Value := 'KK';
+    SetLength(Owned, 1);
+    Owned[0] := 'k';
+    SyncVisibleStringMap(Layout.DirectMap, Rows, Owned);
+
+    Json := LayoutToJson(Layout);
+    Reloaded := LayoutFromJson(Json);
+    try
+      Assert.AreEqual('KK', Reloaded.DirectMap['k'], 'the grid edit applied');
+      Assert.AreEqual('vowel', Reloaded.DirectClasses['a'],
+        'direct_classes must survive a grid edit plus save');
+      Assert.AreEqual('consonant', Reloaded.DirectClasses['k']);
+    finally
+      Reloaded.Free;
+    end;
+  finally
+    Layout.Free;
   end;
 end;
 

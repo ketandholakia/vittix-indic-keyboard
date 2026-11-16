@@ -64,6 +64,16 @@ begin
       Obj.AddPair(PairStr.Key, PairStr.Value);
     Root.AddPair('direct', Obj);
 
+    // DirectClasses (item 9.4, optional): written only when the layout opts
+    // in, so layouts without the section stay byte-identical in shape.
+    if ALayout.DirectClasses.Count > 0 then
+    begin
+      Obj := TJSONObject.Create;
+      for PairStr in ALayout.DirectClasses do
+        Obj.AddPair(PairStr.Key, PairStr.Value);
+      Root.AddPair('direct_classes', Obj);
+    end;
+
     // PrebaseMap (generic)
     Obj := TJSONObject.Create;
     for PairMap in ALayout.PrebaseMap do
@@ -188,6 +198,16 @@ begin
             ReadScalarJsonValue(Pair.JsonValue)
           );
         end;
+
+      // DirectClasses (item 9.4, optional — absent for layouts that do not
+      // opt in; the engine keeps the historical behavior for those).
+      Obj := JSON.GetValue('direct_classes') as TJSONObject;
+      if Assigned(Obj) then
+        for Pair in Obj do
+          Result.DirectClasses.AddOrSetValue(
+            Pair.JsonString.Value,
+            ReadScalarJsonValue(Pair.JsonValue)
+          );
 
       // PrebaseMap (generic)
       Obj := JSON.GetValue('prebase') as TJSONObject;

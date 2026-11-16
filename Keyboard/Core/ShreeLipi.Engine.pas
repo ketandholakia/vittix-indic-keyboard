@@ -203,6 +203,7 @@ var
   OutGlyph: string;
   Matra: TKeyMapping;
   ModRule: TKeyMapping;
+  KeyClass: string;
   Outcome: TInjectionOutcome;
   Units: Integer;
 begin
@@ -329,7 +330,13 @@ begin
     begin
       FlushPendingPreludes(Outcome);
       Outcome := CombineInjectionOutcomes(Outcome, EmitOutput(eoEmitText, OutGlyph));
-      gEngineState.CurrentCluster := OutGlyph;
+      // Item 9.4: only a consonant-class direct output opens the cluster
+      // context, so after a standalone vowel another vowel key is standalone
+      // again. Layouts without direct_classes (or keys left unlisted) keep
+      // the historical behavior — every direct output opens the cluster.
+      if (not ActiveLayout.DirectClasses.TryGetValue(AKey, KeyClass)) or
+         SameText(KeyClass, 'consonant') then
+        gEngineState.CurrentCluster := OutGlyph;
       if Outcome <> ioSuccess then
         ResetEngineState;
       Exit(Outcome);

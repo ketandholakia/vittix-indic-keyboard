@@ -63,6 +63,12 @@ type
 
     [Test]
     procedure ValidationResult_HasErrorsWhenErrorsAdded;
+
+    [Test]
+    procedure DirectClasses_UnknownKey_Warns;
+
+    [Test]
+    procedure DirectClasses_KnownKeys_NoWarning;
   end;
 
 implementation
@@ -457,6 +463,59 @@ begin
       Assert.IsFalse(ResultObj.IsValid, 'Should be invalid');
       Assert.IsTrue(ResultObj.HasErrors, 'Should have errors');
       Assert.IsTrue(ResultObj.ErrorCount > 0, 'Error count should be > 0');
+    finally
+      ResultObj.Free;
+    end;
+  finally
+    Layout.Free;
+  end;
+end;
+
+// Item 9.4: every direct_classes entry must reference a key that actually
+// exists in the direct map; a stale entry is a warning (authoring mistake),
+// never an error (the layout still loads and types).
+procedure TLayoutValidationTests.DirectClasses_UnknownKey_Warns;
+var
+  Layout: TKeyboardLayout;
+  ResultObj: TLayoutValidationResult;
+begin
+  Layout := CreateMinimalValidLayout;
+  try
+    Layout.DirectMap.Add('k', 'क');
+    Layout.DirectClasses.Add('x', 'consonant');   // 'x' is not in direct
+
+    ResultObj := TLayoutValidation.ValidateAndReport(Layout);
+    try
+      Assert.IsTrue(ResultObj.IsValid,
+        'a stale direct_classes entry is a warning, not an error');
+      Assert.IsTrue(ResultObj.WarningCount > 0,
+        'a direct_classes key missing from direct must warn');
+      Assert.IsTrue(ResultObj.ToString.Contains('direct_classes'),
+        'the warning must name the direct_classes section');
+    finally
+      ResultObj.Free;
+    end;
+  finally
+    Layout.Free;
+  end;
+end;
+
+procedure TLayoutValidationTests.DirectClasses_KnownKeys_NoWarning;
+var
+  Layout: TKeyboardLayout;
+  ResultObj: TLayoutValidationResult;
+begin
+  Layout := CreateMinimalValidLayout;
+  try
+    Layout.DirectMap.Add('k', 'क');
+    Layout.DirectMap.Add('a', 'अ');
+    Layout.DirectClasses.Add('k', 'consonant');
+    Layout.DirectClasses.Add('a', 'vowel');
+
+    ResultObj := TLayoutValidation.ValidateAndReport(Layout);
+    try
+      Assert.IsTrue(ResultObj.ToString.IndexOf('direct_classes') < 0,
+        'consistent direct_classes entries must not warn');
     finally
       ResultObj.Free;
     end;

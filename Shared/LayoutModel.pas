@@ -64,6 +64,14 @@ type
     Sequences: TDictionary<string, string>;            // k\s → क्ष
     ExtraMaps: TDictionary<string, TDictionary<string, string>>; // for future scripts
 
+    // Item 9.4: optional per-key classification of DIRECT entries
+    // ("consonant" | "vowel" | "other"). The engine opens its consonant
+    // cluster context only for "consonant"-class direct outputs; unlisted
+    // keys (and layouts without the section) keep the historical behavior —
+    // every direct output opens the cluster. Optional: absent for layouts
+    // that do not opt in.
+    DirectClasses: TDictionary<string, string>;
+
     SupportedScripts: TArray<string>; // for UI/editor
 
     constructor Create;
@@ -102,6 +110,7 @@ begin
   Modifiers   := TDictionary<string, TKeyMapping>.Create;
   Sequences   := TDictionary<string, string>.Create;
   Properties  := TDictionary<string, string>.Create;
+  DirectClasses := TDictionary<string, string>.Create;
   ExtraMaps   := TDictionary<string, TDictionary<string, string>>.Create;
   SupportedScripts := TArray<string>.Create('Devanagari', 'Gujarati', 'Tamil', 'Bengali', 'Kannada', 'Malayalam', 'Oriya', 'Punjabi', 'Telugu', 'Sinhala');
 end;
@@ -130,6 +139,7 @@ begin
   Modifiers.Free;
   Sequences.Free;
   Properties.Free;
+  DirectClasses.Free;
   if Assigned(ExtraMaps) then
     for Map in ExtraMaps.Values do
       Map.Free;
