@@ -97,6 +97,17 @@ function ProductionVKToUnicode(VKCode: DWORD; ScanCode: DWORD;
 // it via THookPolicyDependencies.ScanToVK.
 function ProductionScanToVK(ScanCode: DWORD; FallbackVK: DWORD): DWORD;
 
+// Item 9.3: one-time init that resolves the fixed US layout BEFORE the hook
+// goes live, so the first keystroke never pays LoadKeyboardLayout inside the
+// LL hook callback. Exported so tests can assert the cached handle; the lazy
+// fallback inside GetUSLayoutHKL stays as a safety net.
+procedure PreloadUSLayout;
+
+// Read access to the cached fixed US layout handle (0 = not resolved).
+// Exported for tests; production callers go through ProductionScanToVK and
+// ProductionVKToUnicode.
+function GetUSLayoutHKL: HKL;
+
 // Item 7 production dependencies, exported for tests only; production callers
 // go through THookPolicyDependencies.GetForegroundProcessName.
 function ProductionForegroundProcessName: string;
@@ -259,8 +270,21 @@ var
   // thread or notifying the shell; 0 on failure (fail-open fallback below).
   gUSLayoutHKL: HKL = 0;
 
+procedure PreloadUSLayout;
+begin
+  // Item 9.3: called once from InstallKeyboardHook (before SetWindowsHookEx)
+  // and idempotent afterwards — the cache guard in GetUSLayoutHKL makes every
+  // later call a pure read, never a second LoadKeyboardLayout round.
+  if GetUSLayoutHKL = 0 then
+    LogError('US layout preload failed: fixed-layout key conversion falls back '
+      + 'to per-keystroke lazy loading');
+end;
+
 function GetUSLayoutHKL: HKL;
 begin
+  // Lazy fallback (item 9.3): in normal use the cache is filled by
+  // PreloadUSLayout before the hook is installed, so this load path is never
+  // the first call in the LL callback.
   if gUSLayoutHKL = 0 then
     gUSLayoutHKL := LoadKeyboardLayout('00000409', KLF_NOTELLSHELL);
   Result := gUSLayoutHKL;
@@ -672,6 +696,10 @@ procedure InstallKeyboardHook;
 begin
   if KBHook <> 0 then
     Exit;
+
+  // Item 9.3: resolve the fixed US layout before the hook goes live, so no
+  // keystroke ever pays LoadKeyboardLayout inside the LL callback.
+  PreloadUSLayout;
 
   LogInfo('Installing keyboard hook');
   KBHook := SetWindowsHookEx(

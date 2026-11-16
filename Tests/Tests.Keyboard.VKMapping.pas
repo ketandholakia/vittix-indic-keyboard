@@ -34,6 +34,8 @@ type
     procedure ScanToVK_FallbackToIncomingVK_WhenMappingFails;
     [Test]
     procedure ProductionVKToUnicode_UsesScanCodeNotIncomingVK;
+    [Test]
+    procedure PreloadUSLayout_CachesHandle_AndIsIdempotent;
   end;
 
 implementation
@@ -180,6 +182,26 @@ begin
   finally
     SetHookPolicyDependencies(Default(THookPolicyDependencies));
   end;
+end;
+
+// Item 9.3: the US layout handle must be resolved before the hook goes
+// live, so the first keystroke never pays LoadKeyboardLayout inside the LL
+// callback. PreloadUSLayout is that one-time init; the lazy fallback inside
+// GetUSLayoutHKL stays as a safety net but must never be the first call in
+// normal use (the cache guard makes every later call a pure read).
+procedure TVKMappingTests.PreloadUSLayout_CachesHandle_AndIsIdempotent;
+var
+  First, Second: HKL;
+begin
+  PreloadUSLayout;
+  First := GetUSLayoutHKL;
+  Assert.IsTrue(First <> 0, 'preload must resolve the fixed US layout handle');
+
+  // Repeated preload (and any number of later reads) is a pure cache read:
+  // the same handle comes back, no second LoadKeyboardLayout round.
+  PreloadUSLayout;
+  Second := GetUSLayoutHKL;
+  Assert.AreEqual(First, Second, 'the cached handle must be stable');
 end;
 
 initialization
