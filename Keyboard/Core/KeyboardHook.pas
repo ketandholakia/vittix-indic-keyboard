@@ -137,6 +137,10 @@ var
   KeyHandler: TOnKeyChar = nil;
   TargetProcessName: string = '';
   AllowedProcessNames: string = '';
+  // Review fix (issue 2): the allowed list is parsed ONCE when it is set,
+  // never on the per-keystroke path. Entries are already Trim'd and
+  // non-empty; matching below is a plain iteration over this cache.
+  AllowedProcessList: TArray<string> = [];
   Policy: THookPolicyDependencies;
   // Item 7: default True preserves the historical fail-open behavior (ignore
   // ALL injected input). Flipping it lets other tools' injected keys reach the
@@ -410,15 +414,15 @@ end;
 
 function IsProcessAllowed(const ProcessName: string): Boolean;
 var
-  Names: TArray<string>;
-  Name: string;
+  Entry: string;
 begin
+  // Review fix (issue 2): no per-keystroke Split/allocation — the parsed
+  // entries were precomputed in SetAllowedProcessNames.
   Result := False;
-  if Trim(AllowedProcessNames) = '' then
+  if Length(AllowedProcessList) = 0 then
     Exit(False);
-  Names := AllowedProcessNames.Split([',', ';', #13, #10]);
-  for Name in Names do
-    if SameText(Trim(Name), ProcessName) then
+  for Entry in AllowedProcessList do
+    if SameText(Entry, ProcessName) then
       Exit(True);
 end;
 
@@ -642,8 +646,31 @@ begin
 end;
 
 procedure SetAllowedProcessNames(const AProcessNames: string);
+var
+  Names: TArray<string>;
+  RawName, Entry: string;
+  Count: Integer;
 begin
+  // Review fix (issue 2): parse the list ONCE into trimmed, non-empty
+  // entries. Called on settings changes only, never per keystroke; setting
+  // an empty string clears the cache entirely.
   AllowedProcessNames := Trim(AProcessNames);
+  SetLength(AllowedProcessList, 0);
+  if AllowedProcessNames = '' then
+    Exit;
+
+  Names := AllowedProcessNames.Split([',', ';', #13, #10]);
+  Count := 0;
+  SetLength(AllowedProcessList, Length(Names));
+  for RawName in Names do
+  begin
+    Entry := Trim(RawName);
+    if Entry = '' then
+      Continue;
+    AllowedProcessList[Count] := Entry;
+    Inc(Count);
+  end;
+  SetLength(AllowedProcessList, Count);
 end;
 
 procedure SetHookPolicyDependencies(

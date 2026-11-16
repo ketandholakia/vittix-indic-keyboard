@@ -36,6 +36,14 @@ type
 
     [Test]
     procedure HandleKeyEvent_TrimsWhitespaceFromProcessNames;
+
+    // Review fix (issue 2): the allowed list is parsed once when it is set;
+    // these pin the observable parsing behavior (empty entries never match,
+    // replacing the list fully replaces the cache).
+    [Test]
+    procedure HandleKeyEvent_EmptyEntriesOnly_AllowsNothing;
+    [Test]
+    procedure HandleKeyEvent_ReplacingTheList_ReplacesTheAllowedSet;
   end;
 
 implementation
@@ -155,12 +163,38 @@ end;
 procedure TProcessFilterTests.HandleKeyEvent_TrimsWhitespaceFromProcessNames;
 begin
   SetAllowedProcessNames('  CorelDRW.exe  ,   Notepad.exe  ');
-  
+
   GFakeProcess := 'notepad.exe';
   Assert.IsTrue(HandleKeyEvent(MakeKey()), 'Should trim spaces around Notepad.exe');
-  
+
   GFakeProcess := 'coreldrw.exe';
   Assert.IsTrue(HandleKeyEvent(MakeKey()), 'Should trim spaces around CorelDRW.exe');
+end;
+
+procedure TProcessFilterTests.HandleKeyEvent_EmptyEntriesOnly_AllowsNothing;
+begin
+  // A list of empty/whitespace entries must match nothing — in particular an
+  // empty foreground process name (lookup failure) must not be "allowed".
+  SetAllowedProcessNames(',, ;,  ');
+
+  GFakeProcess := '';
+  Assert.IsFalse(HandleKeyEvent(MakeKey()), 'empty entries must not match');
+  GFakeProcess := 'notepad.exe';
+  Assert.IsFalse(HandleKeyEvent(MakeKey()), 'no real entry remains');
+end;
+
+procedure TProcessFilterTests.HandleKeyEvent_ReplacingTheList_ReplacesTheAllowedSet;
+begin
+  SetAllowedProcessNames('notepad.exe');
+  GFakeProcess := 'notepad.exe';
+  Assert.IsTrue(HandleKeyEvent(MakeKey()), 'sanity: first list allows notepad');
+
+  SetAllowedProcessNames('word.exe');
+  GFakeProcess := 'notepad.exe';
+  Assert.IsFalse(HandleKeyEvent(MakeKey()),
+    'replacing the list must drop the previous entries');
+  GFakeProcess := 'word.exe';
+  Assert.IsTrue(HandleKeyEvent(MakeKey()), 'the new entries are active');
 end;
 
 initialization
