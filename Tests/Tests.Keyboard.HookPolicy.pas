@@ -65,7 +65,9 @@ type
     [Test]
     procedure ExtendedKey_PassesEmbeddedScanPrefix;
     [Test]
-    procedure Tab_KeyDown_Consumed_NotifiesEngine;
+    procedure Tab_KeyDown_NotifiesEngine_PassesThroughNatively;
+    [Test]
+    procedure ShiftTab_WithPendingFlush_FocusesBackwards;
     [Test]
     procedure Backspace_KeyDown_Consumed_NotifiesEngine;
     [Test]
@@ -357,12 +359,26 @@ begin
     'a regular key must not carry the prefix');
 end;
 
-procedure THookPolicyTests.Tab_KeyDown_Consumed_NotifiesEngine;
+// Review fix (issue 1): the physical control key passes through NATIVELY
+// after the engine's flush — the hook never consumed it, so its real
+// modifiers survive. Shift+Tab therefore still moves focus backwards.
+procedure THookPolicyTests.Tab_KeyDown_NotifiesEngine_PassesThroughNatively;
 begin
-  Assert.IsTrue(HandleKeyEvent(MakeKey(VK_TAB, True)),
-    'Tab must be consumed');
+  Assert.IsFalse(HandleKeyEvent(MakeKey(VK_TAB, True)),
+    'Tab must pass through natively (no synthetic re-injection)');
   Assert.AreEqual(1, FKeys.Count);
   Assert.AreEqual(#9, FKeys[0], 'the engine must receive the Tab control char');
+end;
+
+procedure THookPolicyTests.ShiftTab_WithPendingFlush_FocusesBackwards;
+begin
+  // The modifier snapshot has Shift held: the pending flush runs, and the
+  // physical Shift+Tab flows on untouched, so focus moves backwards.
+  GFakeModifiers.ShiftDown := True;
+  Assert.IsFalse(HandleKeyEvent(MakeKey(VK_TAB, True)),
+    'Shift+Tab must pass through with its Shift modifier intact');
+  Assert.AreEqual(1, FKeys.Count, 'the pending flush must have been committed');
+  Assert.AreEqual(#9, FKeys[0]);
 end;
 
 procedure THookPolicyTests.Backspace_KeyDown_Consumed_NotifiesEngine;

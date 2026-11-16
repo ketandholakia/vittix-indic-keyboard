@@ -527,19 +527,13 @@ begin
         Outcome := KeyHandler(#13);
     end;
 
-    // Item 4: pass-through (nothing pending, nothing emitted) means the
-    // original control key goes through natively — do not re-inject it.
-    if Outcome = ioPassThrough then
-      Exit(False);
-
-    // A flush actually emitted text, so the physical control key — consumed
-    // by the translation — must be re-injected.
-    if AKey.VKCode = VK_TAB then
-      Outcome := CombineInjectionOutcomes(Outcome, SendVirtualKey(VK_TAB))
-    else
-      Outcome := CombineInjectionOutcomes(Outcome, SendVirtualKey(VK_RETURN));
-
-    Result := (Outcome <> ioZeroAccepted) and (Outcome <> ioPassThrough);
+    // Review fix (issue 1): the engine has committed any pending prebase/reph
+    // (or had nothing to commit). The physical control key passes through
+    // NATIVELY — the hook never consumed it, so there is nothing to
+    // re-inject and its real modifiers survive: Shift+Tab with a pending
+    // matra flushes the matra AND moves focus backwards. Re-injecting a bare
+    // VK_TAB/VK_RETURN would have dropped the Shift modifier.
+    Result := False;
     Exit;
   end;
 

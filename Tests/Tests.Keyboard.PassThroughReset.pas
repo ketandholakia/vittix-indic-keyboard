@@ -60,7 +60,7 @@ type
     [Test]
     procedure Space_WithPendingPrebase_FlushesThenReinjects;
     [Test]
-    procedure Tab_WithPendingPrebase_FlushesThenReinjects;
+    procedure Tab_WithPendingPrebase_FlushesThenPassesThroughNatively;
   end;
 
 implementation
@@ -354,7 +354,9 @@ begin
     'the flushed prebase and the literal space must have been injected');
 end;
 
-procedure TPassThroughResetTests.Tab_WithPendingPrebase_FlushesThenReinjects;
+// Review fix (issue 1): the physical Tab passes through NATIVELY after the
+// flush — no synthetic re-injection, so Shift+Tab keeps its Shift modifier.
+procedure TPassThroughResetTests.Tab_WithPendingPrebase_FlushesThenPassesThroughNatively;
 begin
   SetEngineOutputHandler(nil);
 
@@ -362,10 +364,10 @@ begin
   Assert.IsTrue(HandleKeyEvent(MakeKey($49, True)), 'the prebase key is consumed');
   Assert.AreEqual(0, GSendInputCalls, 'storing the prebase injects nothing');
 
-  Assert.IsTrue(HandleKeyEvent(MakeKey(VK_TAB, True)),
-    'Tab is consumed because the flush emitted text');
-  Assert.AreEqual(2, GSendInputCalls,
-    'the flushed prebase and the reinjected Tab must have been injected');
+  Assert.IsFalse(HandleKeyEvent(MakeKey(VK_TAB, True)),
+    'Tab passes through natively with its real modifiers');
+  Assert.AreEqual(1, GSendInputCalls,
+    'only the flushed prebase is injected; the physical Tab itself flows on');
 end;
 
 initialization
