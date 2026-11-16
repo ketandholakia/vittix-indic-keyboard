@@ -13,6 +13,7 @@ uses
   EngineState in 'Core\EngineState.pas',
   LayoutLoader in 'Layout\LayoutLoader.pas',
   LayoutManager in 'Layout\LayoutManager.pas',
+  LayoutReload in 'Layout\LayoutReload.pas',
   LayoutModel in '..\Shared\LayoutModel.pas',
   LayoutJson in '..\Shared\LayoutJson.pas',
   LayoutValidation in '..\Shared\LayoutValidation.pas',

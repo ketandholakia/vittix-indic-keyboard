@@ -44,7 +44,35 @@ type
     procedure Initialize_SortsFiles_DeterministicDefault;
   end;
 
+  // Item 9.5: the detach / reload / re-attach decision used by the tray,
+  // extracted into the non-visual LayoutReload unit so a failed reload leaves
+  // the engine attached to the exact same active layout it had before.
+  [TestFixture]
+  [Category('LayoutReload')]
+  TLayoutReloadTests = class
+  strict private
+    FDir: string;
+    procedure WriteLayout(const AID: string);
+  public
+    [Setup]
+    procedure Setup;
+    [TearDown]
+    procedure TearDown;
+
+    [Test]
+    procedure Reload_Success_ActivatesPreferredAndAttachesEngine;
+    [Test]
+    procedure Reload_Failure_ReAttachesThePreviousLayout;
+    [Test]
+    procedure Reload_Failure_LeavesManagerAndEngineConsistent;
+  end;
+
 implementation
+
+uses
+  EngineState,
+  ShreeLipi.Engine,
+  LayoutReload;
 
 procedure TLayoutManagerTests.WriteFile(const AFileName, AContent: string);
 var
@@ -234,7 +262,113 @@ begin
   Assert.AreEqual('z', FManager.GetLayout(2).LayoutID);
 end;
 
+// ---- Item 9.5: detach / reload / re-attach helper --------------------------
+
+const
+  LAYOUT_JSON = '{"layout_id":"%s","name":"%s","script":"Devanagari","encoding":"UTF-16",'
+    + '"layout_type":"typewriter","metadata":{"font_family":"Arial"}}';
+
+procedure TLayoutReloadTests.WriteLayout(const AID: string);
+begin
+  TFile.WriteAllText(TPath.Combine(FDir, AID + '.json'),
+    Format(LAYOUT_JSON, [AID, AID]), TEncoding.UTF8);
+end;
+
+procedure TLayoutReloadTests.Setup;
+begin
+  InitEngineState;
+  SetEngineEnabled(True);
+  SetEngineOutputHandler(nil);
+  FDir := TPath.Combine(TPath.GetTempPath, 'VittixReloadTests_' + TGUID.NewGuid.ToString);
+  TDirectory.CreateDirectory(FDir);
+end;
+
+procedure TLayoutReloadTests.TearDown;
+begin
+  ResetEngineState;
+  SetActiveLayout(nil);
+  try
+    if TDirectory.Exists(FDir) then
+      TDirectory.Delete(FDir, True);
+  except
+  end;
+end;
+
+procedure TLayoutReloadTests.Reload_Success_ActivatesPreferredAndAttachesEngine;
+var
+  Requested: TKeyboardLayout;
+begin
+  WriteLayout('alpha');
+  WriteLayout('beta');
+  gLayoutManager.Initialize(FDir);
+
+  ReloadLayoutsAndActivate(FDir, 'beta');
+
+  Assert.AreSame(gLayoutManager.ActiveLayout, EngineActiveLayout,
+    'the engine must be attached to the manager''s active layout');
+  Assert.AreEqual('beta', EngineActiveLayout.LayoutID,
+    'the preferred layout must be activated');
+
+  // Reload again with no preference: first (sorted) layout becomes active.
+  ReloadLayoutsAndActivate(FDir, '');
+  Requested := gLayoutManager.GetLayout(0);
+  Assert.AreSame(Requested, EngineActiveLayout,
+    'without a preference the engine attaches to the default layout');
+end;
+
+// The heart of item 9.5: a failed reload must leave the engine attached to
+// the EXACT same active layout it had before the attempt, so typing silently
+// continuing is the invariant the tray relies on.
+procedure TLayoutReloadTests.Reload_Failure_ReAttachesThePreviousLayout;
+var
+  Before, After: TKeyboardLayout;
+begin
+  WriteLayout('keepme');
+  gLayoutManager.Initialize(FDir);
+  ReloadLayoutsAndActivate(FDir, 'keepme');
+  Before := EngineActiveLayout;
+
+  Assert.WillRaise(
+    procedure
+    begin
+      ReloadLayoutsAndActivate(TPath.Combine(FDir, 'Missing'), 'keepme');
+    end,
+    Exception,
+    'a failed reload must surface the error to the caller');
+
+  After := EngineActiveLayout;
+  Assert.AreSame(Before, After,
+    'the engine must be re-attached to the same live layout object');
+  Assert.IsNotNull(After, 'the engine must not stay detached');
+  Assert.AreEqual('keepme', After.LayoutID,
+    'the previously active layout ID must be preserved');
+  Assert.AreSame(gLayoutManager.ActiveLayout, After,
+    'manager and engine must agree on the active layout');
+end;
+
+// The first-startup variant (no layouts active at all) cannot be reproduced
+// mid-suite because the global manager keeps its loaded set until a
+// successful reload replaces it. The invariant that holds in EVERY reachable
+// state — and is what the tray relies on — is that after a failed reload the
+// engine is attached to exactly the manager's active layout, whether that is
+// a restored previous layout or nil on a truly fresh start.
+procedure TLayoutReloadTests.Reload_Failure_LeavesManagerAndEngineConsistent;
+begin
+  WriteLayout('one');
+  gLayoutManager.Initialize(FDir);
+
+  Assert.WillRaise(
+    procedure
+    begin
+      ReloadLayoutsAndActivate(TPath.Combine(FDir, 'Missing'), '');
+    end);
+
+  Assert.AreSame(gLayoutManager.ActiveLayout, EngineActiveLayout,
+    'after a failed reload the engine must match the manager''s active layout');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TLayoutManagerTests);
+  TDUnitX.RegisterTestFixture(TLayoutReloadTests);
 
 end.

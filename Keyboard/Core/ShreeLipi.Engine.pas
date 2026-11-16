@@ -32,6 +32,10 @@ function ProcessKeyChar(const AKey: string): TInjectionOutcome;
 procedure ResetPendingOnPassThrough;
 procedure ResetClusterContext;
 procedure SetEngineOutputHandler(AHandler: TEngineOutputHandler);
+// Item 9.5: read access to the layout object the engine is currently
+// attached to (nil = detached), so callers and tests can verify re-attach
+// decisions without reaching into this unit's state.
+function EngineActiveLayout: TKeyboardLayout;
 
 implementation
 
@@ -43,6 +47,11 @@ procedure SetEngineOutputHandler(AHandler: TEngineOutputHandler);
 begin
   // nil restores the default physical output path via SendInputHelper.
   OnOutput := AHandler;
+end;
+
+function EngineActiveLayout: TKeyboardLayout;
+begin
+  Result := ActiveLayout;
 end;
 
 { --------------------------------------------------

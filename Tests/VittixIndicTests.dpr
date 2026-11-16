@@ -21,6 +21,7 @@ uses
   SettingsPathProvider in '..\Keyboard\Config\SettingsPathProvider.pas',
   LayoutManager in '..\Keyboard\Layout\LayoutManager.pas',
   LayoutLoader in '..\Keyboard\Layout\LayoutLoader.pas',
+  LayoutReload in '..\Keyboard\Layout\LayoutReload.pas',
   Tests.SettingsPath in 'Tests.SettingsPath.pas',
   AppSettings in '..\Keyboard\Config\AppSettings.pas',
   Tests.Shared.LayoutValidation in 'Tests.Shared.LayoutValidation.pas',

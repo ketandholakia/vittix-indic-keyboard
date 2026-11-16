@@ -25,6 +25,7 @@ uses
   ShreeLipi.Engine,
 
   LayoutManager,
+  LayoutReload,
   AppSettings,
   LayoutModel,
   frmSettings,
@@ -918,18 +919,10 @@ begin
   GAppSettings.FallbackFont := Settings.FallbackFont;
   GAppSettings.PreviewFontSize := Settings.PreviewFontSize;
 
-  // Detach the engine before the manager frees the old layout objects, so the
-  // flush inside SetActiveLayout below can never run on a freed layout
-  // (same ordering rule as ReloadLayoutsClick).
-  SetActiveLayout(nil);
-  gLayoutManager.Initialize(GAppSettings.LayoutsPath);
-  if GAppSettings.DefaultLayoutID <> '' then
-    gLayoutManager.SetActiveLayoutByID(GAppSettings.DefaultLayoutID);
-
-  if gLayoutManager.ActiveLayout = nil then
-    raise Exception.Create('No layout could be activated with the current settings.');
-
-  SetActiveLayout(gLayoutManager.ActiveLayout);
+  // Reload layouts and re-attach the engine (item 9.5): on a failed reload
+  // the helper re-attaches the previously active layout before re-raising,
+  // so the caller sees the original error exactly once and typing continues.
+  ReloadLayoutsAndActivate(GAppSettings.LayoutsPath, GAppSettings.DefaultLayoutID);
   ResetEngineState;
   ResetInjectionStatus;
 
@@ -974,19 +967,13 @@ begin
   // Layout JSON is hand-editable, so there has to be a way to pick up changes
   // without restarting the application.
   //
-  // The engine is detached BEFORE the manager reloads: SetActiveLayout(nil)
-  // flushes any pending prebase/reph through the still-valid old layout and
-  // then drops the engine's pointer, so nothing below can flush through a
-  // freed layout object. The whole reload is guarded — a failure is reported
-  // as a balloon, never raised out of the click handler.
+  // ReloadLayoutsAndActivate detaches the engine, reloads, re-activates the
+  // default layout and re-attaches the engine — and on a failed reload it
+  // re-attaches the previously active layout BEFORE re-raising, so typing
+  // continues unaffected (item 9.5). The whole reload is guarded: a failure
+  // is reported as a balloon, never raised out of the click handler.
   try
-    SetActiveLayout(nil);
-
-    gLayoutManager.Initialize(GAppSettings.LayoutsPath);
-    if GAppSettings.DefaultLayoutID <> '' then
-      gLayoutManager.SetActiveLayoutByID(GAppSettings.DefaultLayoutID);
-
-    SetActiveLayout(gLayoutManager.ActiveLayout);
+    ReloadLayoutsAndActivate(GAppSettings.LayoutsPath, GAppSettings.DefaultLayoutID);
     ResetEngineState;
 
     UpdateLayoutHeader;
@@ -1003,12 +990,8 @@ begin
       Notify(Format('Reloaded %d layout(s).', [gLayoutManager.LayoutCount]));
   except
     on E: Exception do
-    begin
-      // The manager keeps the previous layout set on a failed reload, so the
-      // engine can be re-attached to it and typing continues unaffected.
-      SetActiveLayout(gLayoutManager.ActiveLayout);
+      // The helper already re-attached the engine; only the report remains.
       Notify('Reloading layouts failed: ' + E.Message);
-    end;
   end;
 end;
 
