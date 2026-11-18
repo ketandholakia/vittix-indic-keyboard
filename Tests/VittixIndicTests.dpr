@@ -37,6 +37,7 @@ uses
   Tests.LayoutEditor.BackupManager in 'Tests.LayoutEditor.BackupManager.pas',
   Tests.Layouts.RealLayouts in 'Tests.Layouts.RealLayouts.pas',
   Tests.Layouts.LegacyGlyphs in 'Tests.Layouts.LegacyGlyphs.pas',
+  Tests.Layouts.Phonetic in 'Tests.Layouts.Phonetic.pas',
   Tests.Layouts.Examples in 'Tests.Layouts.Examples.pas',
   Tests.Utils.Logger in 'Tests.Utils.Logger.pas',
   Tests.Engine.PendingState in 'Tests.Engine.PendingState.pas',
