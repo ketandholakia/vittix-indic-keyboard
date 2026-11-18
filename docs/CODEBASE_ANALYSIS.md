@@ -364,3 +364,17 @@ through cp437 when the files were authored (present before this round, e.g.
 commit `214e333`). The decode recipe is
 `storedGlyph.encode('cp437').decode('utf-8')`; fixing the stored glyphs
 changes engine output for those keys and needs its own decision.
+
+**Phase A resolved (2026-11-19, commits 505ca0f..62d052e):** the mojibake
+finding above is fixed — 54 glyph values repaired across the four legacy
+layouts (full decoded key→glyph table in the fix(A.1) commit); remington now
+types decoded Unicode (`k` → ક, `kA` → કા) and a data-integrity gate test
+keeps cp437 remnants out of all four files. `direct_classes` is complete for
+the determinable keys: `m` = consonant (documented Kruti Dev chart: `;` = म);
+`q`/`Q` stay unlisted pending verification against the real fonts. Layout
+schema versioned at 1.1 (validator accepts declared 1.0 and 1.1, absent still
+defaults to current; the four direct_classes layouts declare 1.1, the other
+six layouts untouched). `EnsureBackup` is wired into every editor save site
+(always-on, `_backup` subdir, MaxBackups=20 rotation). Left open for
+sign-off: remington's `encoding: "legacy"` label now coexists with Unicode
+glyphs — relabeling is a deliberate decision. Test suite: 243 → 265.
