@@ -34,14 +34,12 @@ type
   TKeyMapping = record
     Key: string;
     Glyph: string;
-    MapType: string; // e.g. direct, prebase, postbase, modifier, sequence, extra
-    // Extensible metadata. Known values the ENGINE DOES NOT EXECUTE yet:
-    //   - "behavior": "move_to_cluster_start" (reph ra must be emitted before
-    //     the consonant it attaches to) and "behavior": "join_next" (halant
-    //     joins the following consonant). The current engine emits reph before
-    //     the next consonant implicitly and emits the halant glyph verbatim,
-    //     so these flags are preserved as authoring metadata only. Implementing
-    //     them is future work; see docs/CODEBASE_ANALYSIS.md.
+    // MapType carries the modifier's "behavior" tag when present (parsed by
+    // LayoutFromJson): "move_to_cluster_start" (reph — the engine resolves
+    // the rule by this tag, Phase B.4) and "join_next" (the phonetic halant
+    // that drives auto-halant, Phase B.2). Plain map names otherwise:
+    // direct, prebase, postbase, modifier, sequence, extra.
+    MapType: string;
     Metadata: TDictionary<string, string>;
     procedure InitMetadata;
     procedure FreeMetadata;

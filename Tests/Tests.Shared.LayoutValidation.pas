@@ -92,6 +92,22 @@ type
 
     [Test]
     procedure DirectClasses_KnownKeys_NoWarning;
+
+    // Phase B.5: the engine now implements auto-halant (join_next) and
+    // inherent-vowel absorption (inherent_vowel_key) for phonetic layouts.
+    // The blanket phonetic warning is retired; phonetic layouts are warned
+    // only for the opt-ins they are missing.
+    [Test]
+    procedure PhoneticLayout_MissingOptIns_WarnsWithGuidance;
+
+    [Test]
+    procedure PhoneticLayout_WithOptIns_NoWarning;
+
+    [Test]
+    procedure PhoneticLayout_PartialOptIns_WarnListsMissing;
+
+    [Test]
+    procedure RenamedRephRule_NotWarnedAsUnexecutedMetadata;
   end;
 
 implementation
@@ -537,7 +553,10 @@ begin
 
     ResultObj := TLayoutValidation.ValidateAndReport(Layout);
     try
-      Assert.IsTrue(ResultObj.ToString.IndexOf('direct_classes') < 0,
+      // Targets the stale-entry warning specifically; the generic word
+      // "direct_classes" also appears in the Phase B.5 phonetic opt-in
+      // warning, which is unrelated here.
+      Assert.IsTrue(ResultObj.ToString.IndexOf('missing from the direct map') < 0,
         'consistent direct_classes entries must not warn');
     finally
       ResultObj.Free;
@@ -711,6 +730,130 @@ begin
       Assert.AreEqual('1.1', Loaded.Version, 'declared 1.1 must round-trip');
     finally
       Loaded.Free;
+    end;
+  finally
+    Layout.Free;
+  end;
+end;
+
+// Phase B.5: the engine implements auto-halant (join_next) and inherent-
+// vowel absorption (inherent_vowel_key) for phonetic layouts. Warn only
+// for the opt-ins a phonetic layout is missing; retire the blanket warning.
+procedure TLayoutValidationTests.PhoneticLayout_MissingOptIns_WarnsWithGuidance;
+var
+  Layout: TKeyboardLayout;
+  ResultObj: TLayoutValidationResult;
+begin
+  Layout := CreateMinimalValidLayout; // LayoutType = 'phonetic', no opt-ins
+  try
+    ResultObj := TLayoutValidation.ValidateAndReport(Layout);
+    try
+      Assert.IsTrue(ResultObj.IsValid,
+        'missing phonetic opt-ins are a warning, not an error');
+      Assert.IsTrue(ResultObj.ToString.Contains('Phonetic layout'),
+        'missing opt-ins must warn');
+      Assert.IsTrue(ResultObj.ToString.Contains('join_next'),
+        'the warning must mention the join_next opt-in');
+      Assert.IsTrue(ResultObj.ToString.Contains('inherent_vowel_key'),
+        'the warning must mention the inherent_vowel_key opt-in');
+      Assert.IsTrue(ResultObj.ToString.Contains('direct_classes'),
+        'the warning must mention the direct_classes requirement');
+    finally
+      ResultObj.Free;
+    end;
+  finally
+    Layout.Free;
+  end;
+end;
+
+procedure TLayoutValidationTests.PhoneticLayout_WithOptIns_NoWarning;
+var
+  Layout: TKeyboardLayout;
+  KM: TKeyMapping;
+  ResultObj: TLayoutValidationResult;
+begin
+  Layout := CreateMinimalValidLayout;
+  try
+    Layout.DirectMap.Add('k', 'क');
+    Layout.DirectClasses.Add('k', 'consonant');
+    KM := Default(TKeyMapping);
+    KM.Key := '\';
+    KM.Glyph := '्';
+    KM.MapType := 'join_next';
+    KM.InitMetadata;
+    Layout.Modifiers.Add('halant', KM);
+    Layout.Properties.Add('inherent_vowel_key', 'a');
+
+    ResultObj := TLayoutValidation.ValidateAndReport(Layout);
+    try
+      Assert.IsTrue(ResultObj.ToString.IndexOf('Phonetic layout') < 0,
+        'a fully opted-in phonetic layout must not warn');
+    finally
+      ResultObj.Free;
+    end;
+  finally
+    Layout.Free;
+  end;
+end;
+
+procedure TLayoutValidationTests.PhoneticLayout_PartialOptIns_WarnListsMissing;
+var
+  Layout: TKeyboardLayout;
+  KM: TKeyMapping;
+  ResultObj: TLayoutValidationResult;
+begin
+  Layout := CreateMinimalValidLayout;
+  try
+    // Classes + join_next present, inherent_vowel_key absent.
+    Layout.DirectMap.Add('k', 'क');
+    Layout.DirectClasses.Add('k', 'consonant');
+    KM := Default(TKeyMapping);
+    KM.Key := '\';
+    KM.Glyph := '्';
+    KM.MapType := 'join_next';
+    KM.InitMetadata;
+    Layout.Modifiers.Add('halant', KM);
+
+    ResultObj := TLayoutValidation.ValidateAndReport(Layout);
+    try
+      Assert.IsTrue(ResultObj.ToString.Contains('Phonetic layout'),
+        'a partially opted-in phonetic layout still warns');
+      Assert.IsTrue(ResultObj.ToString.Contains('inherent_vowel_key'),
+        'the warning must name the still-missing opt-in');
+    finally
+      ResultObj.Free;
+    end;
+  finally
+    Layout.Free;
+  end;
+end;
+
+// Phase B.4 made the engine execute any modifier tagged
+// "behavior": "move_to_cluster_start" — such a rule must no longer be
+// reported as unexecuted metadata just because its rule name is not 'reph'.
+procedure TLayoutValidationTests.RenamedRephRule_NotWarnedAsUnexecutedMetadata;
+var
+  Layout: TKeyboardLayout;
+  KM: TKeyMapping;
+  ResultObj: TLayoutValidationResult;
+begin
+  Layout := CreateMinimalValidLayout;
+  try
+    Layout.DirectMap.Add('k', 'क');
+    KM := Default(TKeyMapping);
+    KM.Key := 'R';
+    KM.Glyph := 'र्';
+    KM.MapType := 'move_to_cluster_start';
+    KM.InitMetadata;
+    Layout.Modifiers.Add('reph_1', KM);
+
+    ResultObj := TLayoutValidation.ValidateAndReport(Layout);
+    try
+      Assert.IsTrue(ResultObj.IsValid, ResultObj.ToString);
+      Assert.IsTrue(ResultObj.ToString.IndexOf('not executed by the engine') < 0,
+        'a move_to_cluster_start rule IS executed and must not warn');
+    finally
+      ResultObj.Free;
     end;
   finally
     Layout.Free;

@@ -165,6 +165,8 @@ var
   ExtraMap: TDictionary<string, string>;
   ExtraPair: TPair<string, string>;
   PairProp: TPair<string, string>;
+  HasJoinNext, HasInherentKey: Boolean;
+  Missing: string;
 
   procedure CheckAndRegisterKey(const AKey, ASection: string; const AKeyForSeen: string = '');
   var
@@ -219,6 +221,10 @@ begin
     AddError(vsError, 'Layout', 'Version',
       Format('Unsupported layout schema version "%s"; supported version is "%s"',
         [ALayout.Version, SupportedLayoutSchemaVersionsText]));
+
+  // Phase B.5: phonetic opt-in tracking for the engine-feature warning.
+  HasJoinNext := False;
+  HasInherentKey := ALayout.Properties.ContainsKey('inherent_vowel_key');
 
   SeenKeys := TDictionary<string, string>.Create;
   try
@@ -300,16 +306,22 @@ begin
             AddError(vsWarning, 'Modifiers.Metadata', PairMod.Key, 'Empty metadata key');
         end;
 
+      // Phase B.2/B.4: the engine executes auto-halant via a join_next tag.
+      if SameText(PairMod.Value.MapType, 'join_next') then
+        HasJoinNext := True;
+
       // The dictionary key names a modifier rule; runtime lookup uses the
-      // physical key stored in the mapping. Only reph and halant are executed
-      // by the engine, so unrelated legacy modifier metadata is not treated
-      // as a physical-key mapping here.
-      if (PairMod.Key <> 'reph') and (PairMod.Key <> 'halant') then
+      // physical key stored in the mapping. Executed rules: reph and halant
+      // by name, and ANY rule tagged "behavior": "move_to_cluster_start"
+      // (Phase B.4) — everything else is authoring metadata and warned.
+      if (PairMod.Key <> 'reph') and (PairMod.Key <> 'halant') and
+         (not SameText(PairMod.Value.MapType, 'move_to_cluster_start')) then
         AddError(vsWarning, 'Modifiers', PairMod.Key,
           'Modifier is retained as metadata but is not executed by the engine');
 
       if ACheckCrossMapDuplicates and
-         ((PairMod.Key = 'reph') or (PairMod.Key = 'halant')) then
+         (((PairMod.Key = 'reph') or (PairMod.Key = 'halant')) or
+          SameText(PairMod.Value.MapType, 'move_to_cluster_start')) then
         CheckAndRegisterKey(PairMod.Value.Key, 'Modifiers');
     end;
 
@@ -377,17 +389,30 @@ begin
         CheckAndRegisterKey(PairProp.Key, 'Properties', PairProp.Key);
     end;
 
-    // ---------------- PHONETIC ENGINE LIMITATION ----------------
-    // The engine has no inherent-vowel or auto-halant support: a consonant key
-    // emits its glyph verbatim (with any inherent vowel the glyph carries) and
-    // a following consonant never gets an automatic halant, so phonetic
-    // layouts cannot produce half-consonant forms. Explicit halant input is
-    // required. This warning documents the limitation until the engine
-    // implements inherent-vowel/auto-halant handling for phonetic layouts.
+    // ---------------- PHONETIC ENGINE OPT-INS (Phase B.5) ----------------
+    // The engine implements auto-halant (a phonetic layout's halant modifier
+    // tagged "behavior": "join_next") and inherent-vowel absorption
+    // (properties "inherent_vowel_key"), both gated on direct_classes
+    // classification. Warn only for the opt-ins a phonetic layout is
+    // missing; without them half-forms need explicit halant input.
     if SameText(ALayout.LayoutType, 'phonetic') then
-      AddError(vsWarning, 'Layout', 'LayoutType',
-        'Phonetic layout: the engine has no inherent-vowel or auto-halant support; ' +
-        'half-consonant forms require explicit halant input.');
+    begin
+      Missing := '';
+      if not HasJoinNext then
+        Missing := Missing + 'halant modifier "join_next", ';
+      if not HasInherentKey then
+        Missing := Missing + 'properties "inherent_vowel_key", ';
+      if ALayout.DirectClasses.Count = 0 then
+        Missing := Missing + 'direct_classes classification, ';
+      if Missing <> '' then
+      begin
+        SetLength(Missing, Length(Missing) - 2); // drop the trailing ", "
+        AddError(vsWarning, 'Layout', 'LayoutType',
+          'Phonetic layout: engine features need ' + Missing +
+          ' (auto-halant = join_next, inherent-vowel absorption = inherent_vowel_key, ' +
+          'consonant/vowel gating = direct_classes); without them half-forms need explicit halant input.');
+      end;
+    end;
 
   finally
     SeenKeys.Free;

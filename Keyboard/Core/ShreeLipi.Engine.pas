@@ -366,10 +366,9 @@ begin
     // matra reading must win, so the postbase map is consulted BEFORE the
     // direct map. Unicode/phonetic layouts keep the two maps disjoint, so this
     // reordering can never change their output.
-    // TODO(phonetic): the engine still has no inherent-vowel or auto-halant
-    // support, so a phonetic layout cannot suppress the inherent vowel of a
-    // consonant glyph or build half-consonant forms automatically. The
-    // validator emits a warning for phonetic layouts documenting this.
+    // Phase B: the engine now implements inherent-vowel absorption (below)
+    // and auto-halant (direct branch) for opt-in phonetic layouts; the
+    // validator warns about phonetic layouts missing the opt-ins.
     if (gEngineState.CurrentCluster <> '') and
        ActiveLayout.PostbaseMap.TryGetValue(AKey, OutGlyph) then
     begin
