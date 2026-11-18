@@ -33,6 +33,7 @@ uses
   LayoutMappingSync in '..\LayoutEditor\Utils\LayoutMappingSync.pas',
   Tests.LayoutEditor.MappingSync in 'Tests.LayoutEditor.MappingSync.pas',
   Tests.Layouts.RealLayouts in 'Tests.Layouts.RealLayouts.pas',
+  Tests.Layouts.LegacyGlyphs in 'Tests.Layouts.LegacyGlyphs.pas',
   Tests.Layouts.Examples in 'Tests.Layouts.Examples.pas',
   Tests.Utils.Logger in 'Tests.Utils.Logger.pas',
   Tests.Engine.PendingState in 'Tests.Engine.PendingState.pas',

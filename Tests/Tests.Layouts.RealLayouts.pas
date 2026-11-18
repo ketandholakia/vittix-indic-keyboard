@@ -64,6 +64,11 @@ type
     procedure LegacyPostbase_MatraAfterConsonant_Krutidev010;
   end;
 
+// Runs one typed sequence against a real layout and returns the emitted text
+// as one concatenated string, with the engine fully reset afterwards. Shared
+// with the Tests.Layouts.LegacyGlyphs fixture (Phase A.1).
+function TypeSequence(ALayout: TKeyboardLayout; const AKeys: string): string;
+
 implementation
 
 var
@@ -77,8 +82,6 @@ begin
     GEngineEvents.Add(AText);
 end;
 
-// Runs one typed sequence against a real layout and returns the emitted text
-// as one concatenated string, with the engine fully reset afterwards.
 function TypeSequence(ALayout: TKeyboardLayout; const AKeys: string): string;
 var
   Ch: Char;

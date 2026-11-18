@@ -109,12 +109,12 @@
     },
     "anusvara": {
       "key": "M",
-      "glyph": "┬╡",
+      "glyph": "µ",
       "behavior": "post"
     },
     "visarga": {
       "key": "H",
-      "glyph": "┼╕",
+      "glyph": "Ÿ",
       "behavior": "post"
     }
   }
