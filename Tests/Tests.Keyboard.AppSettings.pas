@@ -167,6 +167,7 @@ var
 begin
   FSettings := NewSettings;
   FSettings.EnableKeyboard := False;
+  FSettings.IgnoreInjectedInput := False;
   FSettings.TargetProcessName := 'TestApp.exe';
   FSettings.AllowedProcessesText := 'App1.exe, App2.exe';
   FSettings.ToggleHotkeyText := 'Ctrl+Shift+F12';
@@ -179,6 +180,8 @@ begin
   try
     Second.Load;
     Assert.IsFalse(Second.EnableKeyboard);
+    Assert.IsFalse(Second.IgnoreInjectedInput,
+      'QW3: the injected-input preference must persist');
     Assert.AreEqual('TestApp.exe', Second.TargetProcessName);
     Assert.AreEqual('App1.exe, App2.exe', Second.AllowedProcessesText);
     Assert.AreEqual('Ctrl+Shift+F12', Second.ToggleHotkeyText);
@@ -198,6 +201,8 @@ begin
 
   Assert.IsTrue(FSettings.EnableKeyboard);
   Assert.IsFalse(FSettings.StartWithWindows);
+  Assert.IsTrue(FSettings.IgnoreInjectedInput,
+    'QW3: default must preserve the hook behavior of ignoring injected input');
   Assert.AreEqual('CorelDRW.exe', FSettings.TargetProcessName);
   Assert.AreEqual('CorelDRW.exe', FSettings.AllowedProcessesText);
   Assert.AreEqual('Ctrl+Alt+K', FSettings.ToggleHotkeyText);

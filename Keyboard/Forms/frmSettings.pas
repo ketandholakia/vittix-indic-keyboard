@@ -17,6 +17,7 @@ type
     edtTargetProcess: TEdit;
     lblAllowedApps: TLabel;
     memAllowedApps: TMemo;
+    chkIgnoreInjectedInput: TCheckBox;
     lblHotkeyHelp: TLabel;
     btnOK: TButton;
     btnCancel: TButton;
@@ -147,6 +148,7 @@ begin
     Form.edtActionHotkey.Text := Settings.ActionHotkeyText;
     Form.edtTargetProcess.Text := Settings.TargetProcessName;
     Form.memAllowedApps.Lines.Text := Settings.AllowedProcessesText;
+    Form.chkIgnoreInjectedInput.Checked := Settings.IgnoreInjectedInput;
 
     Result := Form.ShowModal = mrOk;
 
@@ -156,6 +158,7 @@ begin
       Settings.ActionHotkeyText := Trim(Form.edtActionHotkey.Text);
       Settings.TargetProcessName := Trim(Form.edtTargetProcess.Text);
       Settings.AllowedProcessesText := Trim(Form.memAllowedApps.Lines.Text);
+      Settings.IgnoreInjectedInput := Form.chkIgnoreInjectedInput.Checked;
     end;
   finally
     Form.Free;

@@ -16,6 +16,7 @@ type
   TKeyboardAppSettingsData = record
     EnableKeyboard: Boolean;
     StartWithWindows: Boolean;
+    IgnoreInjectedInput: Boolean;
     LayoutsPath: string;
     DefaultLayoutID: string;
     TargetProcessName: string;
@@ -34,6 +35,10 @@ type
     // [General]
     EnableKeyboard: Boolean;
     StartWithWindows: Boolean;
+    // QW3: the hook filters keystrokes that carry the LLKHF_INJECTED flag
+    // when this is on; uncheck only for remote desktop / macro tools that
+    // must drive the mapping. Default True preserves hook history.
+    IgnoreInjectedInput: Boolean;
     // [Layouts]
     LayoutsPath: string;
     DefaultLayoutID: string;
@@ -173,6 +178,7 @@ begin
   // [General]
   EnableKeyboard := FIni.ReadBool('General', 'EnableKeyboard', True);
   StartWithWindows := FIni.ReadBool('General', 'StartWithWindows', False);
+  IgnoreInjectedInput := FIni.ReadBool('General', 'IgnoreInjectedInput', True);
 
   // [Layouts]
   LayoutsPath := FIni.ReadString('Layouts', 'Path', 'layouts');
@@ -205,6 +211,7 @@ begin
 
   FIni.WriteBool('General', 'EnableKeyboard', EnableKeyboard);
   FIni.WriteBool('General', 'StartWithWindows', StartWithWindows);
+  FIni.WriteBool('General', 'IgnoreInjectedInput', IgnoreInjectedInput);
   FIni.WriteString('General', 'TargetProcessName', Trim(TargetProcessName));
   FIni.WriteString('General', 'AllowedProcesses', Trim(AllowedProcessesText));
   FIni.WriteString('Layouts', 'Path', StoredLayoutsPath);

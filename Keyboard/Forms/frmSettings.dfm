@@ -3,7 +3,7 @@ object frmSettings: TfrmSettings
   Top = 0
   BorderStyle = bsDialog
   Caption = 'Settings'
-  ClientHeight = 420
+  ClientHeight = 445
   ClientWidth = 460
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -12,7 +12,7 @@ object frmSettings: TfrmSettings
   Font.Name = 'Segoe UI'
   Font.Style = []
   Position = poScreenCenter
-  Constraints.MinHeight = 420
+  Constraints.MinHeight = 445
   Constraints.MinWidth = 460
   TextHeight = 15
   object lblToggleHotkey: TLabel
@@ -89,9 +89,20 @@ object frmSettings: TfrmSettings
     TabOrder = 3
     WordWrap = False
   end
+  object chkIgnoreInjectedInput: TCheckBox
+    Left = 20
+    Top = 303
+    Width = 420
+    Height = 24
+    Hint = 'Uncheck only if you type through remote desktop or macro tools whose keystrokes must drive the mapping'
+    Caption = 'Ignore injected keystrokes (recommended)'
+    ParentShowHint = False
+    ShowHint = True
+    TabOrder = 4
+  end
   object lblHotkeyHelp: TLabel
     Left = 20
-    Top = 305
+    Top = 332
     Width = 420
     Height = 60
     AutoSize = False
@@ -100,22 +111,22 @@ object frmSettings: TfrmSettings
   end
   object btnOK: TButton
     Left = 284
-    Top = 375
+    Top = 402
     Width = 75
     Height = 25
     Caption = 'OK'
     Default = True
-    TabOrder = 4
+    TabOrder = 5
     OnClick = btnOKClick
   end
   object btnCancel: TButton
     Left = 365
-    Top = 375
+    Top = 402
     Width = 75
     Height = 25
     Cancel = True
     Caption = 'Cancel'
     ModalResult = 2
-    TabOrder = 5
+    TabOrder = 6
   end
 end

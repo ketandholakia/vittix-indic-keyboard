@@ -867,6 +867,7 @@ function TfrmTray.CaptureCurrentSettings: TKeyboardAppSettingsData;
 begin
   Result.EnableKeyboard := GAppSettings.EnableKeyboard;
   Result.StartWithWindows := GAppSettings.StartWithWindows;
+  Result.IgnoreInjectedInput := GAppSettings.IgnoreInjectedInput;
   Result.LayoutsPath := GAppSettings.LayoutsPath;
   Result.DefaultLayoutID := GAppSettings.DefaultLayoutID;
   Result.TargetProcessName := GAppSettings.TargetProcessName;
@@ -942,6 +943,7 @@ begin
 
   GAppSettings.EnableKeyboard := Settings.EnableKeyboard;
   GAppSettings.StartWithWindows := Settings.StartWithWindows;
+  GAppSettings.IgnoreInjectedInput := Settings.IgnoreInjectedInput;
   GAppSettings.LayoutsPath := IncludeTrailingPathDelimiter(Settings.LayoutsPath);
   GAppSettings.DefaultLayoutID := Settings.DefaultLayoutID;
   GAppSettings.TargetProcessName := Trim(Settings.TargetProcessName);
@@ -969,6 +971,8 @@ begin
   miEnable.Checked := EngineEnabled;
   SetTargetProcessName(GAppSettings.TargetProcessName);
   SetAllowedProcessNames(GAppSettings.AllowedProcessesText);
+  // QW3: the injected-input filter is now a persisted user preference.
+  SetIgnoreInjectedInput(GAppSettings.IgnoreInjectedInput);
   UpdateTrayIcon;
 
   if GAppSettings.StartWithWindows then
