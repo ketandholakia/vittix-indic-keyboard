@@ -212,12 +212,13 @@ begin
       AddError(vsError, 'Layout', 'LayoutType', 'LayoutType is required');
   end;
 
-  // Parsing and runtime execution implement only the current schema. Loading
-  // a declared version we do not understand would falsely claim compatibility.
-  if ALayout.Version <> CURRENT_LAYOUT_SCHEMA_VERSION then
+  // Parsing and runtime execution implement the listed schema versions.
+  // Loading a declared version we do not understand would falsely claim
+  // compatibility. (Phase A.3: 1.0 layouts stay supported alongside 1.1.)
+  if not IsSupportedLayoutSchemaVersion(ALayout.Version) then
     AddError(vsError, 'Layout', 'Version',
       Format('Unsupported layout schema version "%s"; supported version is "%s"',
-        [ALayout.Version, CURRENT_LAYOUT_SCHEMA_VERSION]));
+        [ALayout.Version, SupportedLayoutSchemaVersionsText]));
 
   SeenKeys := TDictionary<string, string>.Create;
   try

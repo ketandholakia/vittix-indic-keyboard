@@ -7,9 +7,14 @@ uses
   System.Generics.Collections;
 
 const
-  // The only layout schema understood by the current parser, validator, and
-  // runtime. LayoutJson uses this for omitted legacy version fields.
-  CURRENT_LAYOUT_SCHEMA_VERSION = '1.0';
+  // The schema version this build authors (LayoutJson writes it, and it is
+  // the default for layout files that omit the version field).
+  CURRENT_LAYOUT_SCHEMA_VERSION = '1.1';
+
+  // Every declared schema version this build loads and executes. "1.0"
+  // layouts (the pre-1.1 files) remain fully supported; a declared version
+  // outside this list is rejected rather than falsely claimed compatible.
+  SUPPORTED_LAYOUT_SCHEMA_VERSIONS: array[0..1] of string = ('1.0', '1.1');
 
   // Maximum permitted length of a multi-key sequence key. The runtime engine no
   // longer matches multi-key sequences (legacy feature that never fired and
@@ -47,7 +52,7 @@ type
     // --- Metadata ---
     SourceFileName: string;
     LayoutID: string;
-    Version: string;       // Schema/format version (e.g., "1.0")
+    Version: string;       // Schema/format version (e.g., "1.0", "1.1")
     Name: string;
     Script: string;        // Devanagari, Gujarati, etc.
     Encoding: string;      // legacy / unicode
@@ -78,7 +83,39 @@ type
     destructor Destroy; override;
   end;
 
+// True when AVersion is a declared schema version this build understands.
+function IsSupportedLayoutSchemaVersion(const AVersion: string): Boolean;
+
+// "1.0, 1.1" — for validator messages listing what IS supported.
+function SupportedLayoutSchemaVersionsText: string;
+
 implementation
+
+{ --------------------------------------------------
+  Schema version helpers
+-------------------------------------------------- }
+function IsSupportedLayoutSchemaVersion(const AVersion: string): Boolean;
+var
+  V: string;
+begin
+  for V in SUPPORTED_LAYOUT_SCHEMA_VERSIONS do
+    if AVersion = V then
+      Exit(True);
+  Result := False;
+end;
+
+function SupportedLayoutSchemaVersionsText: string;
+var
+  V: string;
+begin
+  Result := '';
+  for V in SUPPORTED_LAYOUT_SCHEMA_VERSIONS do
+  begin
+    if Result <> '' then
+      Result := Result + ', ';
+    Result := Result + V;
+  end;
+end;
 
 { --------------------------------------------------
   TKeyMapping helpers

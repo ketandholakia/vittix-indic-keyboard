@@ -7,6 +7,7 @@ uses
   System.SysUtils,
   System.Generics.Collections,
   LayoutModel,
+  LayoutJson,
   LayoutValidation;
 
 type
@@ -39,6 +40,28 @@ type
 
     [Test]
     procedure LegacyDefaultSchemaVersion_PassesValidation;
+
+    // Phase A.3: schema 1.1 — the validator accepts BOTH declared versions.
+    [Test]
+    procedure SchemaVersion_1_0_Accepted;
+
+    [Test]
+    procedure SchemaVersion_1_1_Accepted;
+
+    [Test]
+    procedure SchemaVersion_0_9_Rejected;
+
+    [Test]
+    procedure SchemaVersion_1_2_Rejected;
+
+    [Test]
+    procedure SchemaVersion_AbsentInJsonDefaultsToCurrentAndPasses;
+
+    [Test]
+    procedure AllTenRealLayouts_Validate;
+
+    [Test]
+    procedure LayoutJsonRoundTrip_PreservesDeclaredVersion;
 
     [Test]
     procedure Sequences_AreWarningsAndRemainCompatible;
@@ -518,6 +541,176 @@ begin
         'consistent direct_classes entries must not warn');
     finally
       ResultObj.Free;
+    end;
+  finally
+    Layout.Free;
+  end;
+end;
+
+// Phase A.3: the validator accepts every version the build understands and
+// keeps rejecting anything else with the established message shape.
+procedure TLayoutValidationTests.SchemaVersion_1_0_Accepted;
+var
+  Layout: TKeyboardLayout;
+  ResultObj: TLayoutValidationResult;
+begin
+  Layout := CreateMinimalValidLayout;
+  try
+    Layout.Version := '1.0';
+    ResultObj := TLayoutValidation.ValidateAndReport(Layout);
+    try
+      Assert.IsTrue(ResultObj.IsValid, 'declared 1.0 must stay supported: ' + ResultObj.ToString);
+    finally
+      ResultObj.Free;
+    end;
+  finally
+    Layout.Free;
+  end;
+end;
+
+procedure TLayoutValidationTests.SchemaVersion_1_1_Accepted;
+var
+  Layout: TKeyboardLayout;
+  ResultObj: TLayoutValidationResult;
+begin
+  Layout := CreateMinimalValidLayout;
+  try
+    Layout.Version := '1.1';
+    ResultObj := TLayoutValidation.ValidateAndReport(Layout);
+    try
+      Assert.IsTrue(ResultObj.IsValid, 'declared 1.1 must be supported: ' + ResultObj.ToString);
+    finally
+      ResultObj.Free;
+    end;
+  finally
+    Layout.Free;
+  end;
+end;
+
+procedure TLayoutValidationTests.SchemaVersion_0_9_Rejected;
+var
+  Layout: TKeyboardLayout;
+  ResultObj: TLayoutValidationResult;
+begin
+  Layout := CreateMinimalValidLayout;
+  try
+    Layout.Version := '0.9';
+    ResultObj := TLayoutValidation.ValidateAndReport(Layout);
+    try
+      Assert.IsFalse(ResultObj.IsValid);
+      Assert.IsTrue(ResultObj.ToString.Contains('Unsupported layout schema version'));
+    finally
+      ResultObj.Free;
+    end;
+  finally
+    Layout.Free;
+  end;
+end;
+
+procedure TLayoutValidationTests.SchemaVersion_1_2_Rejected;
+var
+  Layout: TKeyboardLayout;
+  ResultObj: TLayoutValidationResult;
+begin
+  Layout := CreateMinimalValidLayout;
+  try
+    Layout.Version := '1.2';
+    ResultObj := TLayoutValidation.ValidateAndReport(Layout);
+    try
+      Assert.IsFalse(ResultObj.IsValid);
+      Assert.IsTrue(ResultObj.ToString.Contains('Unsupported layout schema version'));
+    finally
+      ResultObj.Free;
+    end;
+  finally
+    Layout.Free;
+  end;
+end;
+
+// Layout files that omit the version field keep their legacy tolerance:
+// they load as the CURRENT schema version and pass validation.
+procedure TLayoutValidationTests.SchemaVersion_AbsentInJsonDefaultsToCurrentAndPasses;
+const
+  NoVersionJson = '{"layout_id":"no-version","name":"No Version","script":"Gujarati",' +
+    '"encoding":"unicode","font_family":"Shruti","layout_type":"standard",' +
+    '"direct":{"a":"x"},"prebase":{},"postbase":{},"modifiers":{},"sequences":{},"extra_maps":{}}';
+var
+  Layout: TKeyboardLayout;
+  ResultObj: TLayoutValidationResult;
+begin
+  Layout := LayoutFromJson(NoVersionJson);
+  try
+    Assert.AreEqual(CURRENT_LAYOUT_SCHEMA_VERSION, Layout.Version,
+      'an absent version field must default to the current schema version');
+    ResultObj := TLayoutValidation.ValidateAndReport(Layout);
+    try
+      Assert.IsTrue(ResultObj.IsValid, ResultObj.ToString);
+    finally
+      ResultObj.Free;
+    end;
+  finally
+    Layout.Free;
+  end;
+end;
+
+procedure TLayoutValidationTests.AllTenRealLayouts_Validate;
+var
+  Files: array[0..9] of string;
+  I: Integer;
+  Layout: TKeyboardLayout;
+  ResultObj: TLayoutValidationResult;
+begin
+  Files[0] := 'layouts\devnagari\krutidev_010.json';
+  Files[1] := 'layouts\devnagari\shree_dev_1076.json';
+  Files[2] := 'layouts\devnagari\shreelipi_0708.json';
+  Files[3] := 'layouts\gujarati\remington.json';
+  Files[4] := 'layouts\gujarati\gujarati_remington_unicode.json';
+  Files[5] := 'layouts\gujarati\gujarati_phonetic.json';
+  Files[6] := 'layouts\gujarati\gujarati_inscript.json';
+  Files[7] := 'layouts\hindi\hindi_phonetic.json';
+  Files[8] := 'layouts\hindi\hindi_inscript.json';
+  Files[9] := 'layouts\custom\press_custom_1.json';
+
+  for I := Low(Files) to High(Files) do
+  begin
+    Layout := LayoutJson.LoadLayoutFromFile(Files[I]);
+    try
+      ResultObj := TLayoutValidation.ValidateAndReport(Layout);
+      try
+        Assert.IsTrue(ResultObj.IsValid,
+          Format('real layout "%s" must validate: %s', [Files[I], ResultObj.ToString]));
+      finally
+        ResultObj.Free;
+      end;
+    finally
+      Layout.Free;
+    end;
+  end;
+end;
+
+procedure TLayoutValidationTests.LayoutJsonRoundTrip_PreservesDeclaredVersion;
+var
+  Layout, Loaded: TKeyboardLayout;
+  JsonText: string;
+begin
+  Layout := CreateMinimalValidLayout;
+  try
+    Layout.Version := '1.0';
+    JsonText := LayoutToJson(Layout);
+    Loaded := LayoutFromJson(JsonText);
+    try
+      Assert.AreEqual('1.0', Loaded.Version, 'declared 1.0 must round-trip');
+    finally
+      Loaded.Free;
+    end;
+
+    Layout.Version := '1.1';
+    JsonText := LayoutToJson(Layout);
+    Loaded := LayoutFromJson(JsonText);
+    try
+      Assert.AreEqual('1.1', Loaded.Version, 'declared 1.1 must round-trip');
+    finally
+      Loaded.Free;
     end;
   finally
     Layout.Free;

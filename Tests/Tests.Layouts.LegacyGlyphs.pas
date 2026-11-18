@@ -5,6 +5,7 @@ interface
 uses
   DUnitX.TestFramework,
   System.SysUtils,
+  System.IOUtils,
   LayoutModel,
   LayoutJson,
   LayoutValidation,
@@ -44,6 +45,11 @@ type
     procedure Shreelipi0708_MClassifiedConsonant_QAndQUnlisted;
     [Test]
     procedure ShreeDev1076_HasNoQOrQKeys;
+
+    // Phase A.3: the four legacy layouts declare schema "1.1" (file level);
+    // the other six layouts keep their declared state untouched.
+    [Test]
+    procedure LegacyLayouts_DeclareSchema11_FileLevel;
   end;
 
 implementation
@@ -208,6 +214,40 @@ begin
       'shree_dev_1076 has no Q key in its direct map');
   finally
     Layout.Free;
+  end;
+end;
+
+procedure TLegacyGlyphTests.LegacyLayouts_DeclareSchema11_FileLevel;
+var
+  Declares11, Others: array[0..5] of string;
+  I: Integer;
+  Text: string;
+begin
+  // The four legacy layouts opt into schema 1.1 explicitly.
+  Declares11[0] := 'layouts\devnagari\krutidev_010.json';
+  Declares11[1] := 'layouts\devnagari\shree_dev_1076.json';
+  Declares11[2] := 'layouts\devnagari\shreelipi_0708.json';
+  Declares11[3] := 'layouts\gujarati\remington.json';
+  for I := 0 to 3 do
+  begin
+    Text := TFile.ReadAllText(Declares11[I]);
+    Assert.IsTrue(Text.Contains('"version": "1.1"'),
+      Declares11[I] + ' must declare "version": "1.1"');
+  end;
+
+  // The other six layouts stay exactly as they are (1.0 declared or field
+  // omitted), checked at the raw-file level.
+  Others[0] := 'layouts\gujarati\gujarati_remington_unicode.json';
+  Others[1] := 'layouts\gujarati\gujarati_phonetic.json';
+  Others[2] := 'layouts\gujarati\gujarati_inscript.json';
+  Others[3] := 'layouts\hindi\hindi_phonetic.json';
+  Others[4] := 'layouts\hindi\hindi_inscript.json';
+  Others[5] := 'layouts\custom\press_custom_1.json';
+  for I := 0 to 5 do
+  begin
+    Text := TFile.ReadAllText(Others[I]);
+    Assert.IsFalse(Text.Contains('"version": "1.1"'),
+      Others[I] + ' must NOT gain a 1.1 version field in Phase A.3');
   end;
 end;
 
