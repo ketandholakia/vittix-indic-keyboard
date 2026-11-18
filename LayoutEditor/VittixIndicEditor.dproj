@@ -132,9 +132,6 @@
         <DCCReference Include="Forms\frmEditorMain.pas">
             <Form>frmEditorMain</Form>
         </DCCReference>
-        <DCCReference Include="Forms\frmSequenceEditor.pas">
-            <Form>frmSequenceEditor</Form>
-        </DCCReference>
         <DCCReference Include="..\Keyboard\Layout\LayoutLoader.pas"/>
         <DCCReference Include="..\Shared\LayoutResolver.pas"/>
         <DCCReference Include="UI\EditorTheme.pas"/>

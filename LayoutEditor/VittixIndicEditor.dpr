@@ -12,7 +12,6 @@ uses
 
   // ---- Forms ----
   frmEditorMain in 'Forms\frmEditorMain.pas' {frmEditorMain},
-  frmSequenceEditor in 'Forms\frmSequenceEditor.pas' {frmSequenceEditor},
 
   // ---- Model / IO ----
   LayoutModel in '..\Shared\LayoutModel.pas',
