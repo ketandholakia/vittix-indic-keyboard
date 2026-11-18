@@ -78,6 +78,18 @@ type
     procedure InherentVowel_LegacyLayouts_Unaffected;
     [Test]
     procedure InherentVowel_RequiresTheProperty;
+
+    // Phase B.4: the reph rule is located by its "behavior":
+    // "move_to_cluster_start" tag, falling back to the historical rule name
+    // 'reph'. Pending/flush mechanics unchanged.
+    [Test]
+    procedure Reph_RuleName_FallbackStillWorks;
+    [Test]
+    procedure Reph_BehaviorTag_RenamedRuleWorks;
+    [Test]
+    procedure Reph_TaggedRules_InRealLayouts;
+    [Test]
+    procedure Reph_Absent_NoInterference;
   end;
 
 implementation
@@ -578,6 +590,104 @@ begin
   try
     TypeIntoEvents(Layout, 'ka', Events);
     Assert.AreEqual(1, Events.Count, 'property present: a is absorbed');
+    Assert.AreEqual('ક', Events[0]);
+  finally
+    Events.Free;
+    Layout.Free;
+  end;
+end;
+
+procedure TPhoneticLayoutTests.Reph_RuleName_FallbackStillWorks;
+var
+  Layout: TKeyboardLayout;
+  Events: TStringList;
+  KM: TKeyMapping;
+begin
+  // A legacy-style layout: rule named 'reph', no behavior tag at all.
+  Layout := CreateSynthetic(True, False, False);
+  KM := Default(TKeyMapping);
+  KM.Key := 'R';
+  KM.Glyph := 'ર્';
+  KM.MapType := 'modifier';
+  KM.InitMetadata;
+  Layout.Modifiers.Add('reph', KM);
+  Layout.DirectMap.AddOrSetValue('d', 'દ');
+  Events := TStringList.Create;
+  try
+    TypeIntoEvents(Layout, 'Rk', Events);
+    Assert.AreEqual(2, Events.Count, 'the reph glyph flushes before the consonant');
+    Assert.AreEqual('ર્', Events[0]);
+    Assert.AreEqual('ક', Events[1]);
+  finally
+    Events.Free;
+    Layout.Free;
+  end;
+end;
+
+procedure TPhoneticLayoutTests.Reph_BehaviorTag_RenamedRuleWorks;
+var
+  Layout: TKeyboardLayout;
+  Events: TStringList;
+  KM: TKeyMapping;
+begin
+  // A layout that tags the behavior but names the rule differently: the
+  // engine must find it by "behavior": "move_to_cluster_start", not by the
+  // hardcoded name 'reph'.
+  Layout := CreateSynthetic(True, False, False);
+  KM := Default(TKeyMapping);
+  KM.Key := 'R';
+  KM.Glyph := 'ર્';
+  KM.MapType := 'move_to_cluster_start';
+  KM.InitMetadata;
+  Layout.Modifiers.Add('reph_1', KM);
+  Layout.DirectMap.AddOrSetValue('d', 'દ');
+  Events := TStringList.Create;
+  try
+    TypeIntoEvents(Layout, 'Rk', Events);
+    Assert.AreEqual(2, Events.Count, 'the tagged rule must be found by its behavior');
+    Assert.AreEqual('ર્', Events[0]);
+    Assert.AreEqual('ક', Events[1]);
+  finally
+    Events.Free;
+    Layout.Free;
+  end;
+end;
+
+procedure TPhoneticLayoutTests.Reph_TaggedRules_InRealLayouts;
+var
+  Layout: TKeyboardLayout;
+begin
+  // Both real reph rules carry the behavior tag; the pending/flush
+  // mechanics must be unchanged by the metadata-driven lookup.
+  Layout := LayoutJson.LoadLayoutFromFile('layouts\devnagari\krutidev_010.json');
+  try
+    Assert.AreEqual('dZd', TypeSequence(Layout, 'kZk'),
+      'krutidev: reph glyph flushes before the next consonant');
+  finally
+    Layout.Free;
+  end;
+
+  Layout := LayoutJson.LoadLayoutFromFile('layouts\gujarati\remington.json');
+  try
+    Assert.AreEqual('કર્દ', TypeSequence(Layout, 'kZd'),
+      'remington: reph flushes before the next consonant');
+  finally
+    Layout.Free;
+  end;
+end;
+
+procedure TPhoneticLayoutTests.Reph_Absent_NoInterference;
+var
+  Layout: TKeyboardLayout;
+  Events: TStringList;
+begin
+  // No reph rule at all: 'R' is unmatched and passes through natively
+  // (no emission), the consonant types normally.
+  Layout := CreateSynthetic(True, False, False);
+  Events := TStringList.Create;
+  try
+    TypeIntoEvents(Layout, 'Rk', Events);
+    Assert.AreEqual(1, Events.Count, 'an unmatched key must not inject anything');
     Assert.AreEqual('ક', Events[0]);
   finally
     Events.Free;

@@ -5,6 +5,7 @@ interface
 uses
   System.SysUtils,
   Winapi.Windows,
+  System.Generics.Collections,
   EngineState,
   LayoutModel,
   SendInputHelper,
@@ -151,6 +152,27 @@ end;
   fall back. Without this the hook has already swallowed the trigger
   key, so dropping this state loses the matra/ra entirely.
 -------------------------------------------------- }
+// Phase B.4: the reph rule is located by its "behavior":
+// "move_to_cluster_start" tag when one exists, falling back to the
+// historical rule name 'reph' (untagged layouts, synthetic/test layouts).
+// The pending/flush mechanics are unchanged; only the lookup stops being
+// hardcoded to the rule name.
+function TryGetRephRule(out ModRule: TKeyMapping): Boolean;
+var
+  Pair: TPair<string, TKeyMapping>;
+begin
+  Result := False;
+  if ActiveLayout = nil then
+    Exit;
+  for Pair in ActiveLayout.Modifiers do
+    if SameText(Pair.Value.MapType, 'move_to_cluster_start') then
+    begin
+      ModRule := Pair.Value;
+      Exit(True);
+    end;
+  Result := ActiveLayout.Modifiers.TryGetValue('reph', ModRule);
+end;
+
 procedure FlushPendingPreludes(var AOutcome: TInjectionOutcome);
 var
   ModRule: TKeyMapping;
@@ -160,7 +182,7 @@ begin
 
   if gEngineState.PendingReph then
   begin
-    if ActiveLayout.Modifiers.TryGetValue('reph', ModRule) then
+    if TryGetRephRule(ModRule) then
       AOutcome := CombineInjectionOutcomes(AOutcome, EmitOutput(eoEmitText, ModRule.Glyph));
     gEngineState.PendingReph := False;
   end;
@@ -314,7 +336,7 @@ begin
       Exit(ioPassThrough);
 
     { ---------------- REPH ---------------- }
-    if ActiveLayout.Modifiers.TryGetValue('reph', ModRule) then
+    if TryGetRephRule(ModRule) then
     begin
       if AKey = ModRule.Key then
       begin
