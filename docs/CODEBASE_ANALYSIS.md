@@ -378,3 +378,17 @@ six layouts untouched). `EnsureBackup` is wired into every editor save site
 (always-on, `_backup` subdir, MaxBackups=20 rotation). Left open for
 sign-off: remington's `encoding: "legacy"` label now coexists with Unicode
 glyphs — relabeling is a deliberate decision. Test suite: 243 → 265.
+
+**Phase B resolved (2026-11-19, commits 8c32fb1..3555e8e):** the phonetic
+gaps listed in the engine analysis are closed, opt-in and data-driven:
+auto-halant half-forms (phonetic halant tagged `"behavior": "join_next"`,
+atomic emission so one backspace deletes the half-form), inherent-vowel
+suppression (properties `"inherent_vowel_key"`, once per consonant — `ka`
+types the bare consonant, absorption closes the cluster so `kak` gives two
+full consonants), and `move_to_cluster_start` implemented as metadata (the
+reph rule is found by its tag, rule-name fallback kept). Both phonetic
+layouts ship the `direct_classes` classification, the `join_next` tag and
+the `inherent_vowel_key` property; the validator warns about missing
+opt-ins instead of the old blanket limitation. Known accepted limitation:
+Baraha-style repeat-`a` → aa-matra is not implemented (`kwa` types કા via
+the dedicated matra key; `kaa` gives કઅ). Test suite: 275 → 301.
