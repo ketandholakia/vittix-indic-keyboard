@@ -20,6 +20,8 @@ type
     lblLayoutsFolder: TLabel;
     edtLayoutsPath: TEdit;
     btnBrowseLayouts: TButton;
+    lblCycleHotkey: TLabel;
+    edtCycleHotkey: TEdit;
     chkIgnoreInjectedInput: TCheckBox;
     lblHotkeyHelp: TLabel;
     btnOK: TButton;
@@ -27,6 +29,8 @@ type
     procedure btnOKClick(Sender: TObject);
     procedure btnBrowseLayoutsClick(Sender: TObject);
     procedure edtActionHotkeyKeyDown(Sender: TObject; var Key: Word;
+      Shift: TShiftState);
+    procedure edtCycleHotkeyKeyDown(Sender: TObject; var Key: Word;
       Shift: TShiftState);
     procedure edtToggleHotkeyKeyDown(Sender: TObject; var Key: Word;
       Shift: TShiftState);
@@ -87,6 +91,7 @@ procedure TfrmSettings.btnOKClick(Sender: TObject);
 var
   NormalizedToggle: string;
   NormalizedAction: string;
+  NormalizedCycle: string;
 begin
   if not NormalizeHotkeyInput(edtToggleHotkey.Text, False, NormalizedToggle) then
   begin
@@ -108,6 +113,16 @@ begin
     Exit;
   end;
 
+  if not NormalizeHotkeyInput(edtCycleHotkey.Text, True, NormalizedCycle) then
+  begin
+    MessageDlg(
+      'Cycle hotkey must be blank or use keys like Ctrl+Alt+L, Ctrl+Shift+F2, or Alt+Space.',
+      mtError, [mbOK], 0
+    );
+    edtCycleHotkey.SetFocus;
+    Exit;
+  end;
+
   // Phase C.1: an empty layouts path would fail the whole settings apply
   // (ApplyRuntimeSettings raises), so reject it here with a clear message.
   if Trim(edtLayoutsPath.Text) = '' then
@@ -119,6 +134,7 @@ begin
 
   edtToggleHotkey.Text := NormalizedToggle;
   edtActionHotkey.Text := NormalizedAction;
+  edtCycleHotkey.Text := NormalizedCycle;
   ModalResult := mrOk;
 end;
 
@@ -153,6 +169,12 @@ begin
   CaptureHotkey(edtActionHotkey, Key, Shift, True);
 end;
 
+procedure TfrmSettings.edtCycleHotkeyKeyDown(Sender: TObject; var Key: Word;
+  Shift: TShiftState);
+begin
+  CaptureHotkey(edtCycleHotkey, Key, Shift, True);
+end;
+
 procedure TfrmSettings.edtToggleHotkeyKeyDown(Sender: TObject; var Key: Word;
   Shift: TShiftState);
 begin
@@ -168,6 +190,7 @@ begin
   try
     Form.edtToggleHotkey.Text := Settings.ToggleHotkeyText;
     Form.edtActionHotkey.Text := Settings.ActionHotkeyText;
+    Form.edtCycleHotkey.Text := Settings.CycleHotkeyText;
     Form.edtTargetProcess.Text := Settings.TargetProcessName;
     Form.memAllowedApps.Lines.Text := Settings.AllowedProcessesText;
     Form.edtLayoutsPath.Text := Settings.LayoutsPath;
@@ -179,6 +202,7 @@ begin
     begin
       Settings.ToggleHotkeyText := Trim(Form.edtToggleHotkey.Text);
       Settings.ActionHotkeyText := Trim(Form.edtActionHotkey.Text);
+      Settings.CycleHotkeyText := Trim(Form.edtCycleHotkey.Text);
       Settings.TargetProcessName := Trim(Form.edtTargetProcess.Text);
       Settings.AllowedProcessesText := Trim(Form.memAllowedApps.Lines.Text);
       Settings.LayoutsPath := Trim(Form.edtLayoutsPath.Text);

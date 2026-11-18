@@ -23,6 +23,7 @@ type
     AllowedProcessesText: string;
     ToggleHotkeyText: string;
     ActionHotkeyText: string;
+    CycleHotkeyText: string;
     FallbackFont: string;
     PreviewFontSize: Integer;
   end;
@@ -46,6 +47,9 @@ type
     AllowedProcessesText: string;
     ToggleHotkeyText: string;
     ActionHotkeyText: string;
+    // C.2: cycles to the next loaded layout; '' disables it (no surprise
+    // global binding by default).
+    CycleHotkeyText: string;
     // [Font]
     FallbackFont: string;
     PreviewFontSize: Integer;
@@ -188,6 +192,7 @@ begin
     'CorelDRW.exe');
   ToggleHotkeyText := FIni.ReadString('Hotkey', 'Toggle', 'Ctrl+Alt+K');
   ActionHotkeyText := FIni.ReadString('Hotkey', 'Action', '');
+  CycleHotkeyText := FIni.ReadString('Hotkey', 'Cycle', '');
 
   // [Font]
   FallbackFont := FIni.ReadString('Font', 'FallbackFont', 'Segoe UI');
@@ -218,6 +223,7 @@ begin
   FIni.WriteString('Layouts', 'DefaultLayout', DefaultLayoutID);
   FIni.WriteString('Hotkey', 'Toggle', ToggleHotkeyText);
   FIni.WriteString('Hotkey', 'Action', ActionHotkeyText);
+  FIni.WriteString('Hotkey', 'Cycle', CycleHotkeyText);
   FIni.WriteString('Font', 'FallbackFont', FallbackFont);
   FIni.WriteInteger('Font', 'PreviewSize', PreviewFontSize);
   FIni.UpdateFile;

@@ -3,7 +3,7 @@ object frmSettings: TfrmSettings
   Top = 0
   BorderStyle = bsDialog
   Caption = 'Settings'
-  ClientHeight = 483
+  ClientHeight = 537
   ClientWidth = 460
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -12,7 +12,7 @@ object frmSettings: TfrmSettings
   Font.Name = 'Segoe UI'
   Font.Style = []
   Position = poScreenCenter
-  Constraints.MinHeight = 483
+  Constraints.MinHeight = 537
   Constraints.MinWidth = 460
   TextHeight = 15
   object lblToggleHotkey: TLabel
@@ -115,20 +115,39 @@ object frmSettings: TfrmSettings
     TabOrder = 5
     OnClick = btnBrowseLayoutsClick
   end
+  object lblCycleHotkey: TLabel
+    Left = 20
+    Top = 357
+    Width = 124
+    Height = 15
+    Caption = 'Cycle layout hotkey (optional)'
+  end
+  object edtCycleHotkey: TEdit
+    Left = 20
+    Top = 378
+    Width = 420
+    Height = 23
+    Hint = 'Click here, then press the shortcut you want to use'
+    ParentShowHint = False
+    ReadOnly = True
+    ShowHint = True
+    TabOrder = 6
+    OnKeyDown = edtCycleHotkeyKeyDown
+  end
   object chkIgnoreInjectedInput: TCheckBox
     Left = 20
-    Top = 355
+    Top = 409
     Width = 420
     Height = 24
     Hint = 'Uncheck only if you type through remote desktop or macro tools whose keystrokes must drive the mapping'
     Caption = 'Ignore injected keystrokes (recommended)'
     ParentShowHint = False
     ShowHint = True
-    TabOrder = 6
+    TabOrder = 7
   end
   object lblHotkeyHelp: TLabel
     Left = 20
-    Top = 386
+    Top = 440
     Width = 420
     Height = 60
     AutoSize = False
@@ -137,22 +156,22 @@ object frmSettings: TfrmSettings
   end
   object btnOK: TButton
     Left = 284
-    Top = 452
+    Top = 506
     Width = 75
     Height = 25
     Caption = 'OK'
     Default = True
-    TabOrder = 7
+    TabOrder = 8
     OnClick = btnOKClick
   end
   object btnCancel: TButton
     Left = 365
-    Top = 452
+    Top = 506
     Width = 75
     Height = 25
     Cancel = True
     Caption = 'Cancel'
     ModalResult = 2
-    TabOrder = 8
+    TabOrder = 9
   end
 end

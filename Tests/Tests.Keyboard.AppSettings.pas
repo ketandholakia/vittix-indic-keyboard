@@ -171,6 +171,7 @@ begin
   FSettings.TargetProcessName := 'TestApp.exe';
   FSettings.AllowedProcessesText := 'App1.exe, App2.exe';
   FSettings.ToggleHotkeyText := 'Ctrl+Shift+F12';
+  FSettings.CycleHotkeyText := 'Ctrl+Alt+L';
   FSettings.FallbackFont := 'Arial';
   FSettings.PreviewFontSize := 22;
   FSettings.Save;
@@ -185,6 +186,8 @@ begin
     Assert.AreEqual('TestApp.exe', Second.TargetProcessName);
     Assert.AreEqual('App1.exe, App2.exe', Second.AllowedProcessesText);
     Assert.AreEqual('Ctrl+Shift+F12', Second.ToggleHotkeyText);
+    Assert.AreEqual('Ctrl+Alt+L', Second.CycleHotkeyText,
+      'C.2: the layout-cycle hotkey must persist');
     Assert.AreEqual('Arial', Second.FallbackFont);
     Assert.AreEqual(22, Second.PreviewFontSize);
   finally
@@ -207,6 +210,8 @@ begin
   Assert.AreEqual('CorelDRW.exe', FSettings.AllowedProcessesText);
   Assert.AreEqual('Ctrl+Alt+K', FSettings.ToggleHotkeyText);
   Assert.AreEqual('', FSettings.ActionHotkeyText);
+  Assert.AreEqual('', FSettings.CycleHotkeyText,
+    'C.2: the layout-cycle hotkey defaults to disabled (no surprise global binding)');
   Assert.AreEqual('', FSettings.DefaultLayoutID);
   Assert.AreEqual('Segoe UI', FSettings.FallbackFont);
   Assert.AreEqual(16, FSettings.PreviewFontSize);

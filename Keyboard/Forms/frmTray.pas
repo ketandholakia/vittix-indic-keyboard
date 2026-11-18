@@ -112,6 +112,10 @@ type
     procedure BuildAppWhitelistMenu;
     procedure UpdateLayoutHeader;
     procedure LayoutItemClick(Sender: TObject);
+    // C.2: shared switch logic (menu click and the cycle hotkey both land
+    // here) and the hotkey-driven next-layout cycle.
+    procedure SwitchToLayoutIndex(Index: Integer);
+    procedure CycleToNextLayout;
     procedure UpdateTrayIcon;
     procedure OpenSettings(Sender: TObject);
     procedure RegisterConfiguredHotkeys;
@@ -139,6 +143,7 @@ implementation
 const
   HOTKEY_ID_TOGGLE = 1; // ID for the global hotkey to toggle the engine
   HOTKEY_ID_ACTION = 2;
+  HOTKEY_ID_CYCLE = 3;  // C.2: global hotkey that cycles to the next layout
   APP_RUN_NAME = 'Vittix Indic Keyboard';
   APP_WHITELIST_ITEM_BASE = 200;
   // Sentinel tags for the two whitelist actions that are not process toggles.
@@ -425,6 +430,10 @@ begin
     // Special action hotkey pressed
     MessageBox(Handle, 'Special action hotkey triggered!', 'Vittix Indic Keyboard', MB_OK or MB_ICONINFORMATION);
     // TODO: Implement custom action here
+  end
+  else if Msg.HotKey = HOTKEY_ID_CYCLE then
+  begin
+    CycleToNextLayout;
   end;
 end;
 
@@ -790,12 +799,10 @@ begin
     );
 end;
 
-procedure TfrmTray.LayoutItemClick(Sender: TObject);
-var
-  Index: Integer;
+// C.2: the shared layout-switch steps, used by the tray menu click and the
+// cycle hotkey alike.
+procedure TfrmTray.SwitchToLayoutIndex(Index: Integer);
 begin
-  Index := TMenuItem(Sender).Tag;
-
   // 1. Update the layout manager with the user's selection.
   gLayoutManager.SetActiveLayout(Index);
 
@@ -817,6 +824,46 @@ begin
   // 6. The on-screen keyboard shows the active layout, so refresh it if open.
   if Assigned(FOSK) then
     FOSK.LoadLayout(gLayoutManager.ActiveLayout);
+end;
+
+procedure TfrmTray.LayoutItemClick(Sender: TObject);
+var
+  Index: Integer;
+begin
+  Index := TMenuItem(Sender).Tag;
+  SwitchToLayoutIndex(Index);
+end;
+
+// C.2: cycle to the next loaded layout (wraps). No active layout yet starts
+// at the first one.
+procedure TfrmTray.CycleToNextLayout;
+var
+  I, Current, NextIndex: Integer;
+begin
+  if gLayoutManager.LayoutCount < 2 then
+  begin
+    Notify('Only one layout is loaded; nothing to cycle.');
+    Exit;
+  end;
+
+  Current := -1;
+  for I := 0 to gLayoutManager.LayoutCount - 1 do
+    if gLayoutManager.GetLayout(I) = gLayoutManager.ActiveLayout then
+    begin
+      Current := I;
+      Break;
+    end;
+
+  if Current < 0 then
+    NextIndex := 0
+  else
+    NextIndex := (Current + 1) mod gLayoutManager.LayoutCount;
+
+  SwitchToLayoutIndex(NextIndex);
+
+  // A hotkey press has no visible menu feedback, so name the new layout.
+  if Assigned(gLayoutManager.ActiveLayout) then
+    Notify('Layout: ' + gLayoutManager.ActiveLayout.Name);
 end;
 
 procedure TfrmTray.OpenSettings(Sender: TObject);
@@ -874,6 +921,7 @@ begin
   Result.AllowedProcessesText := GAppSettings.AllowedProcessesText;
   Result.ToggleHotkeyText := GAppSettings.ToggleHotkeyText;
   Result.ActionHotkeyText := GAppSettings.ActionHotkeyText;
+  Result.CycleHotkeyText := GAppSettings.CycleHotkeyText;
   Result.FallbackFont := GAppSettings.FallbackFont;
   Result.PreviewFontSize := GAppSettings.PreviewFontSize;
 end;
@@ -897,6 +945,7 @@ procedure TfrmTray.UnregisterConfiguredHotkeys;
 begin
   UnregisterHotKey(Handle, HOTKEY_ID_TOGGLE);
   UnregisterHotKey(Handle, HOTKEY_ID_ACTION);
+  UnregisterHotKey(Handle, HOTKEY_ID_CYCLE);
 end;
 
 procedure TfrmTray.RegisterConfiguredHotkeys;
@@ -905,6 +954,7 @@ var
   VK: UINT;
   ActionHotkey: string;
   ToggleHotkey: string;
+  CycleHotkey: string;
 begin
   UnregisterConfiguredHotkeys;
 
@@ -929,6 +979,16 @@ begin
       Notify('Action hotkey is already in use by another app: ' + ActionHotkey);
   end;
 
+  // C.2: empty default keeps the cycle hotkey unbound until the user opts in.
+  CycleHotkey := Trim(GAppSettings.CycleHotkeyText);
+  if CycleHotkey <> '' then
+  begin
+    if not GAppSettings.ParseHotkey(CycleHotkey, Mods, VK) then
+      Notify('Invalid layout-cycle hotkey in settings: ' + CycleHotkey)
+    else if not RegisterHotKey(Handle, HOTKEY_ID_CYCLE, Mods or MOD_NOREPEAT, VK) then
+      Notify('Layout-cycle hotkey is already in use by another app: ' + CycleHotkey);
+  end;
+
   // The shortcut belongs in the menu's shortcut column, not inside the caption.
   // Appending it to the caption broke mnemonic alignment and rendered
   // 'Enable Keyboard ()' when no hotkey was configured.
@@ -950,6 +1010,7 @@ begin
   GAppSettings.AllowedProcessesText := Trim(Settings.AllowedProcessesText);
   GAppSettings.ToggleHotkeyText := Settings.ToggleHotkeyText;
   GAppSettings.ActionHotkeyText := Settings.ActionHotkeyText;
+  GAppSettings.CycleHotkeyText := Settings.CycleHotkeyText;
   GAppSettings.FallbackFont := Settings.FallbackFont;
   GAppSettings.PreviewFontSize := Settings.PreviewFontSize;
 
