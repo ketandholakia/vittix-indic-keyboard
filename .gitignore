@@ -91,6 +91,7 @@ modules/
 .agents/
 .openclaw/
 .commandcode/
+.zcode/
 AGENTS.md
 SOUL.md
 USER.md
