@@ -99,11 +99,15 @@ begin
   ProcessKeyChar('\');
   ProcessKeyChar('t');
   ProcessKeyChar('Y');
-  
+
+  // Phase B.2 (auto-halant): a consonant after an open cluster emits the
+  // halant glyph + the new consonant as ONE atomic string (the previous
+  // consonant is already on screen), and the explicit halant still ends the
+  // cluster before 't'.
   Assert.AreEqual(6, FEvents.Count);
   Assert.AreEqual('ન', FEvents[0]);
-  Assert.AreEqual('મ', FEvents[1]);
-  Assert.AreEqual('સ', FEvents[2]);
+  Assert.AreEqual('્મ', FEvents[1]);
+  Assert.AreEqual('્સ', FEvents[2]);
   Assert.AreEqual('્', FEvents[3]);
   Assert.AreEqual('ત', FEvents[4]);
   Assert.AreEqual('ે', FEvents[5]);
@@ -136,8 +140,8 @@ begin
 
   Assert.AreEqual(6, FEvents.Count);
   Assert.AreEqual('न', FEvents[0]);
-  Assert.AreEqual('म', FEvents[1]);
-  Assert.AreEqual('स', FEvents[2]);
+  Assert.AreEqual('्म', FEvents[1]);
+  Assert.AreEqual('्स', FEvents[2]);
   Assert.AreEqual('्', FEvents[3]);
   Assert.AreEqual('त', FEvents[4]);
   Assert.AreEqual('े', FEvents[5]);

@@ -43,6 +43,29 @@ var
   ActiveLayout: TKeyboardLayout = nil;
   OnOutput: TEngineOutputHandler = nil;
 
+{ --------------------------------------------------
+  Phase B.2: auto-halant opt-in. A phonetic layout whose halant modifier
+  declares "behavior": "join_next" (LayoutFromJson parses that into
+  MapType) lets a consonant key pressed while a consonant cluster is open
+  become a half-form: the halant glyph joins the new consonant. Legacy
+  layouts keep emitting their font-key strings verbatim, and a phonetic
+  layout without the tag keeps the explicit-halant-only behavior.
+-------------------------------------------------- }
+function AutoHalantGlyph(out AHalantGlyph: string): Boolean;
+var
+  ModRule: TKeyMapping;
+begin
+  Result := False;
+  if (ActiveLayout = nil) or (not SameText(ActiveLayout.LayoutType, 'phonetic')) then
+    Exit;
+  if not ActiveLayout.Modifiers.TryGetValue('halant', ModRule) then
+    Exit;
+  if not SameText(ModRule.MapType, 'join_next') then
+    Exit;
+  AHalantGlyph := ModRule.Glyph;
+  Result := True;
+end;
+
 procedure SetEngineOutputHandler(AHandler: TEngineOutputHandler);
 begin
   // nil restores the default physical output path via SendInputHelper.
@@ -210,6 +233,8 @@ end;
 function ProcessKeyChar(const AKey: string): TInjectionOutcome;
 var
   OutGlyph: string;
+  ClusterGlyph: string;
+  HalantGlyph: string;
   Matra: TKeyMapping;
   ModRule: TKeyMapping;
   KeyClass: string;
@@ -338,14 +363,32 @@ begin
     if ActiveLayout.DirectMap.TryGetValue(AKey, OutGlyph) then
     begin
       FlushPendingPreludes(Outcome);
+      // Phase B.2 (auto-halant): a consonant-class key pressed while a
+      // consonant cluster is open becomes a half-form in a phonetic layout
+      // that opted in via the halant modifier's "join_next" behavior. The
+      // halant glyph + the consonant go out as ONE atomic string, so one
+      // backspace unit deletes the whole half-form (same accounting as the
+      // legacy multi-glyph strings). The cluster context tracks the new
+      // consonant itself, not the halant.
+      ClusterGlyph := OutGlyph;
+      if (gEngineState.CurrentCluster <> '') and
+         ActiveLayout.DirectClasses.TryGetValue(AKey, KeyClass) and
+         SameText(KeyClass, 'consonant') and
+         AutoHalantGlyph(HalantGlyph) then
+        OutGlyph := HalantGlyph + OutGlyph;
       Outcome := CombineInjectionOutcomes(Outcome, EmitOutput(eoEmitText, OutGlyph));
       // Item 9.4: only a consonant-class direct output opens the cluster
       // context, so after a standalone vowel another vowel key is standalone
       // again. Layouts without direct_classes (or keys left unlisted) keep
       // the historical behavior — every direct output opens the cluster.
+      // Phase B.2: a CLASSIFIED vowel/other direct output now also ENDS an
+      // open cluster — a standalone vowel or matra completes the consonant,
+      // so auto-halant can never fire across one.
       if (not ActiveLayout.DirectClasses.TryGetValue(AKey, KeyClass)) or
          SameText(KeyClass, 'consonant') then
-        gEngineState.CurrentCluster := OutGlyph;
+        gEngineState.CurrentCluster := ClusterGlyph
+      else
+        gEngineState.CurrentCluster := '';
       if Outcome <> ioSuccess then
         ResetEngineState;
       Exit(Outcome);
