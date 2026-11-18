@@ -27,6 +27,7 @@ uses
   LayoutJson,
   LayoutValidation,
   LayoutMappingSync,
+  BackupManager,
   LayoutEditorSettings,
   EditorTheme,
   VittixKeyboardView,
@@ -921,7 +922,12 @@ procedure TfrmEditorMain.btnExportLayoutClick(Sender: TObject);
 begin
   if FLayout = nil then Exit;
   if SaveDialog.Execute then
+  begin
+    // Phase A.4: overwriting an existing layout file keeps a backup first.
+    // EnsureBackup no-ops when the target does not exist yet.
+    EnsureBackup(SaveDialog.FileName, DefaultBackupOptions);
     SaveLayoutToFile(FLayout, SaveDialog.FileName);
+  end;
 end;
 
 procedure TfrmEditorMain.btnImportLayoutClick(Sender: TObject);
@@ -1251,6 +1257,8 @@ begin
   // If file already exists → overwrite silently
   if FCurrentFileName <> '' then
   begin
+    // Phase A.4: keep a backup before clobbering the existing file.
+    EnsureBackup(FCurrentFileName, DefaultBackupOptions);
     SaveLayoutToFile(FLayout, FCurrentFileName);
     SetModified(False);
   end
@@ -1261,6 +1269,9 @@ begin
       Exit;
 
     FCurrentFileName := SaveDialog.FileName;
+    // Phase A.4: no-op for a brand-new file; backs up if the chosen name
+    // already exists (Save Dialog's replace confirmation).
+    EnsureBackup(FCurrentFileName, DefaultBackupOptions);
     SaveLayoutToFile(FLayout, FCurrentFileName);
     SetModified(False);
   end;
@@ -1272,6 +1283,9 @@ begin
   if not SaveDialog.Execute then Exit;
   SaveUIToLayout;
   FCurrentFileName := SaveDialog.FileName;
+  // Phase A.4: brand-new Save As targets are not backed up (EnsureBackup
+  // no-ops); overwriting an existing file keeps a backup first.
+  EnsureBackup(FCurrentFileName, DefaultBackupOptions);
   SaveLayoutToFile(FLayout, FCurrentFileName);
   SetModified(False);
 end;
