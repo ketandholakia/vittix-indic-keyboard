@@ -42,6 +42,7 @@ interface
 
 uses
   Winapi.Windows,
+  Winapi.Messages,
   System.SysUtils,
   System.Classes,
   System.Types,
@@ -85,7 +86,11 @@ type
     FShiftState: Boolean;
     FHighContrastMode: Boolean;
     FScaleToFit: Boolean;
-    
+    // QW2: when False (on-screen keyboard), mouse clicks neither activate the
+    // control (WM_MOUSEACTIVATE -> MA_NOACTIVATE) nor steal keyboard focus,
+    // so the SendInput output of an engine-typed glyph lands in the window
+    // the user is actually working in. Default True keeps editor behavior.
+    FFocusOnClick: Boolean;
     FRefKeySize: TSize;
     FRefKeySpacing: Integer;
     FRefOriginX, FRefOriginY, FRefRowGapExtra: Integer;
@@ -132,6 +137,7 @@ type
     procedure KeyDown(var Key: Word; Shift: TShiftState); override;
     procedure ChangeScale(M, D: Integer); override;
     procedure Resize; override;
+    procedure WMMouseActivate(var Msg: TWMMouseActivate); message WM_MOUSEACTIVATE;
   public
     constructor Create(AOwner: TComponent); override;
 
@@ -185,6 +191,13 @@ type
       read FOnKeySelect write FOnKeySelect;
     property OnKeyAssign: TVittixKeyAssignEvent
       read FOnKeyAssign write FOnKeyAssign;
+
+    // QW2: clicking a key normally focuses the control (editor inspector
+    // workflow). The on-screen keyboard sets False so a click neither
+    // activates the control nor moves keyboard focus away from the window
+    // the user is typing into.
+    property FocusOnClick: Boolean read FFocusOnClick
+      write FFocusOnClick default True;
 
     property Align;
     property Anchors;
@@ -354,6 +367,7 @@ begin
   FUnmappedColor := $F8F8F8;
   FSelectedColor := clHighlight;
   FHighContrastMode := False;
+  FFocusOnClick := True;
 
   Font.Name := 'Segoe UI';
   Font.Size := 9;
@@ -812,6 +826,16 @@ end;
   Mouse / keyboard
 ------------------------------------------------- }
 
+procedure TVittixKeyboardView.WMMouseActivate(var Msg: TWMMouseActivate);
+begin
+  // QW2: a non-focus-on-click view must not activate its form either, or the
+  // first click would still pull keyboard focus away from the user's window.
+  if FFocusOnClick then
+    inherited
+  else
+    Msg.Result := MA_NOACTIVATE;
+end;
+
 procedure TVittixKeyboardView.MouseDown(Button: TMouseButton;
   Shift: TShiftState; X, Y: Integer);
 var
@@ -819,7 +843,8 @@ var
   Glyph: string;
 begin
   inherited;
-  SetFocus;
+  if FFocusOnClick then
+    SetFocus;
   if FLayout = nil then Exit;
 
   if not HitTestInternal(Point(X, Y), Hit) then Exit;

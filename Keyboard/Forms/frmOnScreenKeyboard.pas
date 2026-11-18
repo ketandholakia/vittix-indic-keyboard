@@ -4,6 +4,7 @@ interface
 
 uses
   Winapi.Windows,
+  Winapi.Messages,
   System.SysUtils,
   System.Classes,
   Vcl.Forms,
@@ -13,6 +14,8 @@ uses
   Vcl.Buttons,
   LayoutModel,
   LayoutResolver,
+  ShreeLipi.Engine,
+  OSKInput,
   VittixKeyboardView;
 
 type
@@ -27,6 +30,9 @@ type
     procedure vkvKeyboardKeySelect(Sender: TObject; const KeyName, CurrentGlyph: string);
   private
     FLayout: TKeyboardLayout;
+    // QW2: the OSK must never take focus, or the glyph the engine sends via
+    // SendInput would land in the OSK window instead of the user's document.
+    procedure WMMouseActivate(var Msg: TWMMouseActivate); message WM_MOUSEACTIVATE;
   public
     procedure LoadLayout(ALayout: TKeyboardLayout);
   end;
@@ -35,8 +41,17 @@ implementation
 
 {$R *.dfm}
 
+procedure TfrmOnScreenKeyboard.WMMouseActivate(var Msg: TWMMouseActivate);
+begin
+  Msg.Result := MA_NOACTIVATE;
+end;
+
 procedure TfrmOnScreenKeyboard.FormCreate(Sender: TObject);
 begin
+  // QW2: clicks type through the engine, so the keyboard must not take
+  // focus: the view skips SetFocus and never activates, at form and control
+  // level. The engine's own guards make clicks no-ops when typing is off.
+  vkvKeyboard.FocusOnClick := False;
   lblLayoutName.Caption := 'No layout loaded';
   lblKeyInfo.Caption := '';
 end;
@@ -67,6 +82,7 @@ procedure TfrmOnScreenKeyboard.vkvKeyboardKeySelect(Sender: TObject;
   const KeyName, CurrentGlyph: string);
 var
   Resolved: TResolvedGlyph;
+  EngineKey: string;
 begin
   if FLayout = nil then
   begin
@@ -80,6 +96,14 @@ begin
   else
     lblKeyInfo.Caption := Format('Key: %s    glyph: %s    from %s',
       [KeyName, CurrentGlyph, Resolved.SourceLabel]);
+
+  // QW2: type through the engine so the click produces exactly what the
+  // physical key would (cluster context, prebase/postbase, reph all apply).
+  // The engine passes through when disabled or layout-less; '' means the
+  // name is not a typeable single character.
+  EngineKey := OSKKeyNameToEngineKey(KeyName, vkvKeyboard.ShiftState);
+  if EngineKey <> '' then
+    ProcessKeyChar(EngineKey);
 end;
 
 end.

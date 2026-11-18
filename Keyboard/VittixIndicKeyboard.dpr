@@ -11,6 +11,7 @@ uses
   KeyboardHook in 'Core\KeyboardHook.pas',
   ShreeLipi.Engine in 'Core\ShreeLipi.Engine.pas',
   EngineState in 'Core\EngineState.pas',
+  OSKInput in 'Core\OSKInput.pas',
   LayoutLoader in 'Layout\LayoutLoader.pas',
   LayoutManager in 'Layout\LayoutManager.pas',
   LayoutReload in 'Layout\LayoutReload.pas',
