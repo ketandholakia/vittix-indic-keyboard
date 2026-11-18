@@ -3,7 +3,7 @@
   "layout_id": "gujarati-remington",
   "name": "Gujarati Remington",
   "script": "Gujarati",
-  "encoding": "legacy",
+  "encoding": "unicode",
   "font_family": "Gopika",
   "layout_type": "remington",
   "direct": {

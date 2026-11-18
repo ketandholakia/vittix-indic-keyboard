@@ -50,6 +50,17 @@ type
     // the other six layouts keep their declared state untouched.
     [Test]
     procedure LegacyLayouts_DeclareSchema11_FileLevel;
+
+    // Phase A.5: a layout whose non-ASCII glyphs are all script-block Unicode
+    // emits Unicode code points and must not declare legacy encoding — the
+    // metadata (encoding + font_family) drives the editor/OSK glyph rendering,
+    // and a legacy label on Unicode data renders glyphs in a legacy font.
+    [Test]
+    [TestCase('remington','layouts\gujarati\remington.json')]
+    [TestCase('krutidev_010','layouts\devnagari\krutidev_010.json')]
+    [TestCase('shree_dev_1076','layouts\devnagari\shree_dev_1076.json')]
+    [TestCase('shreelipi_0708','layouts\devnagari\shreelipi_0708.json')]
+    procedure ScriptBlockGlyphLayout_MustDeclareUnicode(const ALayoutFile: string);
   end;
 
 implementation
@@ -248,6 +259,62 @@ begin
     Text := TFile.ReadAllText(Others[I]);
     Assert.IsFalse(Text.Contains('"version": "1.1"'),
       Others[I] + ' must NOT gain a 1.1 version field in Phase A.3');
+  end;
+end;
+
+procedure TLegacyGlyphTests.ScriptBlockGlyphLayout_MustDeclareUnicode(
+  const ALayoutFile: string);
+
+  function IsScriptBlockChar(const C: Char): Boolean;
+  begin
+    Result := ((Ord(C) >= $0900) and (Ord(C) <= $097F)) or   // Devanagari
+              ((Ord(C) >= $0A80) and (Ord(C) <= $0AFF));     // Gujarati
+  end;
+
+var
+  Layout: TKeyboardLayout;
+  HasScriptGlyph, HasNonScriptNonAscii: Boolean;
+
+  procedure Scan(const AGlyph: string);
+  var
+    C: Char;
+  begin
+    for C in AGlyph do
+      if Ord(C) >= $0080 then
+        if IsScriptBlockChar(C) then
+          HasScriptGlyph := True
+        else
+          HasNonScriptNonAscii := True;   // Latin font code (µ, ©, Æ, Ÿ ...)
+  end;
+
+begin
+  Layout := LayoutJson.LoadLayoutFromFile(ALayoutFile);
+  try
+    HasScriptGlyph := False;
+    HasNonScriptNonAscii := False;
+    for var Pair in Layout.DirectMap do
+      Scan(Pair.Value);
+    for var Pair in Layout.PostbaseMap do
+      Scan(Pair.Value);
+    for var Pair in Layout.PrebaseMap do
+      Scan(Pair.Value.Glyph);
+    for var Pair in Layout.Modifiers do
+      Scan(Pair.Value.Glyph);
+
+    // Only a layout that EMITS script-block Unicode (and nothing that looks
+    // like a legacy font code) is required to say so. Pure-ASCII or Latin-
+    // coded layouts (the KrutiDev family) legitimately stay "legacy".
+    if HasScriptGlyph and (not HasNonScriptNonAscii) then
+      Assert.AreEqual('unicode', Layout.Encoding,
+        ExtractFileName(ALayoutFile) +
+        ' emits script-block Unicode glyphs, so its encoding label must say "unicode"')
+    else
+      // FailsOnNoAsserts: pin the branch decision itself — the legacy label
+      // is permitted here because the glyphs carry legacy font codes.
+      Assert.IsTrue(HasNonScriptNonAscii or (not HasScriptGlyph),
+        ExtractFileName(ALayoutFile) + ' keeps a non-unicode label only because its glyphs are legacy font codes');
+  finally
+    Layout.Free;
   end;
 end;
 
