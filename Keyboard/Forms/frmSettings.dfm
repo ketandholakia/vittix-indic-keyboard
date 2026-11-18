@@ -3,7 +3,7 @@ object frmSettings: TfrmSettings
   Top = 0
   BorderStyle = bsDialog
   Caption = 'Settings'
-  ClientHeight = 445
+  ClientHeight = 483
   ClientWidth = 460
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -12,7 +12,7 @@ object frmSettings: TfrmSettings
   Font.Name = 'Segoe UI'
   Font.Style = []
   Position = poScreenCenter
-  Constraints.MinHeight = 445
+  Constraints.MinHeight = 483
   Constraints.MinWidth = 460
   TextHeight = 15
   object lblToggleHotkey: TLabel
@@ -89,20 +89,46 @@ object frmSettings: TfrmSettings
     TabOrder = 3
     WordWrap = False
   end
-  object chkIgnoreInjectedInput: TCheckBox
+  object lblLayoutsFolder: TLabel
     Left = 20
     Top = 303
+    Width = 78
+    Height = 15
+    Caption = 'Layouts folder'
+  end
+  object edtLayoutsPath: TEdit
+    Left = 20
+    Top = 324
+    Width = 320
+    Height = 23
+    Hint = 'Folder the keyboard loads layouts from; a missing folder falls back to the per-user copy'
+    ParentShowHint = False
+    ShowHint = True
+    TabOrder = 4
+  end
+  object btnBrowseLayouts: TButton
+    Left = 345
+    Top = 324
+    Width = 95
+    Height = 23
+    Caption = 'Browse...'
+    TabOrder = 5
+    OnClick = btnBrowseLayoutsClick
+  end
+  object chkIgnoreInjectedInput: TCheckBox
+    Left = 20
+    Top = 355
     Width = 420
     Height = 24
     Hint = 'Uncheck only if you type through remote desktop or macro tools whose keystrokes must drive the mapping'
     Caption = 'Ignore injected keystrokes (recommended)'
     ParentShowHint = False
     ShowHint = True
-    TabOrder = 4
+    TabOrder = 6
   end
   object lblHotkeyHelp: TLabel
     Left = 20
-    Top = 332
+    Top = 386
     Width = 420
     Height = 60
     AutoSize = False
@@ -111,22 +137,22 @@ object frmSettings: TfrmSettings
   end
   object btnOK: TButton
     Left = 284
-    Top = 402
+    Top = 452
     Width = 75
     Height = 25
     Caption = 'OK'
     Default = True
-    TabOrder = 5
+    TabOrder = 7
     OnClick = btnOKClick
   end
   object btnCancel: TButton
     Left = 365
-    Top = 402
+    Top = 452
     Width = 75
     Height = 25
     Cancel = True
     Caption = 'Cancel'
     ModalResult = 2
-    TabOrder = 6
+    TabOrder = 8
   end
 end

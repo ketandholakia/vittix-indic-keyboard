@@ -4,7 +4,7 @@ interface
 
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes,
-  Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls,
+  Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.FileCtrl,
   AppSettings;
 
 type
@@ -17,11 +17,15 @@ type
     edtTargetProcess: TEdit;
     lblAllowedApps: TLabel;
     memAllowedApps: TMemo;
+    lblLayoutsFolder: TLabel;
+    edtLayoutsPath: TEdit;
+    btnBrowseLayouts: TButton;
     chkIgnoreInjectedInput: TCheckBox;
     lblHotkeyHelp: TLabel;
     btnOK: TButton;
     btnCancel: TButton;
     procedure btnOKClick(Sender: TObject);
+    procedure btnBrowseLayoutsClick(Sender: TObject);
     procedure edtActionHotkeyKeyDown(Sender: TObject; var Key: Word;
       Shift: TShiftState);
     procedure edtToggleHotkeyKeyDown(Sender: TObject; var Key: Word;
@@ -70,6 +74,15 @@ begin
   Result := Result + KeyToken;
 end;
 
+procedure TfrmSettings.btnBrowseLayoutsClick(Sender: TObject);
+var
+  Dir: string;
+begin
+  Dir := Trim(edtLayoutsPath.Text);
+  if SelectDirectory('Select layouts folder', '', Dir) then
+    edtLayoutsPath.Text := Dir;
+end;
+
 procedure TfrmSettings.btnOKClick(Sender: TObject);
 var
   NormalizedToggle: string;
@@ -92,6 +105,15 @@ begin
       mtError, [mbOK], 0
     );
     edtActionHotkey.SetFocus;
+    Exit;
+  end;
+
+  // Phase C.1: an empty layouts path would fail the whole settings apply
+  // (ApplyRuntimeSettings raises), so reject it here with a clear message.
+  if Trim(edtLayoutsPath.Text) = '' then
+  begin
+    MessageDlg('Layouts folder cannot be empty.', mtError, [mbOK], 0);
+    edtLayoutsPath.SetFocus;
     Exit;
   end;
 
@@ -148,6 +170,7 @@ begin
     Form.edtActionHotkey.Text := Settings.ActionHotkeyText;
     Form.edtTargetProcess.Text := Settings.TargetProcessName;
     Form.memAllowedApps.Lines.Text := Settings.AllowedProcessesText;
+    Form.edtLayoutsPath.Text := Settings.LayoutsPath;
     Form.chkIgnoreInjectedInput.Checked := Settings.IgnoreInjectedInput;
 
     Result := Form.ShowModal = mrOk;
@@ -158,6 +181,7 @@ begin
       Settings.ActionHotkeyText := Trim(Form.edtActionHotkey.Text);
       Settings.TargetProcessName := Trim(Form.edtTargetProcess.Text);
       Settings.AllowedProcessesText := Trim(Form.memAllowedApps.Lines.Text);
+      Settings.LayoutsPath := Trim(Form.edtLayoutsPath.Text);
       Settings.IgnoreInjectedInput := Form.chkIgnoreInjectedInput.Checked;
     end;
   finally
