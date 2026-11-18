@@ -105,3 +105,6 @@ tmp/
 *.rar
 *.log
 Tests/*.res
+
+# Manual repo exports (regenerable from git archive)
+/*.zip
