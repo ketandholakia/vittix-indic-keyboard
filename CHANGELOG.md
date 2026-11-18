@@ -1,5 +1,7 @@
 ## Unreleased
 
+- The Settings dialog now exposes the layouts folder: an editable path with a Browse button and an OK-time empty check. Apply flows through the existing resolution (a missing/unwritable folder falls back to the per-user layouts copy and persists the resolution).
+- New optional "Cycle layout hotkey": a configurable global hotkey (unbound by default) switches to the next loaded layout, wrapping at the end, through the same switch path as the tray menu (engine re-attach, default-layout persistence, header/menu/OSK refresh) and names the new layout in a tray balloon. Persisted as `[Hotkey] Cycle`.
 - Phonetic layouts now type like a phonetic IME instead of emitting glyph strings verbatim (opt-in, data-driven):
   - **Auto-halant:** in a `layout_type: "phonetic"` layout whose halant modifier declares `"behavior": "join_next"`, a consonant key pressed while a consonant cluster is open emits the halant glyph + the new consonant as one atomic half-form (`kk` → ક્ક, `kks` → ક્ક્સ), one backspace unit per half-form. Legacy layouts keep verbatim output regardless of their tags.
   - **Inherent-vowel suppression:** a phonetic layout declaring `properties: {"inherent_vowel_key": "a"}` absorbs that vowel-classified key right after a consonant (`ka` → ક), and the absorption ends the cluster so `kak` gives two full consonants. Strict opt-in; the capital variant and all other vowels are standalone. Accepted limitation: after a matra the cluster is closed, so `kwa` gives કાઅ (matras have their own keys in these layouts).
