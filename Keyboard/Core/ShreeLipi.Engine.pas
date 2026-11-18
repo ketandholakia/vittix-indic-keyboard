@@ -238,6 +238,7 @@ var
   Matra: TKeyMapping;
   ModRule: TKeyMapping;
   KeyClass: string;
+  InherentKey: string;
   Outcome: TInjectionOutcome;
   Units: Integer;
 begin
@@ -356,6 +357,29 @@ begin
       gEngineState.CurrentCluster := '';
       if Outcome <> ioSuccess then
         ResetEngineState;
+      Exit(Outcome);
+    end;
+
+    { ---------------- INHERENT VOWEL ABSORPTION (Phase B.3) ---------------- }
+    // In a phonetic layout that declares properties "inherent_vowel_key",
+    // that vowel-CLASSIFIED key right after an open consonant cluster emits
+    // NOTHING — the inherent vowel is already visible in the consonant
+    // glyph — and ends the cluster, so "ka" types the bare consonant while
+    // "kak" gives two full consonants and "kk" keeps its B.2 half-form.
+    // Placed AFTER the contextual postbase check: if the layout also maps
+    // the key to a matra via postbase, the matra reading wins, consistent
+    // with item 2's ordering. Exact-case compare: the capital variant is a
+    // standalone vowel, never the inherent one. Strict opt-in: layouts
+    // without the property keep emitting the standalone vowel.
+    if SameText(ActiveLayout.LayoutType, 'phonetic') and
+       ActiveLayout.Properties.TryGetValue('inherent_vowel_key', InherentKey) and
+       (AKey = InherentKey) and
+       (gEngineState.CurrentCluster <> '') and
+       ActiveLayout.DirectClasses.TryGetValue(AKey, KeyClass) and
+       SameText(KeyClass, 'vowel') then
+    begin
+      FlushPendingPreludes(Outcome);
+      gEngineState.CurrentCluster := '';
       Exit(Outcome);
     end;
 

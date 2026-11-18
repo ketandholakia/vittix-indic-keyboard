@@ -118,5 +118,7 @@
   },
   "prebase": {},
   "postbase": {},
-  "properties": {}
+  "properties": {
+    "inherent_vowel_key": "a"
+  }
 }

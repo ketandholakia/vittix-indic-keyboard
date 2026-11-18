@@ -61,6 +61,23 @@ type
     procedure AutoHalant_RequiresPhoneticAndJoinNextTag;
     [Test]
     procedure AutoHalant_HindiLayout;
+
+    // Phase B.3: inherent-vowel suppression. In a phonetic layout that
+    // declares properties "inherent_vowel_key", that vowel-classified key
+    // right after an open consonant cluster emits nothing (the inherent
+    // vowel is already visible in the consonant glyph) and ends the cluster.
+    [Test]
+    procedure InherentVowel_KA_Absorbed;
+    [Test]
+    procedure InherentVowel_KAK_TwoFullConsonants;
+    [Test]
+    procedure InherentVowel_NonAbsorbed_Cases;
+    [Test]
+    procedure InherentVowel_Absorption_LeavesOneBackspaceUnit;
+    [Test]
+    procedure InherentVowel_LegacyLayouts_Unaffected;
+    [Test]
+    procedure InherentVowel_RequiresTheProperty;
   end;
 
 implementation
@@ -443,6 +460,127 @@ begin
     Assert.AreEqual('क्क', TypeSequence(Layout, 'kk'), 'hindi phonetic: kk gives the half-form');
     Assert.AreEqual('क्य', TypeSequence(Layout, 'ky'), 'hindi phonetic: ky gives the half-form');
   finally
+    Layout.Free;
+  end;
+end;
+
+procedure TPhoneticLayoutTests.InherentVowel_KA_Absorbed;
+var
+  Layout: TKeyboardLayout;
+begin
+  Layout := LayoutJson.LoadLayoutFromFile('layouts\gujarati\gujarati_phonetic.json');
+  try
+    Assert.AreEqual('ક', TypeSequence(Layout, 'ka'),
+      'gujarati: the inherent vowel after a consonant is absorbed');
+  finally
+    Layout.Free;
+  end;
+
+  Layout := LayoutJson.LoadLayoutFromFile('layouts\hindi\hindi_phonetic.json');
+  try
+    Assert.AreEqual('क', TypeSequence(Layout, 'ka'),
+      'hindi: the inherent vowel after a consonant is absorbed');
+  finally
+    Layout.Free;
+  end;
+end;
+
+procedure TPhoneticLayoutTests.InherentVowel_KAK_TwoFullConsonants;
+var
+  Layout: TKeyboardLayout;
+begin
+  Layout := LayoutJson.LoadLayoutFromFile('layouts\gujarati\gujarati_phonetic.json');
+  try
+    // Absorption ENDS the cluster, so the second k is fresh: two full
+    // consonants, no half-form. Contrast kk (B.2) which half-forms.
+    Assert.AreEqual('કક', TypeSequence(Layout, 'kak'),
+      'absorption closes the cluster; no auto-halant across it');
+  finally
+    Layout.Free;
+  end;
+end;
+
+procedure TPhoneticLayoutTests.InherentVowel_NonAbsorbed_Cases;
+var
+  Layout: TKeyboardLayout;
+begin
+  Layout := LayoutJson.LoadLayoutFromFile('layouts\gujarati\gujarati_phonetic.json');
+  try
+    Assert.AreEqual('અ', TypeSequence(Layout, 'a'),
+      'word-start a is the standalone vowel');
+    Assert.AreEqual('કઆ', TypeSequence(Layout, 'kA'),
+      'capital A is the standalone long vowel, never absorbed');
+    Assert.AreEqual('કઇ', TypeSequence(Layout, 'ki'),
+      'other vowels are never absorbed');
+    Assert.AreEqual('કાઅ', TypeSequence(Layout, 'kwa'),
+      'DECISION 3: after a matra the cluster is closed; a is standalone again');
+  finally
+    Layout.Free;
+  end;
+end;
+
+procedure TPhoneticLayoutTests.InherentVowel_Absorption_LeavesOneBackspaceUnit;
+var
+  Layout: TKeyboardLayout;
+  Events: TStringList;
+begin
+  Layout := LayoutJson.LoadLayoutFromFile('layouts\gujarati\gujarati_phonetic.json');
+  Events := TStringList.Create;
+  try
+    TypeIntoEvents(Layout, 'ka' + #8, Events);
+    // Absorption emits nothing, so the stack holds only the consonant: one
+    // backspace deletes it whole.
+    Assert.AreEqual(2, Events.Count, 'absorption adds no emission');
+    Assert.AreEqual('ક', Events[0]);
+    Assert.AreEqual('<bs>', Events[1], 'exactly one backspace unit for ka');
+  finally
+    Events.Free;
+    Layout.Free;
+  end;
+end;
+
+procedure TPhoneticLayoutTests.InherentVowel_LegacyLayouts_Unaffected;
+var
+  Layout: TKeyboardLayout;
+begin
+  Layout := LayoutJson.LoadLayoutFromFile('layouts\devnagari\krutidev_010.json');
+  try
+    Assert.AreEqual('dv', TypeSequence(Layout, 'ka'),
+      'krutidev: a keeps emitting its font-key string verbatim');
+  finally
+    Layout.Free;
+  end;
+end;
+
+procedure TPhoneticLayoutTests.InherentVowel_RequiresTheProperty;
+var
+  Layout: TKeyboardLayout;
+  Events: TStringList;
+begin
+  // Synthetic phonetic WITH classes+join_next but WITHOUT the property:
+  // 'a' keeps emitting the standalone vowel (DECISION 2: strict opt-in).
+  Layout := CreateSynthetic(True, True, False);
+  Events := TStringList.Create;
+  try
+    TypeIntoEvents(Layout, 'ka', Events);
+    Assert.AreEqual(2, Events.Count, 'no inherent_vowel_key property: no absorption');
+    Assert.AreEqual('ક', Events[0]);
+    Assert.AreEqual('અ', Events[1]);
+  finally
+    Events.Free;
+    Layout.Free;
+  end;
+
+  // ...and with the property the synthetic layout absorbs, proving the
+  // rule is data-driven, not tied to the shipped files.
+  Layout := CreateSynthetic(True, True, True);
+  Events := TStringList.Create;
+  try
+    TypeIntoEvents(Layout, 'ka', Events);
+    Assert.AreEqual(1, Events.Count, 'property present: a is absorbed');
+    Assert.AreEqual('ક', Events[0]);
+  finally
+    Events.Free;
     Layout.Free;
   end;
 end;
