@@ -365,7 +365,7 @@ commit `214e333`). The decode recipe is
 `storedGlyph.encode('cp437').decode('utf-8')`; fixing the stored glyphs
 changes engine output for those keys and needs its own decision.
 
-**Phase A resolved (2026-11-19, commits 505ca0f..62d052e):** the mojibake
+**Phase A resolved (2026-11-19, commits 505ca0f..62d052e):** the mojibake (A.5 completion: remington's font_family moved from the legacy Gopika to Nirmala UI, pairing the unicode label with a font that can render it in the editor/OSK glyph view.)
 finding above is fixed — 54 glyph values repaired across the four legacy
 layouts (full decoded key→glyph table in the fix(A.1) commit); remington now
 types decoded Unicode (`k` → ક, `kA` → કા) and a data-integrity gate test

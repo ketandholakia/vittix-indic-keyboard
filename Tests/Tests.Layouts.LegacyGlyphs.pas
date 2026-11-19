@@ -61,6 +61,14 @@ type
     [TestCase('shree_dev_1076','layouts\devnagari\shree_dev_1076.json')]
     [TestCase('shreelipi_0708','layouts\devnagari\shreelipi_0708.json')]
     procedure ScriptBlockGlyphLayout_MustDeclareUnicode(const ALayoutFile: string);
+
+    // Phase A.5 completion: the unicode label must be PAIRED with a font that
+    // can render it. font_family drives the editor/OSK glyph rendering
+    // (TVittixKeyboardView.GlyphFontName), so a legacy font name on Unicode
+    // glyphs renders wrong characters. Nirmala UI per the approved decision —
+    // the same Unicode font gujarati_remington_unicode uses for this script.
+    [Test]
+    procedure Remington_UnicodeLabel_PairedWithUnicodeFont;
   end;
 
 implementation
@@ -313,6 +321,22 @@ begin
       // is permitted here because the glyphs carry legacy font codes.
       Assert.IsTrue(HasNonScriptNonAscii or (not HasScriptGlyph),
         ExtractFileName(ALayoutFile) + ' keeps a non-unicode label only because its glyphs are legacy font codes');
+  finally
+    Layout.Free;
+  end;
+end;
+
+procedure TLegacyGlyphTests.Remington_UnicodeLabel_PairedWithUnicodeFont;
+var
+  Layout: TKeyboardLayout;
+begin
+  Layout := LayoutJson.LoadLayoutFromFile('layouts\gujarati\remington.json');
+  try
+    Assert.AreEqual('unicode', Layout.Encoding,
+      'precondition: the A.5 label fix must hold');
+    Assert.AreEqual('Nirmala UI', Layout.FontFamily,
+      'remington: Unicode glyphs must name a Unicode font — the legacy Gopika '
+      + 'label renders them as wrong characters in the editor/OSK glyph view');
   finally
     Layout.Free;
   end;
