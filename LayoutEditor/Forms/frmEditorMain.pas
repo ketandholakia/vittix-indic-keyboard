@@ -2409,6 +2409,14 @@ begin
   // that used to delete every mapping the filter excluded.
   SyncVisibleStringMap(FLayout.DirectMap, CollectStringRows(grdDirect), FDirectOwned);
   SyncVisibleStringMap(FLayout.DirectClasses, CollectDirectClassRows(grdDirect), FDirectOwned);
+  // Review D.3: a class whose key just lost its glyph (row's glyph cleared)
+  // would survive as an invisible orphan the UI can neither show nor edit
+  // (the validator warns, but the model should simply agree with the grid).
+  // Prune entries whose key is no longer a direct mapping. Filtered-out rows
+  // are safe: their keys are still in DirectMap, so nothing hidden is lost.
+  for var ClassKey in FLayout.DirectClasses.Keys.ToArray do
+    if not FLayout.DirectMap.ContainsKey(ClassKey) then
+      FLayout.DirectClasses.Remove(ClassKey);
   SyncVisibleMappings(FLayout.PrebaseMap, CollectPrebaseRows, FPrebaseOwned, 'prebase');
   SyncVisibleStringMap(FLayout.PostbaseMap, CollectStringRows(grdPostbase), FPostbaseOwned);
   SyncVisibleStringMap(FLayout.Sequences, CollectStringRows(grdSequences), FSequencesOwned);
