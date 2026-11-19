@@ -258,6 +258,11 @@ begin
   SetKeyHandler(HandleRawKey);
   SetTargetProcessName(GAppSettings.TargetProcessName);
   SetAllowedProcessNames(GAppSettings.AllowedProcessesText);
+  // QW3 review fix: the persisted injected-input filter must reach the hook
+  // at STARTUP too — ApplyRuntimeSettings was the only caller, so a user who
+  // unchecked "ignore injected keystrokes" silently got the default (True)
+  // until the first Settings-OK.
+  SetIgnoreInjectedInput(GAppSettings.IgnoreInjectedInput);
   if Trim(GAppSettings.AllowedProcessesText) = '' then
     AddStartupNotice('No allowed apps are configured. Interception stays disabled except for the primary target process.');
   // Load layouts from the resolved folder (see above).
