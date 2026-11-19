@@ -964,6 +964,14 @@ begin
     ResultObj := TLayoutValidation.ValidateAndReport(Layout);
     try
       Assert.IsTrue(ResultObj.ToString.Contains('empty value'),
+        'the empty inherent_vowel_key must be named');
+      // Review D.4: the specific cross-check owns the defect, so the generic
+      // missing-opt-in warning must not ALSO list the property. (The generic
+      // warning may still fire for other genuinely missing opt-ins - this
+      // fixture has no direct_classes - but its property item is gone.)
+      Assert.IsTrue(ResultObj.ToString.IndexOf('properties "inherent_vowel_key"') < 0,
+        'a present-but-empty inherent_vowel_key must not also be listed as a missing opt-in');
+      Assert.IsTrue(ResultObj.IsValid,
         'empty inherent_vowel_key must warn: ' + ResultObj.ToString);
     finally
       ResultObj.Free;

@@ -225,9 +225,12 @@ begin
         [ALayout.Version, SupportedLayoutSchemaVersionsText]));
 
   // Phase B.5: phonetic opt-in tracking for the engine-feature warning.
+  // Review D.4: a PRESENT property counts as the opt-in taken, even when its
+  // value is empty or malformed — the specific cross-check warning below
+  // names the problem, and firing the generic missing-opt-in warning on top
+  // double-reports the same defect.
   HasJoinNext := False;
-  HasInherentKey := ALayout.Properties.TryGetValue('inherent_vowel_key', InherentKey) and
-    (Trim(InherentKey) <> '');
+  HasInherentKey := ALayout.Properties.ContainsKey('inherent_vowel_key');
   MoveToClusterStartCount := 0;
 
   SeenKeys := TDictionary<string, string>.Create;
