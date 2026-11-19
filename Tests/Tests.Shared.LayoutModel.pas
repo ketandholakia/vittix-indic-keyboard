@@ -1,4 +1,4 @@
-unit Tests.Shared.LayoutModel;
+﻿unit Tests.Shared.LayoutModel;
 
 interface
 
