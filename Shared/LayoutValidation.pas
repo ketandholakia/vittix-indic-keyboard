@@ -278,13 +278,21 @@ begin
 
     // ---------------- DIRECT CLASSES (item 9.4) ----------------
     // Every direct_classes entry must reference a key that exists in the
-    // direct map; a stale entry silently changes nothing at runtime, so it is
-    // a warning, never an error.
+    // direct map, and carry a class the engine understands. The engine gates
+    // half-forms and cluster behavior on SameText 'consonant'/'vowel' — any
+    // other value silently behaves as "other", changing runtime output with
+    // no visible cause, so unknown values are warned (never errors).
     for PairStr in ALayout.DirectClasses do
     begin
       if not ALayout.DirectMap.ContainsKey(PairStr.Key) then
         AddError(vsWarning, 'DirectClasses', PairStr.Key,
           Format('direct_classes key "%s" (%s) is missing from the direct map',
+            [PairStr.Key, PairStr.Value]));
+      if (not SameText(PairStr.Value, 'consonant')) and
+         (not SameText(PairStr.Value, 'vowel')) and
+         (not SameText(PairStr.Value, 'other')) then
+        AddError(vsWarning, 'DirectClasses', PairStr.Key,
+          Format('direct_classes key "%s" has unknown class "%s" (expected consonant, vowel, or other)',
             [PairStr.Key, PairStr.Value]));
     end;
 

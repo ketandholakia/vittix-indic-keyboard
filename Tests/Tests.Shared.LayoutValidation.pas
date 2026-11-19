@@ -123,6 +123,10 @@ type
 
     [Test]
     procedure DuplicateMoveToClusterStart_Warns;
+    [Test]
+    procedure DirectClasses_UnknownClassValue_Warns;
+    [Test]
+    procedure DirectClasses_ValidTrio_NoClassWarning;
   end;
 
 implementation
@@ -809,8 +813,72 @@ begin
 
     ResultObj := TLayoutValidation.ValidateAndReport(Layout);
     try
-      Assert.IsTrue(ResultObj.ToString.IndexOf('Phonetic layout') < 0,
-        'a fully opted-in phonetic layout must not warn');
+      // Review D.2 strengthening: the old pin only checked the B.5 text; a
+      // false-positive cross-check or class warning would slip through.
+      // Scoped to the Phase B/A.5 diagnostics: the fixture's halant rule
+      // (physical key '' under the rule name 'halant') legitimately trips
+      // the pre-existing Key-mismatch warning, so a blanket zero-warnings
+      // assert would fail on unrelated ground.
+      Assert.IsTrue(ResultObj.IsValid,
+        'a fully opted-in phonetic layout must have no errors');
+      Assert.IsTrue(ResultObj.ToString.IndexOf('direct_classes') < 0,
+        'no direct_classes diagnostic may fire on a valid configuration');
+      Assert.IsTrue(ResultObj.ToString.IndexOf('inherent_vowel_key') < 0,
+        'no inherent_vowel_key diagnostic may fire on a valid configuration');
+      Assert.IsTrue(ResultObj.ToString.IndexOf('unknown class') < 0,
+        'no unknown-class diagnostic may fire on a valid configuration');
+    finally
+      ResultObj.Free;
+    end;
+  finally
+    Layout.Free;
+  end;
+end;
+
+procedure TLayoutValidationTests.DirectClasses_UnknownClassValue_Warns;
+var
+  Layout: TKeyboardLayout;
+  ResultObj: TLayoutValidationResult;
+begin
+  Layout := CreateMinimalValidLayout;
+  try
+    Layout.DirectMap.Add('k', 'क');
+    Layout.DirectMap.Add('a', 'अ');
+    Layout.DirectClasses.Add('k', 'consonnat');       // typo: silently 'other' at runtime
+    Layout.DirectClasses.Add('a', ' consonant ');     // the engine does NOT trim: warns
+
+    ResultObj := TLayoutValidation.ValidateAndReport(Layout);
+    try
+      Assert.IsTrue(ResultObj.IsValid,
+        'an unknown class value is a warning, never an error');
+      Assert.IsTrue(ResultObj.ToString.Contains('unknown class'),
+        'an unknown class value must be named: ' + ResultObj.ToString);
+    finally
+      ResultObj.Free;
+    end;
+  finally
+    Layout.Free;
+  end;
+end;
+
+procedure TLayoutValidationTests.DirectClasses_ValidTrio_NoClassWarning;
+var
+  Layout: TKeyboardLayout;
+  ResultObj: TLayoutValidationResult;
+begin
+  Layout := CreateMinimalValidLayout;
+  try
+    Layout.DirectMap.Add('k', 'क');
+    Layout.DirectMap.Add('a', 'अ');
+    Layout.DirectMap.Add('f', 'फ़');
+    Layout.DirectClasses.Add('k', 'consonant');
+    Layout.DirectClasses.Add('a', 'VOWEL');   // case: SameText must accept
+    Layout.DirectClasses.Add('f', 'Other');   // case: SameText must accept
+
+    ResultObj := TLayoutValidation.ValidateAndReport(Layout);
+    try
+      Assert.IsTrue(ResultObj.ToString.IndexOf('unknown class') < 0,
+        'the valid trio (any case) must not warn: ' + ResultObj.ToString);
     finally
       ResultObj.Free;
     end;
