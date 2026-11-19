@@ -319,6 +319,12 @@ begin
         'Legacy sequences are retained but explicitly warned about');
       Assert.IsTrue(ResultObj.WarningCount > 0);
       Assert.IsTrue(ResultObj.ToString.Contains('not supported by the engine'));
+      // The warning's example conjunct is a Devanagari literal; this unit
+      // has a BOM so the literal is the REAL conjunct. If the production
+      // unit ever loses its BOM, the message compiles as cp1252 mojibake
+      // and this assertion catches it.
+      Assert.IsTrue(ResultObj.ToString.Contains('क्ष'),
+        'the sequences warning must show the real Devanagari conjunct');
     finally
       ResultObj.Free;
     end;

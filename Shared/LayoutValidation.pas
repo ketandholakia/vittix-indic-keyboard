@@ -1,4 +1,4 @@
-unit LayoutValidation;
+﻿unit LayoutValidation;
 
 interface
 
