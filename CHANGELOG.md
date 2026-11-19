@@ -1,5 +1,6 @@
 ## Unreleased
 
+- In the Layout Editor, the Direct tab now exposes a "Class" column (Key, Glyph, Class, Preview) showing the key's `direct_classes` classification (`consonant`, `vowel`, `other`). Cell edits in the Class column round-trip through `SyncUIToModel`/`SyncVisibleStringMap` with search filter preservation and clipboard copy/paste support.
 - Tightened layout validation: cross-checks the value of `inherent_vowel_key` (verifies non-empty, existence in DirectMap, and `vowel` classification in direct_classes) and warns on duplicate `move_to_cluster_start` modifier rules. Pinned cluster-clear semantics for legacy layouts (consonant + standalone vowel + vowel in Kruti Dev produces standalone vowels instead of attaching matra).
 
 - Completed the remington metadata fix: `font_family` is now `Nirmala UI` to match its Unicode glyphs (the label became `unicode` in the A.5 fix, but the legacy `Gopika` name made the editor/OSK glyph view render Unicode code points in a legacy font).

@@ -268,6 +268,7 @@ type
     procedure ReportFilterCount(Grid: TStringGrid; Total: Integer);
 
     function CollectStringRows(Grid: TStringGrid): TArray<TStringMappingRow>;
+    function CollectDirectClassRows(Grid: TStringGrid): TArray<TStringMappingRow>;
     function CollectPrebaseRows: TArray<TEditorMapping>;
     function CollectModifierRows: TArray<TEditorMapping>;
     function CollectOwnedKeys(Grid: TStringGrid): TArray<string>;
@@ -659,6 +660,8 @@ end;
 
 procedure TfrmEditorMain.GridSetEditText(Sender: TObject; ACol, ARow: Integer; const Value: string);
 begin
+  if (Sender = grdDirect) and (ACol = 1) and (grdDirect.ColCount > 3) then
+    grdDirect.Cells[3, ARow] := Value;
   PushUndo;
   SaveUIToLayout;
   UpdateLayoutPreview;
@@ -1171,14 +1174,14 @@ end;
 
 procedure TfrmEditorMain.AddRowToGrid(Grid: TStringGrid);
 var
-  Row: Integer;
+  Row, C: Integer;
 begin
   if Grid = nil then Exit;
   Row := Grid.RowCount;
   Grid.RowCount := Row + 1;
   Grid.Cells[0, Row] := 'NewKey';
-  if Grid.ColCount > 1 then
-    Grid.Cells[1, Row] := '';
+  for C := 1 to Grid.ColCount - 1 do
+    Grid.Cells[C, Row] := '';
   SelectGridRow(Grid, Row);
   Grid.EditorMode := True;
 end;
@@ -1222,6 +1225,8 @@ begin
     // author is not left guessing why an edit in one grid did nothing.
     var Resolved := TLayoutResolver.Resolve(FLayout, KeyText);
     var Line := Format('%s: %s -> %s', [GridName, KeyText, ValueText]);
+    if (Grid = grdDirect) and (grdDirect.ColCount > 2) and (grdDirect.Cells[2, ARow] <> '') then
+      Line := Line + ' [' + grdDirect.Cells[2, ARow] + ']';
     if Resolved.Found then
       Line := Line + '   resolves from ' + Resolved.SourceLabel
     else if ValueText <> '' then
@@ -1569,7 +1574,12 @@ begin
 
   Row := Grid.Row;
   if Row >= Grid.FixedRows then
-    Clipboard.AsText := Grid.Cells[0,Row] + #9 + Grid.Cells[1,Row];
+  begin
+    if (Grid = grdDirect) and (Grid.ColCount > 2) and (Grid.Cells[2, Row] <> '') then
+      Clipboard.AsText := Grid.Cells[0, Row] + #9 + Grid.Cells[1, Row] + #9 + Grid.Cells[2, Row]
+    else
+      Clipboard.AsText := Grid.Cells[0, Row] + #9 + Grid.Cells[1, Row];
+  end;
 end;
 
 procedure TfrmEditorMain.miPasteClick(Sender: TObject);
@@ -1588,8 +1598,10 @@ begin
     Parts := Clipboard.AsText.Split([#9]);
     if Length(Parts) >= 2 then
     begin
-      Grid.Cells[0,Row] := Parts[0];
-      Grid.Cells[1,Row] := Parts[1];
+      Grid.Cells[0, Row] := Parts[0];
+      Grid.Cells[1, Row] := Parts[1];
+      if (Grid = grdDirect) and (Length(Parts) >= 3) and (Grid.ColCount > 2) then
+        Grid.Cells[2, Row] := Parts[2];
       SetInspectorFromSelection(Grid, Row);
       SaveUIToLayout;
     end;
@@ -1741,14 +1753,18 @@ procedure TfrmEditorMain.RenderDirect(const Filter: string);
 var
   Keys: TArray<string>;
   I, Row: Integer;
-  Needle, Glyph: string;
+  Needle, Glyph, KeyClass: string;
 begin
-  grdDirect.ColCount := 3;
+  grdDirect.ColCount := 4;
   grdDirect.DefaultRowHeight := GRID_ROW_HEIGHT;
-  grdDirect.ColWidths[2] := 120;
+  grdDirect.ColWidths[0] := 60;
+  grdDirect.ColWidths[1] := 100;
+  grdDirect.ColWidths[2] := 100;
+  grdDirect.ColWidths[3] := 120;
   grdDirect.Cells[0, 0] := 'Key';
   grdDirect.Cells[1, 0] := 'Glyph';
-  grdDirect.Cells[2, 0] := 'Preview';
+  grdDirect.Cells[2, 0] := 'Class';
+  grdDirect.Cells[3, 0] := 'Preview';
   grdDirect.RowCount := 1;
   FDirectOwned := nil;
 
@@ -1766,14 +1782,20 @@ begin
   for I := 0 to High(Keys) do
   begin
     Glyph := FLayout.DirectMap[Keys[I]];
+    KeyClass := '';
+    if not FLayout.DirectClasses.TryGetValue(Keys[I], KeyClass) then
+      KeyClass := '';
+
     if (Needle <> '') and (Pos(Needle, LowerCase(Keys[I])) = 0) and
-       (Pos(Needle, LowerCase(Glyph)) = 0) then
+       (Pos(Needle, LowerCase(Glyph)) = 0) and
+       (Pos(Needle, LowerCase(KeyClass)) = 0) then
       Continue;
 
     grdDirect.RowCount := Row + 1;
     grdDirect.Cells[0, Row] := Keys[I];
     grdDirect.Cells[1, Row] := Glyph;
-    grdDirect.Cells[2, Row] := Glyph;
+    grdDirect.Cells[2, Row] := KeyClass;
+    grdDirect.Cells[3, Row] := Glyph;
     Inc(Row);
   end;
 
@@ -2000,6 +2022,22 @@ begin
   end;
 end;
 
+function TfrmEditorMain.CollectDirectClassRows(Grid: TStringGrid): TArray<TStringMappingRow>;
+var
+  I, R: Integer;
+begin
+  SetLength(Result, Grid.RowCount - Grid.FixedRows);
+  for R := Grid.FixedRows to Grid.RowCount - 1 do
+  begin
+    I := R - Grid.FixedRows;
+    Result[I].Key := Trim(Grid.Cells[0, R]);
+    if Grid.ColCount > 2 then
+      Result[I].Value := LowerCase(Trim(Grid.Cells[2, R]))
+    else
+      Result[I].Value := '';
+  end;
+end;
+
 function TfrmEditorMain.CollectPrebaseRows: TArray<TEditorMapping>;
 var
   I, R: Integer;
@@ -2089,6 +2127,8 @@ begin
   Grid.Cells[0, Row] := Key;
   if Grid.ColCount > 1 then
     Grid.Cells[1, Row] := edtInspectorValue.Text;
+  if (Grid = grdDirect) and (Grid.ColCount > 3) then
+    Grid.Cells[3, Row] := edtInspectorValue.Text;
   Grid.Invalidate;
   SaveUIToLayout;
   UpdateLayoutPreview;
@@ -2287,7 +2327,9 @@ begin
   // Status badge. Drawn once per row in the glyph column, not once per cell:
   // it used to repeat in every column and collide with the preview glyph.
   Badge := '';
-  if (ARow >= Grid.FixedRows) and (ACol = Grid.ColCount - 2) then
+  if (ARow >= Grid.FixedRows) and
+     (((Grid = grdDirect) and (ACol = 1)) or
+      ((Grid <> grdDirect) and (ACol = Grid.ColCount - 2))) then
   begin
     if KeyText = '' then
       Badge := 'EMPTY'
@@ -2348,6 +2390,7 @@ begin
   // is hiding stays in the model untouched. This is the fix for the save path
   // that used to delete every mapping the filter excluded.
   SyncVisibleStringMap(FLayout.DirectMap, CollectStringRows(grdDirect), FDirectOwned);
+  SyncVisibleStringMap(FLayout.DirectClasses, CollectDirectClassRows(grdDirect), FDirectOwned);
   SyncVisibleMappings(FLayout.PrebaseMap, CollectPrebaseRows, FPrebaseOwned, 'prebase');
   SyncVisibleStringMap(FLayout.PostbaseMap, CollectStringRows(grdPostbase), FPostbaseOwned);
   SyncVisibleStringMap(FLayout.Sequences, CollectStringRows(grdSequences), FSequencesOwned);

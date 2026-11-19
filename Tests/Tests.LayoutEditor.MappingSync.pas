@@ -48,6 +48,8 @@ type
     procedure DirectClasses_JsonRoundTrip_Preserved;
     [Test]
     procedure DirectClasses_SurvivesVisibleGridSync_AndSave;
+    [Test]
+    procedure DirectClasses_SyncFromGrid_AddsUpdatesAndDeletes;
   end;
 
 implementation
@@ -506,6 +508,44 @@ begin
     end;
   finally
     Layout.Free;
+  end;
+end;
+
+procedure TLayoutEditorMappingSyncTests.DirectClasses_SyncFromGrid_AddsUpdatesAndDeletes;
+var
+  Classes: TDictionary<string, string>;
+  Rows: TArray<TStringMappingRow>;
+  Owned: TArray<string>;
+begin
+  Classes := TDictionary<string, string>.Create;
+  try
+    Classes.Add('k', 'consonant');
+    Classes.Add('t', 'consonant');
+    Classes.Add('a', 'vowel');
+
+    // Grid currently displays 'k' (modified to vowel), 't' (cleared class), 's' (newly classified)
+    // while 'a' is filtered out.
+    SetLength(Owned, 3);
+    Owned[0] := 'k';
+    Owned[1] := 't';
+    Owned[2] := 's';
+
+    SetLength(Rows, 3);
+    Rows[0].Key := 'k';
+    Rows[0].Value := 'vowel';       // update
+    Rows[1].Key := 't';
+    Rows[1].Value := '';            // deletion from direct_classes
+    Rows[2].Key := 's';
+    Rows[2].Value := 'consonant';    // addition
+
+    SyncVisibleStringMap(Classes, Rows, Owned);
+
+    Assert.AreEqual('vowel', Classes['k'], 'k class was updated to vowel');
+    Assert.IsFalse(Classes.ContainsKey('t'), 't was cleared so it was removed from direct_classes');
+    Assert.AreEqual('consonant', Classes['s'], 's was added to direct_classes');
+    Assert.AreEqual('vowel', Classes['a'], 'filtered-out a was preserved untouched');
+  finally
+    Classes.Free;
   end;
 end;
 
