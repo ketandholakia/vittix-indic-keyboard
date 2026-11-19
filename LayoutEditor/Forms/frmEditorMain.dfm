@@ -119,9 +119,17 @@ object frmEditorMain: TfrmEditorMain
             Width = 612
             Height = 611
             Align = alClient
-            ColCount = 2
+            ColCount = 4
+            ColWidths = (
+              60
+              100
+              100
+              120)
             DefaultColWidth = 180
             DefaultRowHeight = 26
+            FixedCols = 0
+            RowCount = 2
+            FixedRows = 1
             PopupMenu = pmGridContext
             TabOrder = 1
             ExplicitHeight = 498

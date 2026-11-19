@@ -1547,6 +1547,10 @@ begin
   Grid.RowCount := Row + 1;
   Grid.Cells[0,Row] := 'NewKey';
   Grid.Cells[1,Row] := '';
+  // Review D.1: a fresh row must not inherit the preview of whatever row
+  // previously occupied it.
+  if (Grid = grdDirect) and (Grid.ColCount > 3) then
+    Grid.Cells[3,Row] := '';
   SaveUIToLayout;
 end;
 
@@ -1600,8 +1604,22 @@ begin
     begin
       Grid.Cells[0, Row] := Parts[0];
       Grid.Cells[1, Row] := Parts[1];
-      if (Grid = grdDirect) and (Length(Parts) >= 3) and (Grid.ColCount > 2) then
-        Grid.Cells[2, Row] := Parts[2];
+      // Review D.1: the clipboard is the row's WHOLE content — pasting a
+      // 2-value (old-format) row over one that carries a direct_classes
+      // value must clear the class, or the old class silently transfers to
+      // the pasted key on the next sync.
+      if Grid = grdDirect then
+      begin
+        if (Length(Parts) >= 3) and (Grid.ColCount > 2) then
+          Grid.Cells[2, Row] := Parts[2]
+        else if Grid.ColCount > 2 then
+          Grid.Cells[2, Row] := '';
+        // Mirror the glyph into the Preview column like GridSetEditText does,
+        // so the pasted row does not show a stale preview until the next
+        // full render.
+        if (Grid.ColCount > 3) then
+          Grid.Cells[3, Row] := Grid.Cells[1, Row];
+      end;
       SetInspectorFromSelection(Grid, Row);
       SaveUIToLayout;
     end;
