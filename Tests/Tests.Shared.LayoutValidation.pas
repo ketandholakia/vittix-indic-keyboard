@@ -108,6 +108,21 @@ type
 
     [Test]
     procedure RenamedRephRule_NotWarnedAsUnexecutedMetadata;
+
+    [Test]
+    procedure InherentVowelKey_EmptyValue_Warns;
+
+    [Test]
+    procedure InherentVowelKey_NotInDirectMap_Warns;
+
+    [Test]
+    procedure InherentVowelKey_MissingFromDirectClasses_Warns;
+
+    [Test]
+    procedure InherentVowelKey_ClassifiedAsNonVowel_Warns;
+
+    [Test]
+    procedure DuplicateMoveToClusterStart_Warns;
   end;
 
 implementation
@@ -782,6 +797,8 @@ begin
   try
     Layout.DirectMap.Add('k', 'क');
     Layout.DirectClasses.Add('k', 'consonant');
+    Layout.DirectMap.Add('a', 'अ');
+    Layout.DirectClasses.Add('a', 'vowel');
     KM := Default(TKeyMapping);
     KM.Key := '\';
     KM.Glyph := '्';
@@ -858,6 +875,135 @@ begin
       Assert.IsTrue(ResultObj.IsValid, ResultObj.ToString);
       Assert.IsTrue(ResultObj.ToString.IndexOf('not executed by the engine') < 0,
         'a move_to_cluster_start rule IS executed and must not warn');
+    finally
+      ResultObj.Free;
+    end;
+  finally
+    Layout.Free;
+  end;
+end;
+
+procedure TLayoutValidationTests.InherentVowelKey_EmptyValue_Warns;
+var
+  Layout: TKeyboardLayout;
+  ResultObj: TLayoutValidationResult;
+begin
+  Layout := CreateMinimalValidLayout;
+  try
+    Layout.DirectMap.Add('k', 'क');
+    Layout.Properties.Add('inherent_vowel_key', '');
+
+    ResultObj := TLayoutValidation.ValidateAndReport(Layout);
+    try
+      Assert.IsTrue(ResultObj.ToString.Contains('empty value'),
+        'empty inherent_vowel_key must warn: ' + ResultObj.ToString);
+    finally
+      ResultObj.Free;
+    end;
+  finally
+    Layout.Free;
+  end;
+end;
+
+procedure TLayoutValidationTests.InherentVowelKey_NotInDirectMap_Warns;
+var
+  Layout: TKeyboardLayout;
+  ResultObj: TLayoutValidationResult;
+begin
+  Layout := CreateMinimalValidLayout;
+  try
+    Layout.DirectMap.Add('k', 'क');
+    Layout.Properties.Add('inherent_vowel_key', 'a'); // 'a' not in DirectMap
+
+    ResultObj := TLayoutValidation.ValidateAndReport(Layout);
+    try
+      Assert.IsTrue(ResultObj.ToString.Contains('not defined in DirectMap'),
+        'inherent_vowel_key missing from DirectMap must warn: ' + ResultObj.ToString);
+    finally
+      ResultObj.Free;
+    end;
+  finally
+    Layout.Free;
+  end;
+end;
+
+procedure TLayoutValidationTests.InherentVowelKey_MissingFromDirectClasses_Warns;
+var
+  Layout: TKeyboardLayout;
+  ResultObj: TLayoutValidationResult;
+begin
+  Layout := CreateMinimalValidLayout;
+  try
+    Layout.DirectMap.Add('k', 'क');
+    Layout.DirectClasses.Add('k', 'consonant');
+    Layout.DirectMap.Add('a', 'अ'); // 'a' in DirectMap but missing from DirectClasses
+    Layout.Properties.Add('inherent_vowel_key', 'a');
+
+    ResultObj := TLayoutValidation.ValidateAndReport(Layout);
+    try
+      Assert.IsTrue(ResultObj.ToString.Contains('missing from direct_classes'),
+        'inherent_vowel_key unclassified in direct_classes layout must warn: ' + ResultObj.ToString);
+    finally
+      ResultObj.Free;
+    end;
+  finally
+    Layout.Free;
+  end;
+end;
+
+procedure TLayoutValidationTests.InherentVowelKey_ClassifiedAsNonVowel_Warns;
+var
+  Layout: TKeyboardLayout;
+  ResultObj: TLayoutValidationResult;
+begin
+  Layout := CreateMinimalValidLayout;
+  try
+    Layout.DirectMap.Add('k', 'क');
+    Layout.DirectClasses.Add('k', 'consonant');
+    Layout.DirectMap.Add('a', 'अ');
+    Layout.DirectClasses.Add('a', 'consonant'); // wrong class
+    Layout.Properties.Add('inherent_vowel_key', 'a');
+
+    ResultObj := TLayoutValidation.ValidateAndReport(Layout);
+    try
+      Assert.IsTrue(ResultObj.ToString.Contains('instead of "vowel"'),
+        'inherent_vowel_key classified as non-vowel must warn: ' + ResultObj.ToString);
+    finally
+      ResultObj.Free;
+    end;
+  finally
+    Layout.Free;
+  end;
+end;
+
+procedure TLayoutValidationTests.DuplicateMoveToClusterStart_Warns;
+var
+  Layout: TKeyboardLayout;
+  KM1, KM2: TKeyMapping;
+  ResultObj: TLayoutValidationResult;
+begin
+  Layout := CreateMinimalValidLayout;
+  try
+    Layout.DirectMap.Add('k', 'क');
+
+    KM1 := Default(TKeyMapping);
+    KM1.Key := 'R';
+    KM1.Glyph := 'ર્';
+    KM1.MapType := 'move_to_cluster_start';
+    KM1.InitMetadata;
+    Layout.Modifiers.Add('reph', KM1);
+
+    KM2 := Default(TKeyMapping);
+    KM2.Key := 'Z';
+    KM2.Glyph := 'ર્';
+    KM2.MapType := 'move_to_cluster_start';
+    KM2.InitMetadata;
+    Layout.Modifiers.Add('reph2', KM2);
+
+    ResultObj := TLayoutValidation.ValidateAndReport(Layout);
+    try
+      Assert.IsTrue(ResultObj.ToString.Contains('Multiple modifier rules declare behavior "move_to_cluster_start"'),
+        'duplicate move_to_cluster_start must warn: ' + ResultObj.ToString);
     finally
       ResultObj.Free;
     end;

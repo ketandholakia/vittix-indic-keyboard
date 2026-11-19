@@ -62,6 +62,8 @@ type
     procedure LegacyPostbase_StandaloneVowel_WithoutConsonant_ShreeDev1076;
     [Test]
     procedure LegacyPostbase_MatraAfterConsonant_Krutidev010;
+    [Test]
+    procedure LegacyDirectVowel_EndsCluster_Krutidev010;
   end;
 
 // Runs one typed sequence against a real layout and returns the emitted text
@@ -440,6 +442,21 @@ begin
   try
     Assert.AreEqual('lk', TypeSequence(Layout, 'dA'),
       'krutidev: consonant + A must produce the aa-matra glyph');
+  finally
+    Layout.Free;
+  end;
+end;
+
+procedure TRealLayoutTests.LegacyDirectVowel_EndsCluster_Krutidev010;
+var
+  Layout: TKeyboardLayout;
+begin
+  Layout := LayoutJson.LoadLayoutFromFile('layouts\devnagari\krutidev_010.json');
+  try
+    // k -> 'd' (consonant, opens cluster), a -> 'v' (standalone vowel, ends cluster),
+    // A -> 'vk' (standalone vowel because cluster is closed, NOT 'k' matra).
+    Assert.AreEqual('dvvk', TypeSequence(Layout, 'kaA'),
+      'krutidev: k (consonant) + a (vowel) + A (vowel) must produce standalone vowels, not attach matra');
   finally
     Layout.Free;
   end;

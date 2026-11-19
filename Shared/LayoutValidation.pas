@@ -167,6 +167,8 @@ var
   PairProp: TPair<string, string>;
   HasJoinNext, HasInherentKey: Boolean;
   Missing: string;
+  MoveToClusterStartCount: Integer;
+  InherentKey, InherentClass: string;
 
   procedure CheckAndRegisterKey(const AKey, ASection: string; const AKeyForSeen: string = '');
   var
@@ -224,7 +226,9 @@ begin
 
   // Phase B.5: phonetic opt-in tracking for the engine-feature warning.
   HasJoinNext := False;
-  HasInherentKey := ALayout.Properties.ContainsKey('inherent_vowel_key');
+  HasInherentKey := ALayout.Properties.TryGetValue('inherent_vowel_key', InherentKey) and
+    (Trim(InherentKey) <> '');
+  MoveToClusterStartCount := 0;
 
   SeenKeys := TDictionary<string, string>.Create;
   try
@@ -310,6 +314,14 @@ begin
       if SameText(PairMod.Value.MapType, 'join_next') then
         HasJoinNext := True;
 
+      if SameText(PairMod.Value.MapType, 'move_to_cluster_start') then
+      begin
+        Inc(MoveToClusterStartCount);
+        if MoveToClusterStartCount > 1 then
+          AddError(vsWarning, 'Modifiers', PairMod.Key,
+            'Multiple modifier rules declare behavior "move_to_cluster_start"; only the first will be executed by the engine');
+      end;
+
       // The dictionary key names a modifier rule; runtime lookup uses the
       // physical key stored in the mapping. Executed rules: reph and halant
       // by name, and ANY rule tagged "behavior": "move_to_cluster_start"
@@ -387,6 +399,29 @@ begin
     begin
       for PairProp in ALayout.Properties do
         CheckAndRegisterKey(PairProp.Key, 'Properties', PairProp.Key);
+    end;
+
+    if ALayout.Properties.TryGetValue('inherent_vowel_key', InherentKey) then
+    begin
+      if Trim(InherentKey) = '' then
+        AddError(vsWarning, 'Properties', 'inherent_vowel_key',
+          'Property "inherent_vowel_key" has an empty value')
+      else
+      begin
+        if not ALayout.DirectMap.ContainsKey(InherentKey) then
+          AddError(vsWarning, 'Properties', 'inherent_vowel_key',
+            Format('Property "inherent_vowel_key" specifies key "%s", which is not defined in DirectMap', [InherentKey]));
+
+        if ALayout.DirectClasses.Count > 0 then
+        begin
+          if not ALayout.DirectClasses.TryGetValue(InherentKey, InherentClass) then
+            AddError(vsWarning, 'Properties', 'inherent_vowel_key',
+              Format('Property "inherent_vowel_key" specifies key "%s", which is missing from direct_classes (must be "vowel")', [InherentKey]))
+          else if not SameText(InherentClass, 'vowel') then
+            AddError(vsWarning, 'Properties', 'inherent_vowel_key',
+              Format('Property "inherent_vowel_key" specifies key "%s" classified as "%s" instead of "vowel"', [InherentKey, InherentClass]));
+        end;
+      end;
     end;
 
     // ---------------- PHONETIC ENGINE OPT-INS (Phase B.5) ----------------
