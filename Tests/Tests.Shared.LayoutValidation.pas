@@ -1,4 +1,4 @@
-unit Tests.Shared.LayoutValidation;
+﻿unit Tests.Shared.LayoutValidation;
 
 interface
 

@@ -1,4 +1,4 @@
-unit Tests.Shared.LayoutJson;
+﻿unit Tests.Shared.LayoutJson;
 
 interface
 
