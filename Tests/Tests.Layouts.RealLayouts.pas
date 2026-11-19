@@ -31,6 +31,12 @@ type
     [TestCase('hindi_inscript','layouts\hindi\hindi_inscript.json')]
     [TestCase('gujarati_phonetic','layouts\gujarati\gujarati_phonetic.json')]
     [TestCase('gujarati_inscript','layouts\gujarati\gujarati_inscript.json')]
+    [TestCase('Gujarati_Remington_indica','layouts\gujarati\Gujarati_Remington_indica.json')]
+    [TestCase('Gujarati_Godrej_Indica','layouts\gujarati\Gujarati_Godrej_Indica.json')]
+    [TestCase('Gujarati_Gopika_LMG_Unicode','layouts\gujarati\Gujarati_Gopika_LMG_Unicode.json')]
+    [TestCase('Gujarati_Harikrishna_BAPS_Unicode','layouts\gujarati\Gujarati_Harikrishna_BAPS_Unicode.json')]
+    [TestCase('Gujarati_ShreeLipi_768_Unicode','layouts\gujarati\Gujarati_ShreeLipi_768_Unicode.json')]
+    [TestCase('Gujarati_Typewriter_Remington_GAIL_CBI','layouts\gujarati\Gujarati_Typewriter_Remington_GAIL_CBI.json')]
     procedure LoadAndValidateLayout(const ALayoutFile: string);
 
     [Test]
