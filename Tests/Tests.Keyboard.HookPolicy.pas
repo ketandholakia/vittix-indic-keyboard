@@ -140,7 +140,14 @@ function THookPolicyTests.CaptureKey(const AChar: string): TInjectionOutcome;
 begin
   if Assigned(GCaptured) then
     GCaptured.Add(AChar);
-  Result := SendUnicodeText(AChar);
+  // Item (Tab/Enter ordering): the real engine reports ioPassThrough for a
+  // control key with nothing pending, which keeps the physical key native.
+  // The capture handler mirrors that contract; flush-ordering behavior with
+  // REAL pending state is covered in Tests.Keyboard.ControlKeyOrdering.
+  if (AChar = #9) or (AChar = #13) then
+    Result := ioPassThrough
+  else
+    Result := SendUnicodeText(AChar);
 end;
 
 procedure THookPolicyTests.Setup;

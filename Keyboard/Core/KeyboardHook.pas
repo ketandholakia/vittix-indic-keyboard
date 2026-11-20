@@ -611,12 +611,25 @@ begin
         Outcome := KeyHandler(#13);
     end;
 
-    // Review fix (issue 1): the engine has committed any pending prebase/reph
-    // (or had nothing to commit). The physical control key passes through
-    // NATIVELY — the hook never consumed it, so there is nothing to
-    // re-inject and its real modifiers survive: Shift+Tab with a pending
-    // matra flushes the matra AND moves focus backwards. Re-injecting a bare
-    // VK_TAB/VK_RETURN would have dropped the Shift modifier.
+    // Item (Tab/Enter ordering): when the engine COMMITTED the pending
+    // matra/reph (ioSuccess), the injected text is queued after the physical
+    // Tab/Enter that is still in flight — injected input from inside an LL
+    // hook lands after the current event, so the matra would appear in the
+    // field the Tab/Enter just MOVED TO. Consume the physical key and
+    // re-inject it in order, after the text, with Shift preserved so
+    // Shift+Tab still moves focus backwards.
+    //
+    // With NOTHING pending (ioPassThrough / ioNoOutput / a zero- or
+    // partially-accepted flush) the physical control key passes through
+    // NATIVELY as before: the hook only replaces a key it could actually
+    // emit text for — fail-open, never eating a key it cannot replace.
+    if Outcome = ioSuccess then
+    begin
+      SendVirtualKeyWithShift(AKey.VKCode, Modifiers.ShiftDown);
+      Result := True;
+      Exit;
+    end;
+
     Result := False;
     Exit;
   end;

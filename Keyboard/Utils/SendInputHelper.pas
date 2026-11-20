@@ -57,6 +57,11 @@ function SendUnicodeChar(AChar: WideChar): TInjectionOutcome;
 
 function SendBackspace(Count: Integer = 1): TInjectionOutcome;
 function SendVirtualKey(VK: Word): TInjectionOutcome;
+// Item (Tab/Enter ordering): re-injects a control key AFTER emitted text,
+// preserving Shift: when ShiftDown, Shift down/up wraps the virtual key in
+// the SAME SendInput batch, so the whole sequence is atomic. A bare
+// SendVirtualKey would turn a physical Shift+Tab into a forward Tab.
+function SendVirtualKeyWithShift(VK: Word; const AShiftDown: Boolean): TInjectionOutcome;
 
 procedure SetSendInputHook(AHook: TSendInputProc);
 
@@ -316,6 +321,41 @@ begin
   Inputs[1].ki.dwExtraInfo := VITTIX_SENDINPUT_TAG;
 
   Result := SubmitInputs(Inputs, 'SendVirtualKey');
+end;
+
+{ Item (Tab/Enter ordering): one atomic batch. With Shift held, the sequence
+  is [Shift down][VK down][VK up][Shift up]; without, a plain down/up pair.
+  Symmetric down/up keeps the logical modifier state clean; while the user
+  still physically holds Shift after the injected Shift-up, their next
+  keystroke re-establishes it from the hardware events. }
+function SendVirtualKeyWithShift(VK: Word; const AShiftDown: Boolean): TInjectionOutcome;
+var
+  Inputs: array[0..3] of TInput;
+begin
+  if not AShiftDown then
+    Exit(SendVirtualKey(VK));
+
+  ZeroMemory(@Inputs, SizeOf(Inputs));
+
+  Inputs[0].Itype := INPUT_KEYBOARD;
+  Inputs[0].ki.wVk := VK_SHIFT;
+  Inputs[0].ki.dwExtraInfo := VITTIX_SENDINPUT_TAG;
+
+  Inputs[1].Itype := INPUT_KEYBOARD;
+  Inputs[1].ki.wVk := VK;
+  Inputs[1].ki.dwExtraInfo := VITTIX_SENDINPUT_TAG;
+
+  Inputs[2].Itype := INPUT_KEYBOARD;
+  Inputs[2].ki.wVk := VK;
+  Inputs[2].ki.dwFlags := KEYEVENTF_KEYUP;
+  Inputs[2].ki.dwExtraInfo := VITTIX_SENDINPUT_TAG;
+
+  Inputs[3].Itype := INPUT_KEYBOARD;
+  Inputs[3].ki.wVk := VK_SHIFT;
+  Inputs[3].ki.dwFlags := KEYEVENTF_KEYUP;
+  Inputs[3].ki.dwExtraInfo := VITTIX_SENDINPUT_TAG;
+
+  Result := SubmitInputs(Inputs, 'SendVirtualKeyWithShift');
 end;
 
 end.

@@ -47,6 +47,8 @@ type
     procedure StatusCallback_FiresOncePerLatchTrip;
     [Test]
     procedure StatusCallback_ResetFromTrippedFiresHealthy_ResetWhileHealthyIsSilent;
+    [Test]
+    procedure SendVirtualKeyWithShift_BatchShape;
   end;
 
 implementation
@@ -240,6 +242,23 @@ begin
   ResetInjectionStatus;
   Assert.AreEqual(2, GStatusEvents.Count,
     'a re-arm notify must fire only when the latch was actually tripped');
+end;
+
+// Item (Tab/Enter ordering): the Shift-preserving variant submits the whole
+// [Shift down][VK down][VK up][Shift up] sequence as ONE batch; without Shift
+// it degenerates to the plain down/up pair. Full record-order coverage lives
+// in Tests.Keyboard.ControlKeyOrdering.
+procedure TSendInputHelperTests.SendVirtualKeyWithShift_BatchShape;
+begin
+  GReturn := 4;
+  SendVirtualKeyWithShift(VK_TAB, True);
+  Assert.IsTrue(InjectionOK);
+  Assert.AreEqual(4, GLastRequested,
+    'with Shift: Shift down + Tab down/up + Shift up = 4 records');
+
+  SendVirtualKeyWithShift(VK_RETURN, False);
+  Assert.AreEqual(2, GLastRequested,
+    'without Shift: a plain down/up pair = 2 records');
 end;
 
 initialization

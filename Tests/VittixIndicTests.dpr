@@ -45,6 +45,7 @@ uses
   Tests.Engine.InjectionOutcome in 'Tests.Engine.InjectionOutcome.pas',
   Tests.Utils.SendInputHelper in 'Tests.Utils.SendInputHelper.pas',
   Tests.Keyboard.HookPolicy in 'Tests.Keyboard.HookPolicy.pas',
+  Tests.Keyboard.ControlKeyOrdering in 'Tests.Keyboard.ControlKeyOrdering.pas',
   Tests.Keyboard.OSKInput in 'Tests.Keyboard.OSKInput.pas',
   Tests.Keyboard.PassThroughReset in 'Tests.Keyboard.PassThroughReset.pas',
   Tests.Keyboard.VKMapping in 'Tests.Keyboard.VKMapping.pas',

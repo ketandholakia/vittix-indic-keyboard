@@ -60,7 +60,7 @@ type
     [Test]
     procedure Space_WithPendingPrebase_FlushesThenReinjects;
     [Test]
-    procedure Tab_WithPendingPrebase_FlushesThenPassesThroughNatively;
+    procedure Tab_WithPendingPrebase_FlushesThenReinjectsVKTab;
   end;
 
 implementation
@@ -354,9 +354,12 @@ begin
     'the flushed prebase and the literal space must have been injected');
 end;
 
-// Review fix (issue 1): the physical Tab passes through NATIVELY after the
-// flush — no synthetic re-injection, so Shift+Tab keeps its Shift modifier.
-procedure TPassThroughResetTests.Tab_WithPendingPrebase_FlushesThenPassesThroughNatively;
+// Item (Tab/Enter ordering): with a pending prebase the flush emits text, so
+// the physical Tab is CONSUMED and re-injected in order after the matra (the
+// injected matra would otherwise land after the still-in-flight physical
+// Tab, in the field the Tab just moved to). Nothing-pending Tabs stay native
+// (see Tab_NoPending above).
+procedure TPassThroughResetTests.Tab_WithPendingPrebase_FlushesThenReinjectsVKTab;
 begin
   SetEngineOutputHandler(nil);
 
@@ -364,10 +367,10 @@ begin
   Assert.IsTrue(HandleKeyEvent(MakeKey($49, True)), 'the prebase key is consumed');
   Assert.AreEqual(0, GSendInputCalls, 'storing the prebase injects nothing');
 
-  Assert.IsFalse(HandleKeyEvent(MakeKey(VK_TAB, True)),
-    'Tab passes through natively with its real modifiers');
-  Assert.AreEqual(1, GSendInputCalls,
-    'only the flushed prebase is injected; the physical Tab itself flows on');
+  Assert.IsTrue(HandleKeyEvent(MakeKey(VK_TAB, True)),
+    'Tab with a committed flush must be consumed (re-injected in order)');
+  Assert.AreEqual(2, GSendInputCalls,
+    'the flushed prebase AND the re-injected VK_TAB must have been injected');
 end;
 
 initialization
