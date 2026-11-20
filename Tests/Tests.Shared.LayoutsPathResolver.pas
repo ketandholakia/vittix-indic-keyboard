@@ -59,14 +59,18 @@ type
     procedure SeededUpdate_UserCreatedFiles_NeverTouched;
     [Test]
     procedure SeededUpdate_ManifestWritten_RecordsHashesAndVersion;
+    [Test]
+    procedure SeededUpdate_InvalidManifestFiles_DoesNotBlockStartup;
+    [Test]
+    procedure SeededUpdate_LockedUserFile_IsLeftAlone_AndOtherFilesContinue;
   end;
 
 implementation
 
 procedure TLayoutsPathResolverTests.Setup;
 begin
-  FDir := TPath.Combine(TPath.GetTempPath,
-    'VittixLayoutsResolveTests_' + TGUID.NewGuid.ToString);
+  FDir := TPath.GetFullPath(TPath.Combine(TPath.GetTempPath,
+    'VittixLayoutsResolveTests_' + TGUID.NewGuid.ToString));
   TDirectory.CreateDirectory(FDir);
 end;
 
@@ -199,6 +203,7 @@ var
   PerUser, Shipped, Custom: string;
   Log: TStringList;
 begin
+  PerUser := NewTempDir;
   Shipped := NewTempDir;
   TFile.WriteAllText(TPath.Combine(Shipped, 'a.json'), 'shipped-v2');
   Custom := NewTempDir;
@@ -395,6 +400,52 @@ begin
   end;
 end;
 
+procedure TLayoutsPathResolverTests.SeededUpdate_LockedUserFile_IsLeftAlone_AndOtherFilesContinue;
+var
+  PerUserRoot, Shipped, Resolved: string;
+  Locked: TFileStream;
+  Log: TStringList;
+begin
+  PerUserRoot := NewTempDir;
+  Shipped := NewTempDir;
+  Resolved := TPath.Combine(PerUserRoot, 'layouts');
+  TDirectory.CreateDirectory(Resolved);
+  TFile.WriteAllText(TPath.Combine(Resolved, 'a.json'), 'user-edit');
+  TFile.WriteAllText(TPath.Combine(Shipped, 'a.json'), 'shipped');
+  TFile.WriteAllText(TPath.Combine(Shipped, 'b.json'), 'new-layout');
+  Log := TStringList.Create;
+  Locked := TFileStream.Create(TPath.Combine(Resolved, 'a.json'), fmOpenRead or fmShareExclusive);
+  try
+    UpdateSeededLayouts(Resolved, PerUserRoot, Shipped, '1.1', Log);
+    Assert.IsTrue(Log.Text.Contains('warning: could not reconcile'));
+    Assert.AreEqual('new-layout', TFile.ReadAllText(TPath.Combine(Resolved, 'b.json')));
+  finally
+    Locked.Free;
+    Log.Free;
+  end;
+  Assert.AreEqual('user-edit', TFile.ReadAllText(TPath.Combine(Resolved, 'a.json')));
+end;
+
+procedure TLayoutsPathResolverTests.SeededUpdate_InvalidManifestFiles_DoesNotBlockStartup;
+var
+  PerUserRoot, Shipped, Resolved: string;
+begin
+  PerUserRoot := NewTempDir;
+  Shipped := NewTempDir;
+  Resolved := TPath.Combine(PerUserRoot, 'layouts');
+  TDirectory.CreateDirectory(Resolved);
+  TFile.WriteAllText(TPath.Combine(Resolved, '.seed.json'),
+    '{"files":[] }');
+  TFile.WriteAllText(TPath.Combine(Resolved, 'a.json'), 'user-edit');
+  TFile.WriteAllText(TPath.Combine(Shipped, 'a.json'), 'shipped');
+  TFile.WriteAllText(TPath.Combine(Shipped, 'b.json'), 'new-layout');
+
+  UpdateSeededLayouts(Resolved, PerUserRoot, Shipped, '1.1', nil);
+
+  Assert.AreEqual('user-edit', TFile.ReadAllText(TPath.Combine(Resolved, 'a.json')));
+  Assert.AreEqual('new-layout', TFile.ReadAllText(TPath.Combine(Resolved, 'b.json')));
+end;
+
 procedure TLayoutsPathResolverTests.ReadConfiguredLayoutsPath_ReturnsIniValue_AbsoluteAndRelative;
 var
   IniPath, ExeDir, Raw: string;
@@ -425,7 +476,8 @@ begin
     Ini.Free;
   end;
   Raw := ReadConfiguredLayoutsPath(IniPath, ExeDir);
-  Assert.IsTrue(TPath.IsPathRooted(Raw), 'relative values must be absolutized');
+  Assert.IsTrue(TPath.IsPathRooted(Raw),
+    'relative values must be absolutized: ExeDir=' + ExeDir + '; Raw=' + Raw);
   Assert.AreEqual(IncludeTrailingPathDelimiter(ExeDir) + 'layouts', Raw);
 end;
 

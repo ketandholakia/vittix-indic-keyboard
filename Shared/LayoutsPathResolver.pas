@@ -248,7 +248,9 @@ begin
       Exit;
     Root := TJSONObject(Json);
 
-    FilesObj := Root.FindValue('files') as TJSONObject;
+    FilesObj := nil;
+    if Root.FindValue('files') is TJSONObject then
+      FilesObj := TJSONObject(Root.FindValue('files'));
     if FilesObj <> nil then
       for Pair in FilesObj do
       begin
@@ -316,70 +318,83 @@ begin
   try
     LoadSeedManifest(AResolvedLayoutsDir, Manifest);
 
-    ShippedFiles := TDirectory.GetFiles(ShippedDir, '*.*',
-      TSearchOption.soAllDirectories);
+    try
+      ShippedFiles := TDirectory.GetFiles(ShippedDir, '*.*',
+        TSearchOption.soAllDirectories);
+    except
+      on E: Exception do
+      begin
+        SeedLog(ALog, 'warning', 'could not enumerate shipped layouts: ' + E.Message);
+        Exit;
+      end;
+    end;
     for FileName in ShippedFiles do
     begin
       if PathInBackupFolder(FileName) then
         Continue;
 
-      SeedKey := ReplaceText(ExtractRelativePath(
-        IncludeTrailingPathDelimiter(ShippedDir), FileName), '\', '/');
-      PerUserPath := TPath.Combine(AResolvedLayoutsDir,
-        ReplaceText(SeedKey, '/', '\'));
-      ShippedHash := THashSHA2.GetHashStringFromFile(FileName);
+      try
+        SeedKey := ReplaceText(ExtractRelativePath(
+          IncludeTrailingPathDelimiter(ShippedDir), FileName), '\', '/');
+        PerUserPath := TPath.Combine(AResolvedLayoutsDir,
+          ReplaceText(SeedKey, '/', '\'));
+        ShippedHash := THashSHA2.GetHashStringFromFile(FileName);
 
-      if not TFile.Exists(PerUserPath) then
-      begin
-        // Missing per-user copy (brand-new shipped layout): copy it.
-        try
-          ForceDirectories(ExtractFileDir(PerUserPath));
-          TFile.Copy(FileName, PerUserPath, False);
-          Manifest.AddOrSetValue(SeedKey, ShippedHash);
-          SeedLog(ALog, 'info', 'seeded new shipped layout ' + SeedKey);
-        except
-          on E: Exception do
-            SeedLog(ALog, 'warning', 'could not seed ' + SeedKey + ': ' + E.Message);
-        end;
-        Continue;
-      end;
-
-      UserHash := THashSHA2.GetHashStringFromFile(PerUserPath);
-
-      if Manifest.TryGetValue(SeedKey, RecordedHash) then
-      begin
-        if SameText(UserHash, RecordedHash) then
+        if not TFile.Exists(PerUserPath) then
         begin
-          // The user never edited this file since we shipped it, so a
-          // changed shipped version arrives as an update (backed up first).
-          if not SameText(UserHash, ShippedHash) then
-          begin
-            try
-              EnsureBackup(PerUserPath, DefaultBackupOptions);
-              TFile.Copy(FileName, PerUserPath, True);
-              Manifest.AddOrSetValue(SeedKey, ShippedHash);
-              SeedLog(ALog, 'info', 'updated seeded layout ' + SeedKey +
-                ' to the shipped version');
-            except
-              on E: Exception do
-                SeedLog(ALog, 'warning', 'could not update ' + SeedKey + ': ' +
-                  E.Message);
-            end;
+          // Missing per-user copy (brand-new shipped layout): copy it.
+          try
+            ForceDirectories(ExtractFileDir(PerUserPath));
+            TFile.Copy(FileName, PerUserPath, False);
+            Manifest.AddOrSetValue(SeedKey, ShippedHash);
+            SeedLog(ALog, 'info', 'seeded new shipped layout ' + SeedKey);
+          except
+            on E: Exception do
+              SeedLog(ALog, 'warning', 'could not seed ' + SeedKey + ': ' + E.Message);
           end;
+          Continue;
+        end;
+
+        UserHash := THashSHA2.GetHashStringFromFile(PerUserPath);
+
+        if Manifest.TryGetValue(SeedKey, RecordedHash) then
+        begin
+          if SameText(UserHash, RecordedHash) then
+          begin
+            // The user never edited this file since we shipped it, so a
+            // changed shipped version arrives as an update (backed up first).
+            if not SameText(UserHash, ShippedHash) then
+            begin
+              try
+                EnsureBackup(PerUserPath, DefaultBackupOptions);
+                TFile.Copy(FileName, PerUserPath, True);
+                Manifest.AddOrSetValue(SeedKey, ShippedHash);
+                SeedLog(ALog, 'info', 'updated seeded layout ' + SeedKey +
+                  ' to the shipped version');
+              except
+                on E: Exception do
+                  SeedLog(ALog, 'warning', 'could not update ' + SeedKey + ': ' +
+                    E.Message);
+              end;
+            end;
+          end
+          else
+            SeedLog(ALog, 'warning', 'layout ' + SeedKey +
+              ' was modified by the user; leaving it alone (a newer shipped version exists)');
+        end
+        else if SameText(UserHash, ShippedHash) then
+        begin
+          // No manifest (older-build seed): identical content proves the file
+          // was never edited - adopt it into the manifest.
+          Manifest.AddOrSetValue(SeedKey, ShippedHash);
         end
         else
           SeedLog(ALog, 'warning', 'layout ' + SeedKey +
-            ' was modified by the user; leaving it alone (a newer shipped version exists)');
-      end
-      else if SameText(UserHash, ShippedHash) then
-      begin
-        // No manifest (older-build seed): identical content proves the file
-        // was never edited - adopt it into the manifest.
-        Manifest.AddOrSetValue(SeedKey, ShippedHash);
-      end
-      else
-        SeedLog(ALog, 'warning', 'layout ' + SeedKey +
-          ' has no seed record and differs from the shipped file; treating it as user-modified and leaving it alone');
+            ' has no seed record and differs from the shipped file; treating it as user-modified and leaving it alone');
+      except
+        on E: Exception do
+          SeedLog(ALog, 'warning', 'could not reconcile ' + FileName + ': ' + E.Message);
+      end;
     end;
 
     SaveSeedManifest(AResolvedLayoutsDir, AAppVersion, Manifest);
