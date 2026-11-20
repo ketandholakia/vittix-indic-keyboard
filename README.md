@@ -7,22 +7,38 @@ through instead of silently consuming it.
 
 ## Shipped layouts
 
-The repository currently ships ten layouts. The `script` values represented
-by those files are Devanagari and Gujarati; this is the supported shipped
-layout inventory, not a claim of general support for every Indic script.
+The repository ships 21 layout files under `layouts/`, grouped by script
+folder. The `script` values represented by those files are Devanagari and
+Gujarati; this is the shipped layout inventory, not a claim of general
+support for every Indic script. Generated from `layouts/**/*.json`.
 
-| File | Layout |
-|---|---|
-| `layouts/devnagari/krutidev_010.json` | KrutiDev Devanagari 010 |
-| `layouts/devnagari/shreelipi_0708.json` | ShreeLipi Devanagari 0708 |
-| `layouts/devnagari/shree_dev_1076.json` | ShreeLipi Devanagari 1076 |
-| `layouts/custom/press_custom_1.json` | Press Custom 1 (Devanagari) |
-| `layouts/hindi/hindi_phonetic.json` | Hindi Phonetic Example (Devanagari) |
-| `layouts/hindi/hindi_inscript.json` | Hindi InScript (Devanagari) |
-| `layouts/gujarati/remington.json` | Gujarati Remington |
-| `layouts/gujarati/gujarati_remington_unicode.json` | Gujarati Remington Unicode |
-| `layouts/gujarati/gujarati_phonetic.json` | Gujarati Phonetic Example |
-| `layouts/gujarati/gujarati_inscript.json` | Gujarati InScript |
+| File | Layout | Script | Encoding |
+|---|---|---|---|
+| `layouts/custom/press_custom_1.json` | Press Custom 1 | Devanagari | legacy |
+| `layouts/devnagari/Hindi_InScript_Traditional.json` | Hindi InScript / Traditional | Devanagari | unicode |
+| `layouts/devnagari/Hindi_KrutiDev_010_DevLys_010_Unicode.json` | Hindi Kruti Dev 010 / DevLys 010 (Unicode) | Devanagari | unicode |
+| `layouts/devnagari/Hindi_Remington_GAIL_CBI.json` | Hindi Remington GAIL / CBI | Devanagari | unicode |
+| `layouts/devnagari/hi-remington-gail-unicode.json` | Hindi Remington GAIL (Unicode) | Devanagari | unicode |
+| `layouts/devnagari/krutidev_010.json` | KrutiDev Devanagari 010 | Devanagari | legacy |
+| `layouts/devnagari/shree_dev_1076.json` | ShreeLipi Devanagari 1076 | Devanagari | legacy |
+| `layouts/devnagari/shreelipi_0708.json` | ShreeLipi Devanagari 0708 | Devanagari | legacy |
+| `layouts/gujarati/Gujarati_Godrej_Indica.json` | Gujarati Godrej Indica | Gujarati | unicode |
+| `layouts/gujarati/Gujarati_Gopika_LMG_Unicode.json` | Gujarati Gopika / LMG-Arun (Unicode) | Gujarati | unicode |
+| `layouts/gujarati/Gujarati_Harikrishna_BAPS_Unicode.json` | Gujarati Harikrishna / BAPS (Unicode) | Gujarati | unicode |
+| `layouts/gujarati/Gujarati_Remington_indica.json` | Gujarati Remington Indica | Gujarati | unicode |
+| `layouts/gujarati/Gujarati_Remington_terafont_unicode_v2.json` | Gujarati Terafont / LMG (Caps Lock ON - Unicode) | Gujarati | unicode |
+| `layouts/gujarati/Gujarati_ShreeLipi_768_Unicode.json` | Gujarati Shree-Lipi 768 (Unicode) | Gujarati | unicode |
+| `layouts/gujarati/Gujarati_Typewriter_Remington_GAIL_CBI.json` | Gujarati Typewriter (Remington GAIL / CBI) | Gujarati | unicode |
+| `layouts/gujarati/gujarati_inscript.json` | Gujarati InScript | Gujarati | unicode |
+| `layouts/gujarati/gujarati_phonetic.json` | Gujarati Phonetic Example | Gujarati | unicode |
+| `layouts/gujarati/gujarati_remington_unicode.json` | Gujarati Remington Unicode | Gujarati | unicode |
+| `layouts/gujarati/remington.json` | Gujarati Remington | Gujarati | unicode |
+| `layouts/hindi/hindi_inscript.json` | Hindi InScript | Devanagari | unicode |
+| `layouts/hindi/hindi_phonetic.json` | Hindi Phonetic Example | Devanagari | unicode |
+
+`layouts/custom/press_custom_1.json` is a blank authoring template: it
+declares no mappings, types nothing, and is hidden from the tray menu (the
+validator warns about it).
 
 The InScript files are positional examples, not verified official government
 standards.

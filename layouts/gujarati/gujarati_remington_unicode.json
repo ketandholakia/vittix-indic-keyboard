@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "layout_id": "gujarati-remington-unicode",
+  "layout_id": "gujarati_remington_unicode",
   "name": "Gujarati Remington Unicode",
   "script": "Gujarati",
   "encoding": "unicode",

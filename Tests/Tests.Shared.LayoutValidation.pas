@@ -127,6 +127,10 @@ type
     procedure DirectClasses_UnknownClassValue_Warns;
     [Test]
     procedure DirectClasses_ValidTrio_NoClassWarning;
+    [Test]
+    procedure HyphenatedLayoutID_WarnsAboutStyle;
+    [Test]
+    procedure EmptyLayout_NoMappings_WarnsButIsValid;
   end;
 
 implementation
@@ -134,13 +138,67 @@ implementation
 function CreateMinimalValidLayout: TKeyboardLayout;
 begin
   Result := TKeyboardLayout.Create;
-  Result.LayoutID := 'test-layout';
+  Result.LayoutID := 'test_layout';   // item: canonical underscore-only style
   Result.Name := 'Test Layout';
   Result.Script := 'Devanagari';
   Result.Encoding := 'unicode';
   Result.FontFamily := 'Nirmala UI';
   Result.LayoutType := 'phonetic';
   Result.Group := 'Test';
+end;
+
+// Item (housekeeping): the canonical layout_id style is underscores only.
+// Hyphens still WORK at runtime (SetActiveLayoutByID canonicalizes), so this
+// is a style warning, never an error.
+procedure TLayoutValidationTests.HyphenatedLayoutID_WarnsAboutStyle;
+var
+  Layout: TKeyboardLayout;
+  ResultObj: TLayoutValidationResult;
+begin
+  Layout := CreateMinimalValidLayout;
+  try
+    Layout.LayoutID := 'test-layout';
+    Layout.DirectMap.Add('k', 'क');
+
+    ResultObj := TLayoutValidation.ValidateAndReport(Layout);
+    try
+      Assert.IsTrue(ResultObj.IsValid,
+        'a hyphenated ID is a style issue, not an error');
+      Assert.IsTrue(ResultObj.ToString.Contains('underscores'),
+        'the warning must name the canonical style');
+    finally
+      ResultObj.Free;
+    end;
+  finally
+    Layout.Free;
+  end;
+end;
+
+// Item (housekeeping): a layout with no mappings types nothing. The
+// validator warns; the tray menu hides it. It is NOT an error: the file
+// loads, the editor can author into it.
+procedure TLayoutValidationTests.EmptyLayout_NoMappings_WarnsButIsValid;
+var
+  Layout: TKeyboardLayout;
+  ResultObj: TLayoutValidationResult;
+begin
+  Layout := CreateMinimalValidLayout;
+  try
+    // No maps added at all.
+    ResultObj := TLayoutValidation.ValidateAndReport(Layout);
+    try
+      Assert.IsTrue(ResultObj.IsValid,
+        'an empty layout must still load (warning, not error)');
+      Assert.IsTrue(ResultObj.ToString.Contains('no mappings'),
+        'the empty-layout warning must fire');
+      Assert.IsTrue(Layout.HasNoMappings,
+        'HasNoMappings must agree with the validator condition');
+    finally
+      ResultObj.Free;
+    end;
+  finally
+    Layout.Free;
+  end;
 end;
 
 procedure TLayoutValidationTests.ValidLayout_PassesValidation;

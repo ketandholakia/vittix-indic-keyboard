@@ -48,6 +48,8 @@ type
     procedure Initialize_BackupFileInSubfolder_IsSkipped;
     [Test]
     procedure Initialize_OnlyBackupsPresent_BehavesLikeEmptyDirectory;
+    [Test]
+    procedure SetActiveLayoutByID_CanonicalStyle_MatchesHyphenatedSavedID;
   end;
 
   // Item 9.5: the detach / reload / re-attach decision used by the tray,
@@ -323,6 +325,29 @@ begin
   );
   Assert.AreEqual(0, FManager.LoadErrors.Count,
     'skipped backups must not be reported as load errors');
+end;
+
+// Item (housekeeping): layout files use the underscore-only ID style now;
+// a DefaultLayout saved by an older build may carry hyphens. The
+// canonicalized comparison is the alias map: 'krutidev-010' must still
+// activate a layout whose file now declares 'krutidev_010'.
+procedure TLayoutManagerTests.SetActiveLayoutByID_CanonicalStyle_MatchesHyphenatedSavedID;
+begin
+  WriteFile('krutidev.json',
+    '{"layout_id":"krutidev_010","name":"K","script":"Devanagari","encoding":"UTF-16","layout_type":"typewriter","metadata":{"font_family":"Arial"}}');
+  FManager.Initialize(FDir);
+
+  FManager.SetActiveLayoutByID('krutidev-010');
+  Assert.AreEqual('krutidev_010', FManager.ActiveLayout.LayoutID,
+    'a hyphenated saved ID must resolve to the renamed (underscored) layout');
+
+  FManager.SetActiveLayoutByID('KRUTIDEV_010');
+  Assert.AreEqual('krutidev_010', FManager.ActiveLayout.LayoutID,
+    'the canonical style matches case-insensitively');
+
+  FManager.SetActiveLayoutByID('does_not_exist');
+  Assert.AreEqual('krutidev_010', FManager.ActiveLayout.LayoutID,
+    'an unknown ID must leave the active layout unchanged');
 end;
 
 // ---- Item 9.5: detach / reload / re-attach helper --------------------------

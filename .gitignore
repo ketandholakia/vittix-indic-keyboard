@@ -109,3 +109,11 @@ Tests/*.res
 
 # Manual repo exports (regenerable from git archive)
 /*.zip
+
+# Assistant working files and one-off exports (item: housekeeping)
+/reviews.txt
+/diff-stat.txt
+/TOOLS.md
+/.openclaw-attachments/
+# Compiler-generated resource files anywhere
+*.res

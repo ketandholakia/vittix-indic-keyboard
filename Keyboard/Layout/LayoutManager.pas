@@ -6,6 +6,7 @@ uses
   System.SysUtils,
   System.Classes,
   System.IOUtils,
+  System.StrUtils,
   System.Generics.Collections,
   LayoutModel,
   LayoutLoader,
@@ -195,12 +196,28 @@ begin
   FActiveLayout := FLayouts[Index];
 end;
 
+{ Item (housekeeping): layout_id style is canonicalized before comparison —
+  lowercased, hyphens mapped to underscores. This IS the alias map: layout
+  files were renamed to the underscore-only style, but a saved DefaultLayout
+  in settings.ini written by an older build (e.g. 'krutidev-010') keeps
+  resolving to the renamed layout 'krutidev_010'. No stored alias table to
+  drift out of sync; both spellings work forever. }
+function CanonicalLayoutID(const AID: string): string;
+begin
+  Result := ReplaceText(Trim(AID), '-', '_').ToLower;
+end;
+
 procedure TLayoutManager.SetActiveLayoutByID(const LayoutID: string);
 var
   L: TKeyboardLayout;
+  Wanted: string;
 begin
+  Wanted := CanonicalLayoutID(LayoutID);
+  if Wanted = '' then
+    Exit;
+
   for L in FLayouts do
-    if SameText(L.LayoutID, LayoutID) then
+    if CanonicalLayoutID(L.LayoutID) = Wanted then
     begin
       FActiveLayout := L;
       Exit;

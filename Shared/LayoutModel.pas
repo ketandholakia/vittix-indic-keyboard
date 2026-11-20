@@ -79,6 +79,11 @@ type
 
     constructor Create;
     destructor Destroy; override;
+
+    // Item (housekeeping): True when the layout declares NO mappings at all
+    // (direct, prebase, postbase, modifiers). Such a layout types nothing;
+    // the validator warns and the tray menu hides it.
+    function HasNoMappings: Boolean;
   end;
 
 // True when AVersion is a declared schema version this build understands.
@@ -130,6 +135,16 @@ begin
     Metadata.Free;
     Metadata := nil;
   end;
+end;
+
+{ Item (housekeeping): an empty layout types nothing. ExtraMaps and
+  Sequences are not consulted: Sequences is never executed by the runtime
+  and ExtraMaps have no runtime consumer yet, so neither can make a layout
+  typeable. }
+function TKeyboardLayout.HasNoMappings: Boolean;
+begin
+  Result := (DirectMap.Count = 0) and (PrebaseMap.Count = 0) and
+    (PostbaseMap.Count = 0) and (Modifiers.Count = 0);
 end;
 
 { --------------------------------------------------

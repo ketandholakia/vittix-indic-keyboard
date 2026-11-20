@@ -224,6 +224,14 @@ begin
       Format('Unsupported layout schema version "%s"; supported version is "%s"',
         [ALayout.Version, SupportedLayoutSchemaVersionsText]));
 
+  // Item (housekeeping): layout_id style. Underscores are the canonical form;
+  // hyphens still WORK (SetActiveLayoutByID compares canonicalized IDs) but
+  // a warning nudges new layouts to the one style.
+  if Pos('-', ALayout.LayoutID) > 0 then
+    AddError(vsWarning, 'Layout', 'LayoutID',
+      Format('LayoutID "%s" contains hyphens; the canonical style is underscores only',
+        [ALayout.LayoutID]));
+
   // Phase B.5: phonetic opt-in tracking for the engine-feature warning.
   // Review D.4: a PRESENT property counts as the opt-in taken, even when its
   // value is empty or malformed — the specific cross-check warning below
@@ -405,6 +413,14 @@ begin
       if PairProp.Key = '' then
         AddError(vsWarning, 'Properties', PairProp.Key, 'Empty property key');
     end;
+
+    // Item (housekeeping): an EMPTY layout (no direct, prebase, postbase or
+    // modifier mappings at all) types nothing. Warn so it is visible; the
+    // tray menu hides such layouts so they cannot be picked as the active one.
+    if (ALayout.DirectMap.Count = 0) and (ALayout.PrebaseMap.Count = 0) and
+       (ALayout.PostbaseMap.Count = 0) and (ALayout.Modifiers.Count = 0) then
+      AddError(vsWarning, 'Layout', 'Mappings',
+        'Layout has no mappings (direct, prebase, postbase and modifiers are all empty); it types nothing and is hidden from the tray menu');
 
     if ACheckCrossMapDuplicates then
     begin

@@ -45,6 +45,29 @@ Build-Project "Keyboard\VittixIndicKeyboard.dproj"
 # 4. Build Layout Editor
 Build-Project "LayoutEditor\VittixIndicEditor.dproj"
 
+# 4.5 Optional code signing (docs/RELEASE.md).
+# Runs only when BOTH environment variables are set; the pipeline stays green
+# without them. SIGNTOOL_PATH = full path to signtool.exe (Windows SDK);
+# SIGN_PFX_PATH = the code-signing certificate (.pfx); SIGN_PFX_PASSWORD is
+# read inside the tool call, never echoed.
+$signtool = $env:SIGNTOOL_PATH
+$signPfx = $env:SIGN_PFX_PATH
+if ($signtool -and (Test-Path $signtool) -and $signPfx -and (Test-Path $signPfx)) {
+    Write-Information "`n[Sign] Code-signing exes with signtool..."
+    foreach ($exe in @("build\Win32\VittixIndicKeyboard.exe", "build\Win32\VittixIndicEditor.exe")) {
+        if (Test-Path $exe) {
+            $signProc = Start-Process -FilePath $signtool -ArgumentList "sign", "/fd", "SHA256", "/tr", "http://timestamp.digicert.com", "/td", "SHA256", "/f", "`"$signPfx`"", "/p", "`"$env:SIGN_PFX_PASSWORD`"", "`"$exe`"" -NoNewWindow -Wait -PassThru
+            if ($signProc.ExitCode -ne 0) {
+                Write-Error "signtool failed for $exe with exit code $($signProc.ExitCode)"
+                exit $signProc.ExitCode
+            }
+            Write-Information "[Sign] Signed $exe"
+        }
+    }
+} else {
+    Write-Information "Code signing skipped (set SIGNTOOL_PATH and SIGN_PFX_PATH to enable; see docs/RELEASE.md)."
+}
+
 # 5. Static Checks
 Write-Information "`n[Static Analysis] Validating Layouts, Documentation, and Repository hygiene..."
 

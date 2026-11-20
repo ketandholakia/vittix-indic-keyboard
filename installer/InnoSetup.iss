@@ -1,8 +1,19 @@
 [Setup]
+; Item (housekeeping): ONE source of truth for the version - the built exe's
+; version resource (Keyboard/VittixIndicKeyboard.dproj). Building the exe
+; first is required; compiling the installer without the binaries is an
+; intentional preprocessor error instead of a stale hardcoded version.
+#define AppVersion GetVersionNumbersString("..\\build\\Win32\\VittixIndicKeyboard.exe")
 AppId={{5E5D1E1B-9430-4C3D-B91F-77EF1F7A5074}
 AppName=Vittix Indic Keyboard
-AppVersion=1.0.0.0
+AppVersion={#AppVersion}
 AppPublisher=Vittix
+; Explicit: this is a machine install into Program Files and needs admin.
+PrivilegesRequired=admin
+; Item (mutex): matches the app's single-instance mutex (Local\ scope, per
+; session - see Keyboard/VittixIndicKeyboard.dpr). Setup refuses to run while
+; an instance is running, instead of leaving the exe locked.
+AppMutex=VittixIndicKeyboardInstance
 DefaultDirName={pf}\Vittix Indic Keyboard
 DefaultGroupName=Vittix Indic Keyboard
 AllowNoIcons=yes

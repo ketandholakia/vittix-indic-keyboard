@@ -764,6 +764,12 @@ begin
     begin
       Layout := gLayoutManager.GetLayout(I);
 
+      // Item (housekeeping): an empty layout (no mappings) types nothing —
+      // offering it in the menu would only confuse; the validator warns
+      // about it. Skip it here.
+      if Layout.HasNoMappings then
+        Continue;
+
       // IMPORTANT: Ensure group name is never empty to prevent silent failures.
       GroupName := Trim(Layout.Group);
       if GroupName = '' then
