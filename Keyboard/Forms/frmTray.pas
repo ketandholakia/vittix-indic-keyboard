@@ -87,6 +87,13 @@ type
     // Where the log lives, captured when the logger is initialised.
     FLogDir: string;
 
+    // Item (injection latch): True while the SendInput-failure latch is
+    // tripped (e.g. the user typed into an elevated app). Drives the alternate
+    // tray icon state (blocked shows the "off" frame while the engine stays
+    // enabled) and a hint suffix. The balloon itself comes from the
+    // injection-status callback, which fires once per latch trip.
+    FInjectionBlocked: Boolean;
+
     // The layout and allowed-app submenus are destroyed and rebuilt item by item.
     // Doing that on every popup is a visible hitch with a large layout set, so
     // they are rebuilt only when something they show has actually changed.
@@ -94,6 +101,9 @@ type
     procedure InvalidateTrayMenus;
 
     function HandleRawKey(const AChar: string): TInjectionOutcome;
+    // Item (injection latch): SendInputHelper's status callback. Fires on
+    // transitions only, so the balloon is rate-limited to once per latch trip.
+    procedure TrayInjectionStatusChanged(AHealthy: Boolean);
     function TrayHint: string;
     procedure AddAllowedApplication;
     procedure AddStartupNotice(const Msg: string);
@@ -255,6 +265,10 @@ begin
     [ApplicationVersion, GAppSettings.LayoutsPath, FLogDir]));
 
   // 🔴 REQUIRED: keyboard pipeline
+  // Item (injection latch): the tray reacts to the SendInput status so a UIPI
+  // block is announced once and the icon reflects the blocked state until the
+  // latch re-arms (foreground change, toggle, layout switch, settings apply).
+  SetInjectionStatusCallback(TrayInjectionStatusChanged);
   SetKeyHandler(HandleRawKey);
   SetTargetProcessName(GAppSettings.TargetProcessName);
   SetAllowedProcessNames(GAppSettings.AllowedProcessesText);
@@ -406,11 +420,38 @@ begin
     Result := Result + ' - ' + LayoutName;
   if Hotkey <> '' then
     Result := Result + ' - ' + Hotkey;
+  // Item (injection latch): the alternate icon state gets a matching hint, so
+  // hovering the blocked icon explains why the "enabled" engine looks greyed.
+  if FInjectionBlocked then
+    Result := Result + ' - Typing blocked in this app';
 end;
 
 
+procedure TfrmTray.TrayInjectionStatusChanged(AHealthy: Boolean);
+begin
+  if AHealthy then
+  begin
+    if FInjectionBlocked then
+    begin
+      FInjectionBlocked := False;
+      LogInfo('Injection latch re-armed; typing resumes');
+      UpdateTrayIcon;
+    end;
+    Exit;
+  end;
+
+  // Latch trip: exactly one balloon per episode (the callback fires only on
+  // the healthy->unhealthy transition, never per failing keystroke).
+  FInjectionBlocked := True;
+  LogError('Injection latch tripped; keys pass through unchanged');
+  Notify('Typing is blocked in this app, probably because it is running as '
+    + 'administrator. Keys pass through unchanged.');
+  UpdateTrayIcon;
+end;
+
 procedure TfrmTray.FormDestroy(Sender: TObject);
 begin
+  SetInjectionStatusCallback(nil);
   UnregisterConfiguredHotkeys;
   FreeAndNil(FOSK);
   FreeAndNil(FIconEnabled);
@@ -567,15 +608,24 @@ begin
   // Refresh, and Refresh is what hands FCurrentIcon.Handle to the shell. Writing
   // to TrayIcon.Icon.Handle instead only changed the component's spare copy, so
   // the notification area kept showing whatever it was first given.
-  if EngineEnabled and Assigned(FIconEnabled) then
+  //
+  // Item (injection latch): a tripped latch is an alternate icon state. The
+  // engine is still "enabled", but keys are passing through unchanged, so the
+  // blocked state shows the same greyed frame as a disabled engine; the hint
+  // (and the one-time balloon) tell the two situations apart. Re-arming the
+  // latch restores the enabled frame.
+  if EngineEnabled and (not FInjectionBlocked) and Assigned(FIconEnabled) then
   begin
     TrayIcon.Icon := FIconEnabled;
     LogInfo('Tray icon applied: enabled');
   end
-  else if (not EngineEnabled) and Assigned(FIconDisabled) then
+  else if (not EngineEnabled or FInjectionBlocked) and Assigned(FIconDisabled) then
   begin
+    if FInjectionBlocked then
+      LogInfo('Tray icon applied: blocked (injection latch tripped)')
+    else
+      LogInfo('Tray icon applied: disabled');
     TrayIcon.Icon := FIconDisabled;
-    LogInfo('Tray icon applied: disabled');
   end
   else
   begin
@@ -584,7 +634,7 @@ begin
     // safe to free because TIcon.Assign shares the image by reference.
     var FallbackIcon := TIcon.Create;
     try
-      if EngineEnabled then
+      if EngineEnabled and (not FInjectionBlocked) then
         ilTrayIcons.GetIcon(0, FallbackIcon)
       else
         ilTrayIcons.GetIcon(1, FallbackIcon);

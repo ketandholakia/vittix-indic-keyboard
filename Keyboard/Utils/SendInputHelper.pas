@@ -39,6 +39,15 @@ type
     cbSize: Integer
   ): UINT; stdcall;
 
+  // Item (injection latch): fired ONLY on a state transition, never per
+  // keystroke. AHealthy=False marks the latch trip (one notification per
+  // latch episode, however many SendInput calls keep failing); AHealthy=True
+  // marks the explicit re-arm via ResetInjectionStatus. The tray uses this to
+  // show a one-time balloon and its blocked icon state. A 'reference to'
+  // type so methods, standalone procedures AND anonymous methods all
+  // subscribe (a plain function pointer cannot take methods).
+  TInjectionStatusCallback = reference to procedure(AHealthy: Boolean);
+
 { --------------------------------------------------
   Low-level keyboard output helpers
 -------------------------------------------------- }
@@ -59,6 +68,7 @@ procedure SetSendInputHook(AHook: TSendInputProc);
 -------------------------------------------------- }
 function InjectionOK: Boolean;
 procedure ResetInjectionStatus;
+procedure SetInjectionStatusCallback(ACallback: TInjectionStatusCallback);
 function CombineInjectionOutcomes(const ACurrent, ANext: TInjectionOutcome): TInjectionOutcome;
 
 implementation
@@ -66,6 +76,7 @@ implementation
 var
   gInjectionOK: Boolean = True;
   OnSendInput: TSendInputProc = nil;
+  OnStatusChanged: TInjectionStatusCallback = nil;
 
 function DoSendInput(cInputs: UINT; pInputs: PInput; cbSize: Integer): UINT;
 begin
@@ -86,18 +97,34 @@ begin
   Result := gInjectionOK;
 end;
 
+procedure SetInjectionStatusCallback(ACallback: TInjectionStatusCallback);
+begin
+  // nil restores the silent default (tests, units with no UI).
+  OnStatusChanged := ACallback;
+end;
+
 procedure ResetInjectionStatus;
 begin
   // The ONLY explicit recovery from a failed/partial injection. A later
   // successful SendInput never re-arms injection (it would conceal a failure).
+  // Item: re-arming a TRIPPED latch notifies the listener so the tray can
+  // clear its blocked state; resetting while healthy notifies nobody.
+  if (not gInjectionOK) and Assigned(OnStatusChanged) then
+    OnStatusChanged(True);
   gInjectionOK := True;
 end;
 
 procedure MarkInjectionFailure(const What, Detail: string);
 begin
   // Log only on the transition into the failed state to avoid flooding.
+  // The latch notification is rate-limited the same way: one callback per
+  // latch trip, never per failing keystroke.
   if gInjectionOK then
+  begin
     LogError(What + ': ' + Detail + '; interception will pass keys through');
+    if Assigned(OnStatusChanged) then
+      OnStatusChanged(False);
+  end;
   gInjectionOK := False;
 end;
 

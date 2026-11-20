@@ -43,9 +43,16 @@ type
     procedure ExplicitReset_RestoresInjection;
     [Test]
     procedure AllEvents_CarryTheOwnInjectionTag;
+    [Test]
+    procedure StatusCallback_FiresOncePerLatchTrip;
+    [Test]
+    procedure StatusCallback_ResetFromTrippedFiresHealthy_ResetWhileHealthyIsSilent;
   end;
 
 implementation
+
+uses
+  System.Classes;
 
 type
   TInputArray = array[0..1023] of TInput;
@@ -55,6 +62,8 @@ var
   GLastRequested: Integer;
   GReturn: UINT;
   GAllTagged: Boolean;
+  // Item (injection latch): the recorded status transitions, '0'/'1' in order.
+  GStatusEvents: TStringList = nil;
 
 function FakeSendInput(
   cInputs: UINT;
@@ -71,19 +80,34 @@ begin
   Result := GReturn;
 end;
 
+// Item (injection latch): records every status transition so tests can assert
+// the exact rate limiting (one trip notify per latch episode, one re-arm
+// notify per explicit reset from a tripped state).
+procedure FakeStatusCallback(AHealthy: Boolean);
+begin
+  if AHealthy then
+    GStatusEvents.Add('1')
+  else
+    GStatusEvents.Add('0');
+end;
+
 procedure TSendInputHelperTests.Setup;
 begin
   GLastRequested := -1;
   GReturn := 0;
   GAllTagged := True;
+  GStatusEvents := TStringList.Create;
   ResetInjectionStatus;
   SetSendInputHook(FakeSendInput);
+  SetInjectionStatusCallback(FakeStatusCallback);
 end;
 
 procedure TSendInputHelperTests.TearDown;
 begin
+  SetInjectionStatusCallback(nil);
   SetSendInputHook(nil);
   ResetInjectionStatus;
+  FreeAndNil(GStatusEvents);
 end;
 
 procedure TSendInputHelperTests.SendUnicodeText_FullSuccess_KeepsOk;
@@ -182,6 +206,40 @@ begin
   SendVirtualKey(VK_TAB);   // 2 records
   SendBackspace(2);         // 4 records
   Assert.IsTrue(GAllTagged, 'every submitted INPUT record must carry the tag');
+end;
+
+// Item (injection latch): the trip notification is rate-limited to ONCE per
+// latch episode. Repeated failing SendInput calls must not repeat it.
+procedure TSendInputHelperTests.StatusCallback_FiresOncePerLatchTrip;
+begin
+  GReturn := 0;
+  SendUnicodeText('A');            // trips the latch
+  SendUnicodeText('A');            // still failing
+  SendBackspace(2);                // still failing
+  Assert.AreEqual(1, GStatusEvents.Count,
+    'one latch trip must notify exactly once, whatever keeps failing');
+  Assert.AreEqual('0', GStatusEvents[0], 'the trip notify reports unhealthy');
+end;
+
+procedure TSendInputHelperTests.StatusCallback_ResetFromTrippedFiresHealthy_ResetWhileHealthyIsSilent;
+begin
+  // Resetting while healthy: no notification at all.
+  ResetInjectionStatus;
+  Assert.AreEqual(0, GStatusEvents.Count,
+    'a reset while healthy must not notify');
+
+  // Trip, then explicit re-arm: the listener learns the latch cleared.
+  GReturn := 0;
+  SendUnicodeText('A');
+  ResetInjectionStatus;
+  Assert.AreEqual(2, GStatusEvents.Count);
+  Assert.AreEqual('0', GStatusEvents[0], 'trip notify');
+  Assert.AreEqual('1', GStatusEvents[1], 're-arm notify');
+
+  // Resetting again while healthy: silent.
+  ResetInjectionStatus;
+  Assert.AreEqual(2, GStatusEvents.Count,
+    'a re-arm notify must fire only when the latch was actually tripped');
 end;
 
 initialization

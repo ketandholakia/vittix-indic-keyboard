@@ -63,6 +63,8 @@ type
     [Test]
     procedure InjectionStatus_ProductionDefault_UsesSendInputHelper;
     [Test]
+    procedure ForegroundChange_ReArmsTrippedInjectionLatch_NotifyFiresOncePerTrip;
+    [Test]
     procedure EmptyKeyConversion_PassesThrough;
     [Test]
     procedure ExtendedKey_PassesEmbeddedScanPrefix;
@@ -365,6 +367,65 @@ begin
   ResetInjectionStatus;
   Assert.IsTrue(HandleKeyEvent(MakeKey($41, True)),
     'after the explicit reset the key is consumed again');
+end;
+
+// Item (injection latch): the SendInput-failure latch is per foreground
+// window. A UIPI block against one elevated app must not stop translation
+// everywhere until the user manually toggles: a foreground change re-arms
+// the latch, and the tray's notify callback fires exactly once for the trip.
+procedure THookPolicyTests.ForegroundChange_ReArmsTrippedInjectionLatch_NotifyFiresOncePerTrip;
+var
+  StatusEvents: TStringList;
+begin
+  StatusEvents := TStringList.Create;
+  try
+    // Production injection status + a failing fake SendInput.
+    FDeps.IsInjectionHealthy := nil;
+    SetHookPolicyDependencies(FDeps);
+    GFakeSendReturn := 0;
+    SetInjectionStatusCallback(
+      procedure(AHealthy: Boolean)
+      begin
+        if AHealthy then
+          StatusEvents.Add('1')
+        else
+          StatusEvents.Add('0');
+      end);
+    try
+      // Trip the latch through the fake SendInput (one failing output batch).
+      SendUnicodeText('A');
+      Assert.IsFalse(InjectionOK, 'the failed SendInput must trip the latch');
+      Assert.AreEqual(1, StatusEvents.Count,
+        'the trip must notify exactly once');
+      Assert.AreEqual('0', StatusEvents[0]);
+
+      // An eligible key fails open (pass-through) while the latch is down.
+      Assert.IsFalse(HandleKeyEvent(MakeKey($42, True)),
+        'a tripped latch must fail open');
+
+      // The foreground changes (e.g. the user left the elevated app):
+      // the latch re-arms for the new window.
+      HandleForegroundChanged;
+      Assert.IsTrue(InjectionOK,
+        'a foreground change must re-arm the injection latch');
+
+      // The next key in the new window is translated again.
+      GFakeSendReturn := 2;
+      Assert.IsTrue(HandleKeyEvent(MakeKey($43, True)),
+        'the next key in the new window is translated again');
+
+      // Exactly ONE trip notify for the episode; the re-arm added a healthy
+      // event. (If SendInput keeps failing in the new window, the latch trips
+      // again and notifies again - one notify per latch, never per keystroke.)
+      Assert.AreEqual(2, StatusEvents.Count,
+        'one trip notify + one re-arm notify, rate-limited to once per latch');
+      Assert.AreEqual('1', StatusEvents[1], 'the re-arm notify reports healthy');
+    finally
+      SetInjectionStatusCallback(nil);
+    end;
+  finally
+    StatusEvents.Free;
+  end;
 end;
 
 procedure THookPolicyTests.EmptyKeyConversion_PassesThrough;

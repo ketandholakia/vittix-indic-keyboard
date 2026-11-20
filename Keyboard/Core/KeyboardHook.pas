@@ -721,6 +721,13 @@ begin
   // which belongs to the old foreground window. Both operations clear state
   // with no I/O or allocation, keeping the callback fast.
   InvalidateForegroundCache;
+  // Item (injection latch): the SendInput-failure latch is PER FOREGROUND
+  // WINDOW. A UIPI block against an elevated app must not poison typing in
+  // every other app: a foreground change re-arms the latch, so the next key
+  // in the new window gets a fresh chance (and a fresh failure re-trips it,
+  // with its own one-time notification). ResetInjectionStatus is a state
+  // write with no I/O, keeping the callback fast.
+  ResetInjectionStatus;
   try
     ResetPendingOnPassThrough;
   except
