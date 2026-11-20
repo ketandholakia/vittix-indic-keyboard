@@ -20,6 +20,10 @@ uses
   System.Classes,
   System.IniFiles,
   System.IOUtils,
+  System.StrUtils,
+  System.Hash,
+  System.Generics.Collections,
+  System.JSON,
   Winapi.Windows,
   Winapi.ShlObj,
   BackupManager;
@@ -38,6 +42,32 @@ function DefaultAppDataRoot: string;
 // AExeDir, exactly like TAppSettings.Load does.
 function ReadConfiguredLayoutsPath(const ASettingsIniPath,
   AExeDir: string): string;
+
+{ Item (shipped layout updates never reach existing users): reconcile the
+  per-user seeded layouts copy with the shipped layouts tree at startup.
+
+  ASeedManifest (<per-user layouts>\.seed.json) records, per file, the SHA-256
+  of the shipped version WHEN IT WAS COPIED, plus the app version. For every
+  shipped file:
+    - per-user copy missing            -> copy it (record the hash);
+    - per-user copy hash == recorded   -> the user never edited it, so a
+      shipped file that now differs is OVERWRITTEN (after EnsureBackup);
+    - per-user copy hash != recorded (or no record) -> the user modified it:
+      leave it alone, log a warning through ALog (nil-tolerant).
+  Files the user created (absent from the shipped tree) are never touched;
+  the loop iterates shipped files only.
+
+  Bootstrap: a copy seeded by an older build has no manifest - a per-user
+  file whose content EXACTLY matches the shipped file is adopted (hash
+  recorded); anything else is treated as user-modified. This upgrades
+  existing users without rewriting files that may hold their edits.
+
+  Only acts when AResolvedLayoutsDir IS the per-user app-data copy: a custom
+  configured folder or the exe-relative fallback belongs to the user and is
+  never reconciled. ALog receives 'info: ...' / 'warning: ...' lines for the
+  caller to log. }
+procedure UpdateSeededLayouts(const AResolvedLayoutsDir, AAppDataRoot,
+  AFallbackLayoutsDir, AAppVersion: string; ALog: TStrings);
 
 implementation
 
@@ -170,6 +200,192 @@ begin
   // directory; resolve them the same way TAppSettings.Load does.
   if (Result <> '') and (not TPath.IsPathRooted(Result)) then
     Result := IncludeTrailingPathDelimiter(AExeDir) + Result;
+end;
+
+{ --------------------------------------------------
+  Item: shipped layout updates for existing users
+-------------------------------------------------- }
+
+const
+  SEED_MANIFEST_NAME = '.seed.json';
+
+// ALog receives 'info: ...' / 'warning: ...' lines; nil-tolerant so callers
+// without logging (tests) can pass nil.
+procedure SeedLog(ALog: TStrings; const AKind, AMsg: string);
+begin
+  if ALog <> nil then
+    ALog.Add(AKind + ': ' + AMsg);
+end;
+
+// Loads <ALayoutsDir>\.seed.json into AFiles ('' version when absent).
+function LoadSeedManifest(const ALayoutsDir: string;
+  AFiles: TDictionary<string, string>): string;
+var
+  Json: TJSONValue;
+  Root, FilesObj: TJSONObject;
+  Pair: TJSONPair;
+  ManifestPath: string;
+begin
+  Result := '';
+  AFiles.Clear;
+
+  ManifestPath := TPath.Combine(ALayoutsDir, SEED_MANIFEST_NAME);
+  if not TFile.Exists(ManifestPath) then
+    Exit;
+
+  try
+    Json := TJSONObject.ParseJSONValue(TFile.ReadAllText(ManifestPath));
+  except
+    // A corrupt manifest must never block startup: behave as if absent
+    // (existing files get adopted by equality or left as user-modified).
+    Json := nil;
+  end;
+  if Json = nil then
+    Exit;
+
+  try
+    if not (Json is TJSONObject) then
+      Exit;
+    Root := TJSONObject(Json);
+
+    FilesObj := Root.FindValue('files') as TJSONObject;
+    if FilesObj <> nil then
+      for Pair in FilesObj do
+      begin
+        if (Pair.JsonValue <> nil) and (Pair.JsonValue is TJSONString) then
+          AFiles.AddOrSetValue(Pair.JsonString.Value, Pair.JsonValue.Value);
+      end;
+
+    if Root.FindValue('app_version') is TJSONString then
+      Result := (Root.FindValue('app_version') as TJSONString).Value;
+  finally
+    Json.Free;
+  end;
+end;
+
+procedure SaveSeedManifest(const ALayoutsDir, AAppVersion: string;
+  AFiles: TDictionary<string, string>);
+var
+  Root, FilesObj: TJSONObject;
+  FileName: string;
+begin
+  FilesObj := TJSONObject.Create;
+  try
+    for FileName in AFiles.Keys do
+      FilesObj.AddPair(FileName, AFiles[FileName]);
+
+    Root := TJSONObject.Create;
+    try
+      Root.AddPair('app_version', AAppVersion);
+      Root.AddPair('files', FilesObj);
+      TFile.WriteAllText(TPath.Combine(ALayoutsDir, SEED_MANIFEST_NAME),
+        Root.ToJSON, TEncoding.UTF8);
+    finally
+      Root.Free;
+    end;
+  except
+    // The manifest write is best-effort; the next run re-adopts by equality.
+  end;
+end;
+
+procedure UpdateSeededLayouts(const AResolvedLayoutsDir, AAppDataRoot,
+  AFallbackLayoutsDir, AAppVersion: string; ALog: TStrings);
+var
+  ExpectedPerUser, ShippedDir, PerUserPath: string;
+  ShippedFiles: TArray<string>;
+  FileName, RelPath, SeedKey: string;
+  Manifest: TDictionary<string, string>;
+  RecordedHash, UserHash, ShippedHash: string;
+begin
+  if (Trim(AResolvedLayoutsDir) = '') or (Trim(AAppDataRoot) = '') then
+    Exit;
+
+  // Reconcile ONLY the per-user seeded copy (the folder step (2) owns);
+  // a custom configured folder or the exe-relative fallback is never touched.
+  ExpectedPerUser := TPath.Combine(IncludeTrailingPathDelimiter(Trim(AAppDataRoot)),
+    'layouts');
+  if not SameText(ExcludeTrailingPathDelimiter(AResolvedLayoutsDir),
+    ExcludeTrailingPathDelimiter(ExpectedPerUser)) then
+    Exit;
+
+  ShippedDir := ExcludeTrailingPathDelimiter(AFallbackLayoutsDir);
+  if (ShippedDir = '') or (not TDirectory.Exists(ShippedDir)) then
+    Exit;
+
+  Manifest := TDictionary<string, string>.Create;
+  try
+    LoadSeedManifest(AResolvedLayoutsDir, Manifest);
+
+    ShippedFiles := TDirectory.GetFiles(ShippedDir, '*.*',
+      TSearchOption.soAllDirectories);
+    for FileName in ShippedFiles do
+    begin
+      if PathInBackupFolder(FileName) then
+        Continue;
+
+      SeedKey := ReplaceText(ExtractRelativePath(
+        IncludeTrailingPathDelimiter(ShippedDir), FileName), '\', '/');
+      PerUserPath := TPath.Combine(AResolvedLayoutsDir,
+        ReplaceText(SeedKey, '/', '\'));
+      ShippedHash := THashSHA2.GetHashStringFromFile(FileName);
+
+      if not TFile.Exists(PerUserPath) then
+      begin
+        // Missing per-user copy (brand-new shipped layout): copy it.
+        try
+          ForceDirectories(ExtractFileDir(PerUserPath));
+          TFile.Copy(FileName, PerUserPath, False);
+          Manifest.AddOrSetValue(SeedKey, ShippedHash);
+          SeedLog(ALog, 'info', 'seeded new shipped layout ' + SeedKey);
+        except
+          on E: Exception do
+            SeedLog(ALog, 'warning', 'could not seed ' + SeedKey + ': ' + E.Message);
+        end;
+        Continue;
+      end;
+
+      UserHash := THashSHA2.GetHashStringFromFile(PerUserPath);
+
+      if Manifest.TryGetValue(SeedKey, RecordedHash) then
+      begin
+        if SameText(UserHash, RecordedHash) then
+        begin
+          // The user never edited this file since we shipped it, so a
+          // changed shipped version arrives as an update (backed up first).
+          if not SameText(UserHash, ShippedHash) then
+          begin
+            try
+              EnsureBackup(PerUserPath, DefaultBackupOptions);
+              TFile.Copy(FileName, PerUserPath, True);
+              Manifest.AddOrSetValue(SeedKey, ShippedHash);
+              SeedLog(ALog, 'info', 'updated seeded layout ' + SeedKey +
+                ' to the shipped version');
+            except
+              on E: Exception do
+                SeedLog(ALog, 'warning', 'could not update ' + SeedKey + ': ' +
+                  E.Message);
+            end;
+          end;
+        end
+        else
+          SeedLog(ALog, 'warning', 'layout ' + SeedKey +
+            ' was modified by the user; leaving it alone (a newer shipped version exists)');
+      end
+      else if SameText(UserHash, ShippedHash) then
+      begin
+        // No manifest (older-build seed): identical content proves the file
+        // was never edited - adopt it into the manifest.
+        Manifest.AddOrSetValue(SeedKey, ShippedHash);
+      end
+      else
+        SeedLog(ALog, 'warning', 'layout ' + SeedKey +
+          ' has no seed record and differs from the shipped file; treating it as user-modified and leaving it alone');
+    end;
+
+    SaveSeedManifest(AResolvedLayoutsDir, AAppVersion, Manifest);
+  finally
+    Manifest.Free;
+  end;
 end;
 
 end.

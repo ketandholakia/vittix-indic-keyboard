@@ -270,6 +270,28 @@ begin
     GAppSettings.Save;
   end;
 
+  // Item (shipped layout updates): reconcile the per-user seeded copy with
+  // the shipped layouts BEFORE the engine loads them, so fixed glyphs reach
+  // existing users. User-modified files are left untouched and reported in
+  // the log; every applied update is announced once via the startup balloon.
+  var SeedLogLines := TStringList.Create;
+  try
+    ReconcileSeededLayouts(ResolvedLayoutsPath, ApplicationVersion, SeedLogLines);
+    for var I := 0 to SeedLogLines.Count - 1 do
+      LogInfo('Seed reconcile: ' + SeedLogLines[I]);
+
+    var UpdatedCount := 0;
+    for var I := 0 to SeedLogLines.Count - 1 do
+      if SeedLogLines[I].StartsWith('info: updated') then
+        Inc(UpdatedCount);
+    if UpdatedCount > 0 then
+      AddStartupNotice(Format('%d seeded layout file(s) were updated to the '
+        + 'shipped version; files you edited were left untouched (details in the log).',
+        [UpdatedCount]));
+  finally
+    SeedLogLines.Free;
+  end;
+
   // Confirms the support actions have what they need without waiting for a click.
   LogInfo(Format('Support actions ready: version=%s layouts=%s logs=%s',
     [ApplicationVersion, GAppSettings.LayoutsPath, FLogDir]));

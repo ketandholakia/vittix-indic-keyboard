@@ -83,6 +83,13 @@ var
 // profile) and the fallback is the exe-relative 'layouts' folder.
 function ResolveLayoutsPath(const AConfiguredPath: string): string;
 
+// Item (shipped layout updates): reconcile the per-user seeded layouts copy
+// with the shipped tree using the same keyboard-specific environment as
+// ResolveLayoutsPath. Only the per-user copy is reconciled; ALog collects
+// 'info:'/'warning:' lines for the caller to report.
+procedure ReconcileSeededLayouts(const AResolvedLayoutsDir, AAppVersion: string;
+  ALog: TStrings);
+
 implementation
 
 uses
@@ -102,6 +109,24 @@ begin
 
   Result := LayoutsPathResolver.ResolveLayoutsPath(AConfiguredPath, AppDataRoot,
     IncludeTrailingPathDelimiter(ExtractFilePath(Application.ExeName)) + 'layouts');
+end;
+
+procedure ReconcileSeededLayouts(const AResolvedLayoutsDir, AAppVersion: string;
+  ALog: TStrings);
+var
+  Provider: TSettingsPathProvider;
+  LegacyPath: string;
+  AppDataRoot: string;
+begin
+  Provider := GetSettingsPathProvider();
+  if Assigned(Provider) then
+    AppDataRoot := ExtractFileDir(Provider(LegacyPath))
+  else
+    AppDataRoot := LayoutsPathResolver.DefaultAppDataRoot;
+
+  LayoutsPathResolver.UpdateSeededLayouts(AResolvedLayoutsDir, AppDataRoot,
+    IncludeTrailingPathDelimiter(ExtractFilePath(Application.ExeName)) + 'layouts',
+    AAppVersion, ALog);
 end;
 
 constructor TAppSettings.Create;

@@ -8,6 +8,8 @@ uses
   System.Classes,
   System.IniFiles,
   System.IOUtils,
+  System.Hash,
+  System.JSON,
   LayoutsPathResolver;
 
 type
@@ -43,6 +45,20 @@ type
     procedure ReadConfiguredLayoutsPath_MissingOrEmptyIni_ReturnsEmpty;
     [Test]
     procedure DefaultAppDataRoot_PointsAtTheVittixFolder;
+    [Test]
+    procedure SeededUpdate_NonAppDataPath_IsUntouched;
+    [Test]
+    procedure SeededUpdate_MissingPerUserFile_IsCopied;
+    [Test]
+    procedure SeededUpdate_UnchangedFileWithNewerShipped_IsOverwritten;
+    [Test]
+    procedure SeededUpdate_UserModifiedFile_IsLeftAloneWithWarning;
+    [Test]
+    procedure SeededUpdate_BootstrapWithoutManifest_AdoptsIdenticalFiles;
+    [Test]
+    procedure SeededUpdate_UserCreatedFiles_NeverTouched;
+    [Test]
+    procedure SeededUpdate_ManifestWritten_RecordsHashesAndVersion;
   end;
 
 implementation
@@ -167,6 +183,216 @@ begin
 
   Assert.AreEqual(Fallback, Resolved,
     'a failing app-data creation must fall back to the fallback folder');
+end;
+
+// --------------------------------------------------------------
+// Item (shipped layout updates never reach existing users): the reconcile
+// pass over the per-user seeded copy. All tests use temp dirs for both the
+// per-user copy and the shipped tree; the per-user dir is laid out exactly
+// like the resolver creates it (<root>\layouts).
+// --------------------------------------------------------------
+
+// The reconcile must no-op entirely when the resolved dir is NOT the per-user
+// app-data copy (custom configured folder, exe-relative fallback).
+procedure TLayoutsPathResolverTests.SeededUpdate_NonAppDataPath_IsUntouched;
+var
+  PerUser, Shipped, Custom: string;
+  Log: TStringList;
+begin
+  Shipped := NewTempDir;
+  TFile.WriteAllText(TPath.Combine(Shipped, 'a.json'), 'shipped-v2');
+  Custom := NewTempDir;
+  TFile.WriteAllText(TPath.Combine(Custom, 'a.json'), 'custom');
+
+  Log := TStringList.Create;
+  try
+    UpdateSeededLayouts(Custom, PerUser, Shipped, '9.9', Log);
+
+    Assert.AreEqual('custom', TFile.ReadAllText(TPath.Combine(Custom, 'a.json')),
+      'a non-app-data layouts folder must never be reconciled');
+    Assert.IsFalse(TFile.Exists(TPath.Combine(Custom, '.seed.json')),
+      'no manifest may be written outside the per-user copy');
+    Assert.AreEqual(0, Log.Count, 'a no-op reconcile reports nothing');
+  finally
+    Log.Free;
+  end;
+end;
+
+procedure TLayoutsPathResolverTests.SeededUpdate_MissingPerUserFile_IsCopied;
+var
+  PerUserRoot, Shipped, Resolved: string;
+begin
+  PerUserRoot := NewTempDir;
+  Shipped := NewTempDir;
+  TDirectory.CreateDirectory(TPath.Combine(Shipped, 'gujarati'));
+  TFile.WriteAllText(TPath.Combine(Shipped, 'gujarati', 'new.json'), 'shipped-content');
+
+  Resolved := TPath.Combine(PerUserRoot, 'layouts');
+  TDirectory.CreateDirectory(Resolved);
+  TFile.WriteAllText(TPath.Combine(Resolved, '.seed.json'),
+    '{"app_version":"1.0","files":{}}');
+
+  UpdateSeededLayouts(Resolved, PerUserRoot, Shipped, '1.1', nil);
+
+  Assert.AreEqual('shipped-content',
+    TFile.ReadAllText(TPath.Combine(Resolved, 'gujarati', 'new.json')),
+    'a per-user file missing from the seed must be copied');
+end;
+
+// The core scenario: the user never edited the file (its hash matches the
+// recorded seed), the shipped file changed -> overwrite after EnsureBackup.
+procedure TLayoutsPathResolverTests.SeededUpdate_UnchangedFileWithNewerShipped_IsOverwritten;
+var
+  PerUserRoot, Shipped, Resolved, BackupDir: string;
+  Json: TJSONValue;
+begin
+  PerUserRoot := NewTempDir;
+  Shipped := NewTempDir;
+  Resolved := TPath.Combine(PerUserRoot, 'layouts');
+  TDirectory.CreateDirectory(Resolved);
+
+  // Record the OLD shipped content in the manifest.
+  TFile.WriteAllText(TPath.Combine(Resolved, 'rem.json'), 'old-shipped');
+  TFile.WriteAllText(TPath.Combine(Shipped, 'rem.json'), 'old-shipped');
+  UpdateSeededLayouts(Resolved, PerUserRoot, Shipped, '1.0', nil);
+
+  // A new release ships a fixed file.
+  TFile.WriteAllText(TPath.Combine(Shipped, 'rem.json'), 'fixed-shipped');
+  UpdateSeededLayouts(Resolved, PerUserRoot, Shipped, '1.1', nil);
+
+  Assert.AreEqual('fixed-shipped', TFile.ReadAllText(TPath.Combine(Resolved, 'rem.json')),
+    'an unmodified seeded file must receive the shipped fix');
+
+  BackupDir := TPath.Combine(Resolved, '_backup');
+  Assert.IsTrue(TDirectory.Exists(BackupDir) and
+    (Length(TDirectory.GetFiles(BackupDir, '*.json')) > 0),
+    'the overwritten user copy must be backed up first');
+
+  Json := TJSONObject.ParseJSONValue(TFile.ReadAllText(TPath.Combine(Resolved, '.seed.json')));
+  try
+    Assert.AreEqual(THashSHA2.GetHashStringFromFile(TPath.Combine(Shipped, 'rem.json')),
+      ((Json as TJSONObject).GetValue('files') as TJSONObject).GetValue('rem.json').Value,
+      'the manifest must record the new shipped hash');
+    Assert.AreEqual('1.1', (Json as TJSONObject).GetValue('app_version').Value,
+      'the manifest must record the app version');
+  finally
+    Json.Free;
+  end;
+end;
+
+procedure TLayoutsPathResolverTests.SeededUpdate_UserModifiedFile_IsLeftAloneWithWarning;
+var
+  PerUserRoot, Shipped, Resolved: string;
+  Log: TStringList;
+begin
+  PerUserRoot := NewTempDir;
+  Shipped := NewTempDir;
+  Resolved := TPath.Combine(PerUserRoot, 'layouts');
+  TDirectory.CreateDirectory(Resolved);
+
+  TFile.WriteAllText(TPath.Combine(Resolved, 'rem.json'), 'old-shipped');
+  TFile.WriteAllText(TPath.Combine(Shipped, 'rem.json'), 'old-shipped');
+  UpdateSeededLayouts(Resolved, PerUserRoot, Shipped, '1.0', nil);
+
+  // The user edits their copy; the release ships a fix.
+  TFile.WriteAllText(TPath.Combine(Resolved, 'rem.json'), 'my edits');
+  TFile.WriteAllText(TPath.Combine(Shipped, 'rem.json'), 'fixed-shipped');
+
+  Log := TStringList.Create;
+  try
+    UpdateSeededLayouts(Resolved, PerUserRoot, Shipped, '1.1', Log);
+
+    Assert.AreEqual('my edits', TFile.ReadAllText(TPath.Combine(Resolved, 'rem.json')),
+      'a user-modified file must be left alone');
+    Assert.IsFalse(TDirectory.Exists(TPath.Combine(Resolved, '_backup')),
+      'no backup may be created when nothing is overwritten');
+    Assert.IsTrue(Log.Text.Contains('warning'),
+      'the skipped update must be reported');
+    Assert.IsFalse(Log.Text.Contains('info: updated'),
+      'no update may be reported for a user-modified file');
+  finally
+    Log.Free;
+  end;
+end;
+
+// Existing users upgrading from a build without the manifest: files whose
+// content still equals the shipped version are adopted (recorded in the
+// manifest); differing files are treated as user-modified.
+procedure TLayoutsPathResolverTests.SeededUpdate_BootstrapWithoutManifest_AdoptsIdenticalFiles;
+var
+  PerUserRoot, Shipped, Resolved: string;
+begin
+  PerUserRoot := NewTempDir;
+  Shipped := NewTempDir;
+  Resolved := TPath.Combine(PerUserRoot, 'layouts');
+  TDirectory.CreateDirectory(Resolved);
+
+  // Seeded by an older build: one file unchanged, one edited, no manifest.
+  TFile.WriteAllText(TPath.Combine(Resolved, 'unchanged.json'), 'same');
+  TFile.WriteAllText(TPath.Combine(Resolved, 'edited.json'), 'user text');
+  TFile.WriteAllText(TPath.Combine(Shipped, 'unchanged.json'), 'same');
+  TFile.WriteAllText(TPath.Combine(Shipped, 'edited.json'), 'same');
+
+  UpdateSeededLayouts(Resolved, PerUserRoot, Shipped, '1.1', nil);
+
+  // The unchanged file must now receive a shipped fix (it was adopted).
+  TFile.WriteAllText(TPath.Combine(Shipped, 'unchanged.json'), 'fixed');
+  UpdateSeededLayouts(Resolved, PerUserRoot, Shipped, '1.2', nil);
+  Assert.AreEqual('fixed', TFile.ReadAllText(TPath.Combine(Resolved, 'unchanged.json')),
+    'an adopted (identical) file must be tracked and updatable');
+
+  // The edited file stays untouched.
+  Assert.AreEqual('user text', TFile.ReadAllText(TPath.Combine(Resolved, 'edited.json')),
+    'a differing unmanifested file must be treated as user-modified');
+end;
+
+procedure TLayoutsPathResolverTests.SeededUpdate_UserCreatedFiles_NeverTouched;
+var
+  PerUserRoot, Shipped, Resolved: string;
+begin
+  PerUserRoot := NewTempDir;
+  Shipped := NewTempDir;
+  Resolved := TPath.Combine(PerUserRoot, 'layouts');
+  TDirectory.CreateDirectory(Resolved);
+
+  TFile.WriteAllText(TPath.Combine(Resolved, 'mine.json'), 'user-created');
+  TFile.WriteAllText(TPath.Combine(Resolved, 'mine2.json'), 'user-created-2');
+
+  UpdateSeededLayouts(Resolved, PerUserRoot, Shipped, '1.1', nil);
+
+  Assert.AreEqual('user-created', TFile.ReadAllText(TPath.Combine(Resolved, 'mine.json')),
+    'files the user created must never be touched');
+  Assert.IsTrue(TFile.Exists(TPath.Combine(Resolved, 'mine2.json')));
+  Assert.IsFalse(TFile.Exists(TPath.Combine(Shipped, 'mine.json')),
+    'nothing flows back into the shipped tree');
+end;
+
+procedure TLayoutsPathResolverTests.SeededUpdate_ManifestWritten_RecordsHashesAndVersion;
+var
+  PerUserRoot, Shipped, Resolved: string;
+  Json: TJSONValue;
+begin
+  PerUserRoot := NewTempDir;
+  Shipped := NewTempDir;
+  Resolved := TPath.Combine(PerUserRoot, 'layouts');
+  TDirectory.CreateDirectory(Resolved);
+  TFile.WriteAllText(TPath.Combine(Shipped, 'a.json'), 'content-a');
+
+  UpdateSeededLayouts(Resolved, PerUserRoot, Shipped, '3.2.1.0', nil);
+
+  Json := TJSONObject.ParseJSONValue(TFile.ReadAllText(TPath.Combine(Resolved, '.seed.json')));
+  try
+    Assert.IsNotNull(Json, 'the manifest must be written');
+    Assert.AreEqual('3.2.1.0', (Json as TJSONObject).GetValue('app_version').Value);
+    Assert.AreEqual(64,
+      Length(((Json as TJSONObject).GetValue('files') as TJSONObject).GetValue('a.json').Value),
+      'the manifest records the SHA-256 hex of the shipped content');
+    Assert.AreEqual(THashSHA2.GetHashStringFromFile(TPath.Combine(Shipped, 'a.json')),
+      ((Json as TJSONObject).GetValue('files') as TJSONObject).GetValue('a.json').Value,
+      'the recorded hash matches the shipped file');
+  finally
+    Json.Free;
+  end;
 end;
 
 procedure TLayoutsPathResolverTests.ReadConfiguredLayoutsPath_ReturnsIniValue_AbsoluteAndRelative;

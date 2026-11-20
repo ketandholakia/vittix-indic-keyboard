@@ -109,6 +109,11 @@ begin
       if PathInBackupFolder(FileName) then
         Continue;
 
+      // Dotfiles are control data, not layouts (.seed.json from the shipped
+      // update mechanism lives in the layouts root).
+      if ExtractFileName(FileName).StartsWith('.') then
+        Continue;
+
       try
         Layout := LoadLayoutFromFile(FileName);
         if (Layout.LayoutID <> '') and SeenLayoutIDs.ContainsKey(Layout.LayoutID) then
