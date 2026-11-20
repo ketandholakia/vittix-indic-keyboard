@@ -7,6 +7,7 @@ uses
   System.SysUtils,
   System.Classes,
   Winapi.Windows,
+  Winapi.Messages,
   EngineState,
   SendInputHelper,
   ShreeLipi.Engine,
@@ -61,6 +62,14 @@ type
     procedure Space_WithPendingPrebase_FlushesThenReinjects;
     [Test]
     procedure Tab_WithPendingPrebase_FlushesThenReinjectsVKTab;
+    [Test]
+    procedure MouseLeftButton_Click_ClearsPendingAndStack;
+    [Test]
+    procedure MouseMove_DoesNotClearPending;
+    [Test]
+    procedure MouseRightAndMiddleButtons_ClearPending;
+    [Test]
+    procedure MouseClick_DoesNotReArmInjectionLatch;
   end;
 
 implementation
@@ -95,6 +104,15 @@ function FakeSendInput(cInputs: UINT; pInputs: PInput;
 begin
   Inc(GSendInputCalls);
   Result := cInputs;   // always fully accepted
+end;
+
+// Item (mouse click reset): a value the fixture can flip to simulate a
+// failing SendInput so the latch can be tripped inside these tests.
+function FailingSendInput(cInputs: UINT; pInputs: PInput;
+  cbSize: Integer): UINT; stdcall;
+begin
+  Inc(GSendInputCalls);
+  Result := 0;
 end;
 
 function TPassThroughResetTests.EngineKey(const AChar: string): TInjectionOutcome;
@@ -371,6 +389,81 @@ begin
     'Tab with a committed flush must be consumed (re-injected in order)');
   Assert.AreEqual(2, GSendInputCalls,
     'the flushed prebase AND the re-injected VK_TAB must have been injected');
+end;
+
+// --------------------------------------------------------------
+// Item (mouse click reset): a click may move the caret into another field
+// WITHOUT a foreground change, so the pending prebase/reph and the
+// emitted-length stack must be cleared on button-down. The LL mouse proc
+// never consumes mouse input; only the message-set decision and the engine
+// effect are testable here (no real hook installed).
+// --------------------------------------------------------------
+
+procedure TPassThroughResetTests.MouseLeftButton_Click_ClearsPendingAndStack;
+begin
+  GFakeVKChar := 'i';
+  Assert.IsTrue(HandleKeyEvent(MakeKey($49, True)), 'the prebase key is consumed');
+  Assert.AreEqual('I', gEngineState.PendingPrebase, 'precondition: prebase pending');
+
+  HandleMouseClickReset(WM_LBUTTONDOWN);
+
+  Assert.AreEqual('', gEngineState.PendingPrebase,
+    'a click into another field must cancel the pending matra');
+  Assert.AreEqual(0, Length(gEngineState.EmittedUnits),
+    'the emitted-length stack belongs to the old caret position');
+
+  // The next consonant must not flush a stale matra into the clicked field.
+  GFakeVKChar := 'k';
+  Assert.IsTrue(HandleKeyEvent(MakeKey($4B, True)));
+  Assert.AreEqual(1, FEvents.Count, 'only the consonant is emitted');
+  Assert.AreEqual('T:K', FEvents[0]);
+end;
+
+procedure TPassThroughResetTests.MouseMove_DoesNotClearPending;
+begin
+  GFakeVKChar := 'i';
+  Assert.IsTrue(HandleKeyEvent(MakeKey($49, True)), 'the prebase key is consumed');
+
+  HandleMouseClickReset(WM_MOUSEMOVE);
+  HandleMouseClickReset(WM_LBUTTONUP);
+
+  Assert.AreEqual('I', gEngineState.PendingPrebase,
+    'a mouse move or button-up is not a caret jump; pending state survives');
+end;
+
+procedure TPassThroughResetTests.MouseRightAndMiddleButtons_ClearPending;
+begin
+  GFakeVKChar := 'i';
+  Assert.IsTrue(HandleKeyEvent(MakeKey($49, True)));
+  HandleMouseClickReset(WM_RBUTTONDOWN);
+  Assert.AreEqual('', gEngineState.PendingPrebase, 'right button down resets');
+
+  Assert.IsTrue(HandleKeyEvent(MakeKey($49, True)));
+  HandleMouseClickReset(WM_MBUTTONDOWN);
+  Assert.AreEqual('', gEngineState.PendingPrebase, 'middle button down resets');
+end;
+
+// A click is NOT a foreground change: the injection latch must stay down so
+// a UIPI-blocked session is not re-armed (and re-notified) on every click.
+procedure TPassThroughResetTests.MouseClick_DoesNotReArmInjectionLatch;
+begin
+  // Detach the capture handler so emissions reach the (faked) SendInput and
+  // can actually trip the M1.2 latch; Setup/TearDown restore the capture.
+  SetEngineOutputHandler(nil);
+  SetSendInputHook(FailingSendInput);
+  try
+    GFakeVKChar := 'k';
+    Assert.IsFalse(HandleKeyEvent(MakeKey($4B, True)),
+      'zero-accepted output fails open: the key passes through');
+    Assert.IsFalse(InjectionOK, 'precondition: the latch is tripped');
+
+    HandleMouseClickReset(WM_LBUTTONDOWN);
+
+    Assert.IsFalse(InjectionOK,
+      'a click must not re-arm the injection latch (only a foreground change does)');
+  finally
+    SetSendInputHook(FakeSendInput);
+  end;
 end;
 
 initialization

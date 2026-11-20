@@ -26,6 +26,18 @@ type
   end;
   PKBDLLHookStruct = ^TKBDLLHookStruct;
 
+  // Item (mouse click reset): the RTL does not declare MSLLHOOKSTRUCT either
+  // (same gap as KBDLLHOOKSTRUCT above); the layout matches the Win32 record.
+  // Only the message code is actually used by the policy.
+  TMouseLLHookStruct = record
+    pt: TPoint;
+    mouseData: DWORD;
+    flags: DWORD;
+    time: DWORD;
+    dwExtraInfo: ULONG_PTR;
+  end;
+  PMouseLLHookStruct = ^TMouseLLHookStruct;
+
   TOnKeyChar = function(const AChar: string): TInjectionOutcome of object;
 
   // M2.2: hook-policy dependencies. Every field is a narrow replaceable seam;
@@ -98,6 +110,13 @@ procedure SetIgnoreInjectedInput(AValue: Boolean);
 // window station; the WinEvent callback delegates to it.
 procedure HandleForegroundChanged;
 
+// Item (mouse click reset): a button click may reposition the caret into
+// another field WITHOUT changing the foreground window, so the foreground
+// sink never fires and a pending prebase/reph would be committed into the
+// clicked position. The WH_MOUSE_LL callback delegates here for button-down
+// messages; exposed so tests can pin which messages reset and which do not.
+procedure HandleMouseClickReset(AWParam: WPARAM);
+
 // The production VK-to-character conversion, mapping through a fixed US
 // layout (item 5). Exported so tests can pin the deterministic mapping; the
 // hook policy still overrides it via THookPolicyDependencies.VKToUnicode.
@@ -169,6 +188,10 @@ implementation
 
 var
   KBHook: HHOOK = 0;
+  // Item (mouse click reset): installed and removed together with the
+  // keyboard hook; a click may move the caret into another field without a
+  // foreground change, and the pending matra must not follow it.
+  MouseHook: HHOOK = 0;
   ForegroundEventHook: THandle = 0;
   // Item 3a: GetTickCount of the most recent LL hook callback, the watchdog's
   // liveness heartbeat.
@@ -763,6 +786,13 @@ begin
   LogInfo('Keyboard hook restart requested');
   UnhookWindowsHookEx(KBHook);
   KBHook := 0;
+  // Item (mouse click reset): the mouse hook is a member of the same hook
+  // family - restart it with the keyboard hook so both are known-fresh.
+  if MouseHook <> 0 then
+  begin
+    UnhookWindowsHookEx(MouseHook);
+    MouseHook := 0;
+  end;
   gHookHeartbeat := GetTickCount;
   InstallKeyboardHook;
 end;
@@ -883,6 +913,42 @@ begin
   end;
 end;
 
+{ Item (mouse click reset): the click policy. Only button DOWNS reset — a
+  mouse MOVE inside a field must not kill the typing flow, and button-UPS
+  carry no caret action of their own. The reset is the engine-owned
+  ResetPendingOnPassThrough (clears pending prebase/reph AND the
+  emitted-length stack): the caret may have jumped anywhere, so backspacing
+  into pre-click text must fail safe to one unit. Deliberately NOT
+  HandleForegroundChanged: a click does not re-arm the injection latch and
+  need not drop the foreground process-name cache — the foreground window
+  usually did not change. Allocation-free. }
+procedure HandleMouseClickReset(AWParam: WPARAM);
+begin
+  case AWParam of
+    WM_LBUTTONDOWN, WM_RBUTTONDOWN, WM_MBUTTONDOWN:
+      try
+        ResetPendingOnPassThrough;
+      except
+        on E: Exception do
+          LogError('Mouse-click reset failed: ' + E.Message);
+      end;
+  end;
+end;
+
+// WH_MOUSE_LL adapter: same thin shape as the keyboard one. Passes every
+// event on to the next hook — the reset only clears engine state, it never
+// consumes mouse input.
+function LowLevelMouseProc(
+  nCode: Integer;
+  wParam: WPARAM;
+  lParam: LPARAM
+): LRESULT; stdcall;
+begin
+  if nCode = HC_ACTION then
+    HandleMouseClickReset(wParam);
+  Result := CallNextHookEx(MouseHook, nCode, wParam, lParam);
+end;
+
 // WinEvent callback. Both hooks are installed on the main thread, so this
 // serializes with the keyboard hook callback; the work below is a state
 // clear with no I/O or allocation, keeping the callback fast.
@@ -942,6 +1008,23 @@ begin
   );
   if ForegroundEventHook = 0 then
     LogError('Foreground event hook installation failed');
+
+  // Item (mouse click reset): button clicks clear pending engine state even
+  // when the foreground window does not change. Installed and removed with
+  // the keyboard hook; failure is logged, not fatal — the reset is a stale-
+  // state guard, not a safety requirement. Guarded so a watchdog restart
+  // (which only re-installs the keyboard hook) cannot double-install.
+  if MouseHook = 0 then
+  begin
+    MouseHook := SetWindowsHookEx(
+      WH_MOUSE_LL,
+      @LowLevelMouseProc,
+      HInstance,
+      0
+    );
+    if MouseHook = 0 then
+      LogError('Mouse click hook installation failed');
+  end;
 end;
 
 procedure RemoveKeyboardHook;
@@ -950,6 +1033,12 @@ begin
   begin
     UnhookWinEvent(ForegroundEventHook);
     ForegroundEventHook := 0;
+  end;
+
+  if MouseHook <> 0 then
+  begin
+    UnhookWindowsHookEx(MouseHook);
+    MouseHook := 0;
   end;
 
   if KBHook <> 0 then
