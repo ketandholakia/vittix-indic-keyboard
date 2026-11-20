@@ -37,6 +37,11 @@ type
     [TestCase('Gujarati_Harikrishna_BAPS_Unicode','layouts\gujarati\Gujarati_Harikrishna_BAPS_Unicode.json')]
     [TestCase('Gujarati_ShreeLipi_768_Unicode','layouts\gujarati\Gujarati_ShreeLipi_768_Unicode.json')]
     [TestCase('Gujarati_Typewriter_Remington_GAIL_CBI','layouts\gujarati\Gujarati_Typewriter_Remington_GAIL_CBI.json')]
+    [TestCase('Hindi_InScript_Traditional','layouts\devnagari\Hindi_InScript_Traditional.json')]
+    [TestCase('Hindi_KrutiDev_010_DevLys_010_Unicode','layouts\devnagari\Hindi_KrutiDev_010_DevLys_010_Unicode.json')]
+    [TestCase('Hindi_Remington_GAIL_CBI','layouts\devnagari\Hindi_Remington_GAIL_CBI.json')]
+    [TestCase('hi_remington_gail_unicode','layouts\devnagari\hi-remington-gail-unicode.json')]
+    [TestCase('terafont_v2','layouts\gujarati\Gujarati_Remington_terafont_unicode_v2.json')]
     procedure LoadAndValidateLayout(const ALayoutFile: string);
 
     [Test]
