@@ -41,7 +41,12 @@ function SetCurrentProcessExplicitAppUserModelID(
 var
   hMutex: THandle;
 begin
-  hMutex := CreateMutex(nil, True, 'Global\VittixIndicKeyboardInstance');
+  // Item: Local\ (per-session) instead of Global\ (per-machine): a Global\
+  // mutex makes the second Windows session (Fast User Switching, RDP, another
+  // console user) unable to run its own instance even though per-session LL
+  // hooks and per-user settings are fully independent. Local\ scopes the
+  // single-instance rule to THIS session, which is the behavior users expect.
+  hMutex := CreateMutex(nil, True, 'Local\VittixIndicKeyboardInstance');
   if (hMutex = 0) or (GetLastError = ERROR_ALREADY_EXISTS) then
   begin
     if hMutex <> 0 then CloseHandle(hMutex);
