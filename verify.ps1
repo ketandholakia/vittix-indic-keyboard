@@ -122,8 +122,35 @@ if (-not (Test-Path $installerScript)) {
     exit 1
 }
 Write-Information "Installer script found."
-$iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-if (Test-Path $iscc) {
+$iscc = $env:ISCC_PATH
+if ($iscc -and -not (Test-Path -LiteralPath $iscc -PathType Leaf)) {
+    throw "ISCC_PATH does not point to a compiler: $iscc"
+}
+if (-not $iscc) {
+    $isccCommand = Get-Command ISCC.exe -CommandType Application -ErrorAction SilentlyContinue
+    if ($isccCommand) {
+        $iscc = $isccCommand.Source
+    }
+}
+if (-not $iscc) {
+    $installRoots = @($env:ProgramFiles, ${env:ProgramFiles(x86)})
+    if ($env:LOCALAPPDATA) {
+        $installRoots += Join-Path $env:LOCALAPPDATA 'Programs'
+    }
+    foreach ($version in @(7, 6)) {
+        foreach ($installRoot in $installRoots) {
+            if (-not $installRoot) { continue }
+            $candidate = Join-Path $installRoot "Inno Setup $version\ISCC.exe"
+            if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+                $iscc = $candidate
+                break
+            }
+        }
+        if ($iscc) { break }
+    }
+}
+if ($iscc) {
+    Write-Information "Inno Setup compiler: $iscc"
     Write-Information "`n[Build] Building Installer..."
     $process = Start-Process -FilePath $iscc -ArgumentList "`"$installerScript`"" -NoNewWindow -Wait -PassThru
     if ($process.ExitCode -ne 0) {
@@ -131,7 +158,7 @@ if (Test-Path $iscc) {
         exit $process.ExitCode
     }
 } else {
-    Write-Information "Inno Setup compiler (ISCC.exe) not found; installer build skipped."
+    Write-Information "Inno Setup compiler (ISCC.exe) not found; installer build skipped. Install Inno Setup 6/7 or set ISCC_PATH."
 }
 
 # 5.4 Repository hygiene – whitespace check

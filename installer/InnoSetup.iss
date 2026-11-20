@@ -14,7 +14,7 @@ PrivilegesRequired=admin
 ; session - see Keyboard/VittixIndicKeyboard.dpr). Setup refuses to run while
 ; an instance is running, instead of leaving the exe locked.
 AppMutex=VittixIndicKeyboardInstance
-DefaultDirName={pf}\Vittix Indic Keyboard
+DefaultDirName={commonpf}\Vittix Indic Keyboard
 DefaultGroupName=Vittix Indic Keyboard
 AllowNoIcons=yes
 LicenseFile=..\LICENSE.txt
@@ -22,7 +22,7 @@ OutputDir=..\build
 OutputBaseFilename=VittixIndicKeyboardSetup
 Compression=lzma
 SolidCompression=yes
-ArchitecturesInstallIn64BitMode=x64
+ArchitecturesInstallIn64BitMode=x64os
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
@@ -45,5 +45,5 @@ Name: "{commondesktop}\Vittix Indic Keyboard"; Filename: "{app}\VittixIndicKeybo
 Filename: "{app}\VittixIndicKeyboard.exe"; Description: "{cm:LaunchProgram,Vittix Indic Keyboard}"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
-Filename: "{cmd}"; Parameters: "/C taskkill /F /IM VittixIndicKeyboard.exe"; Flags: runhidden
-Filename: "{cmd}"; Parameters: "/C taskkill /F /IM VittixIndicEditor.exe"; Flags: runhidden
+Filename: "{cmd}"; Parameters: "/C taskkill /F /IM VittixIndicKeyboard.exe"; Flags: runhidden; RunOnceId: "StopKeyboard"
+Filename: "{cmd}"; Parameters: "/C taskkill /F /IM VittixIndicEditor.exe"; Flags: runhidden; RunOnceId: "StopEditor"

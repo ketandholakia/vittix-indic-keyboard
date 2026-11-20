@@ -8,7 +8,7 @@ verify.bat
 
 Builds the DUnitX test suite, runs it, builds `VittixIndicKeyboard.exe` and
 `VittixIndicEditor.exe`, optionally signs them (below), validates the shipped
-layouts, and builds the installer when Inno Setup 6 is installed. Every gate
+layouts, and builds the installer when Inno Setup 6 or 7 is installed. Every gate
 must be green before a release is cut.
 
 ## 2. Code-sign the exes (optional, env-var gated)
@@ -50,11 +50,15 @@ run while the keyboard app is running (`AppMutex` matches the app's
 per-session single-instance mutex, `Local\VittixIndicKeyboardInstance`), and
 declares `PrivilegesRequired=admin` (machine install into Program Files).
 
-Build it via the pipeline (automatic when ISCC.exe is present) or directly:
+Build it via the pipeline (automatic when ISCC.exe is on PATH or Inno Setup
+6/7 is in a standard installation folder) or directly:
 
 ```bat
-"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\InnoSetup.iss
+"C:\Program Files\Inno Setup 7\ISCC.exe" installer\InnoSetup.iss
 ```
+
+For a custom compiler location, set `ISCC_PATH` to the full path to
+`ISCC.exe` before running `verify.bat`. An invalid override fails verification.
 
 Output: `build\VittixIndicKeyboardSetup.exe`. Sign the installer with the
 same signtool command if a certificate is available.

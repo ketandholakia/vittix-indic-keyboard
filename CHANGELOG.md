@@ -1,5 +1,7 @@
 ## Unreleased
 
+- Installer verification now finds Inno Setup 6/7 in standard machine or per-user folders, on PATH, or through an explicit `ISCC_PATH` override. Updated installer directives to compile without deprecation or uninstall-entry warnings under Inno Setup 7.
+
 - Seed-update review fixes: malformed manifest `files` values are treated as absent records, and unreadable files or directory enumeration failures produce warnings instead of interrupting startup. Unreadable user files remain untouched while other layouts continue reconciling. Added corruption and file-lock regression tests, corrected the custom-folder guard test, and made resolver test paths absolute when a restricted host cannot supply a temporary directory.
 
 - Review fixes: the watchdog now replaces stale nonzero hook handles, releases all hook subscriptions before restarting, retries failed restarts, and respects deliberate removal. Auto-repeat no longer fills the consumed-key tracker with duplicate entries. Tab/Enter reinjection leaves physically held modifiers untouched, preserves a native control key when its replacement is rejected, and lets the physical release complete a partially accepted replacement. Injection status is committed before UI notification, and notification errors cannot change the injection outcome. Added lifecycle and failure-path regression tests; session notifications now use `Winapi.WTSApi32`.
