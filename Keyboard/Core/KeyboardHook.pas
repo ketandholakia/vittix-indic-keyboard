@@ -104,6 +104,32 @@ procedure HandleForegroundChanged;
 function ProductionVKToUnicode(VKCode: DWORD; ScanCode: DWORD;
   const Modifiers: TKeyModifierState): string;
 
+// Item 3a (watchdog): hook liveness plumbing, exported for the tray's
+// watchdog timer and for tests.
+//   TouchHookHeartbeat      - updates the heartbeat tick (the LL callback
+//                             calls this on every event; tests call it
+//                             directly to simulate keystroke activity).
+//   HookHeartbeatTick       - the last heartbeat tick.
+//   LastSystemInputTick     - GetLastInputInfo (mouse AND keyboard), the
+//                             system-wide "input happened" signal.
+//   HookHeartbeatIsStale    - the PURE liveness decision: True means input
+//                             reached the system that the hook never saw,
+//                             i.e. Windows silently removed the hook.
+//   KeyboardHookInstalled   - True while the LL hook is installed.
+//   EnsureKeyboardHookInstalled - re-installs when missing; no-op when alive.
+//   RestartKeyboardHook     - unconditional unhook+install (session unlock,
+//                             resume from sleep); no-op when nothing is
+//                             installed (first install stays with
+//                             InstallKeyboardHook).
+procedure TouchHookHeartbeat;
+function HookHeartbeatTick: DWORD;
+function LastSystemInputTick: DWORD;
+function HookHeartbeatIsStale(const ANowTick, AHeartbeatTick,
+  ALastInputTick: DWORD): Boolean;
+function KeyboardHookInstalled: Boolean;
+function EnsureKeyboardHookInstalled(const AReason: string): Boolean;
+procedure RestartKeyboardHook;
+
 // Item 9.2 production scan-to-VK resolution, exported for tests: derives the
 // POSITIONAL VK from the scan code through the fixed US layout; falls back to
 // the incoming VK when the scan cannot be mapped. The hook policy overrides
@@ -144,6 +170,13 @@ implementation
 var
   KBHook: HHOOK = 0;
   ForegroundEventHook: THandle = 0;
+  // Item 3a: GetTickCount of the most recent LL hook callback, the watchdog's
+  // liveness heartbeat.
+  gHookHeartbeat: DWORD = 0;
+  // Item 3a: True once this process successfully installed a keyboard hook.
+  // The watchdog re-installs only hooks this process owned and lost; hosts
+  // that deliberately run hook-less (tests) are never touched.
+  gHookEverInstalled: Boolean = False;
   KeyHandler: TOnKeyChar = nil;
   TargetProcessName: string = '';
   AllowedProcessNames: string = '';
@@ -176,6 +209,13 @@ const
   // The extended-key prefix byte, embedded in the high byte of the scan code
   // passed to MapVirtualKeyEx(MAPVK_VSC_TO_VK_EX) (item 9.2).
   SCANCODE_EXTENDED_PREFIX = $E0;
+
+  // Item 3a (watchdog): a heartbeat older than this while the system recorded
+  // input the hook never saw counts as "Windows removed the hook". Chosen
+  // generous so a mouse-only minute (mouse moves update GetLastInputInfo but
+  // never touch a KEYBOARD hook) does not produce spurious re-installs; a
+  // genuinely typing session refreshes the heartbeat within seconds.
+  HOOK_WATCHDOG_STALE_MS = 120000;
 
 { Item 7: kernel32's QueryFullProcessImageName is not declared in the RTL. It
   works with PROCESS_QUERY_LIMITED_INFORMATION and resolves image paths across
@@ -625,6 +665,96 @@ begin
 end;
 
 { --------------------------------------------------
+  Item 3a: hook liveness plumbing. The heartbeat is one GetTickCount store
+  per keystroke (allocation-free, no I/O); the watchdog compares it against
+  GetLastInputInfo. Windows silently removes WH_KEYBOARD_LL hooks whose
+  callback exceeds the timeout, so a UI stall can kill system-wide typing;
+  the tray's timer uses these to re-install.
+-------------------------------------------------- }
+procedure TouchHookHeartbeat;
+begin
+  gHookHeartbeat := GetTickCount;
+end;
+
+function HookHeartbeatTick: DWORD;
+begin
+  Result := gHookHeartbeat;
+end;
+
+function LastSystemInputTick: DWORD;
+var
+  LastInput: TLastInputInfo;
+begin
+  LastInput.cbSize := SizeOf(TLastInputInfo);
+  if GetLastInputInfo(LastInput) then
+    Result := LastInput.dwTime
+  else
+    Result := 0;   // cannot tell: the caller must treat the hook as alive
+end;
+
+// Pure liveness decision, tick arithmetic wrap-safe via Integer subtraction.
+// Dead means: the system recorded input NEWER than our last heartbeat (the
+// hook missed something - Windows removes LL hooks silently) AND the
+// heartbeat is beyond the generous stale window (so a mouse-only minute or
+// a machine whose clock has not ticked yet is not mistaken for a dead hook).
+function HookHeartbeatIsStale(const ANowTick, AHeartbeatTick,
+  ALastInputTick: DWORD): Boolean;
+begin
+  Result := (Integer(ALastInputTick - AHeartbeatTick) > 0) and
+    (Integer(ANowTick - AHeartbeatTick) > HOOK_WATCHDOG_STALE_MS);
+end;
+
+function KeyboardHookInstalled: Boolean;
+begin
+  Result := KBHook <> 0;
+end;
+
+{ Re-install when the hook vanished. Returns True when the hook is (now)
+  installed. A reinstall failure is logged and retried on the next watchdog
+  tick - fail-open, never fatal.
+  NO-OP when a hook is already installed, and ALSO no-op when this process
+  never had a hook at all (gHookEverInstalled=False): the watchdog's job is
+  to restore a hook WE owned and lost, not to install one in a host that
+  deliberately runs without one (test executables). }
+function EnsureKeyboardHookInstalled(const AReason: string): Boolean;
+begin
+  if KBHook <> 0 then
+    Exit(True);
+  if not gHookEverInstalled then
+    Exit(False);
+
+  LogError('Keyboard hook watchdog: hook is gone (' + AReason +
+    '); re-installing');
+  try
+    InstallKeyboardHook;
+    Result := KBHook <> 0;
+  except
+    on E: Exception do
+    begin
+      LogError('Keyboard hook watchdog re-install failed: ' + E.Message);
+      Result := False;
+    end;
+  end;
+end;
+
+{ Unconditional unhook + re-install for session unlock / resume from sleep:
+  those transitions can leave the hook silently dead even though the handle
+  still looks valid, so the tray restarts it rather than trusting it. No-op
+  when nothing is installed (the first install belongs to
+  InstallKeyboardHook; tests never install real hooks). }
+procedure RestartKeyboardHook;
+begin
+  if KBHook = 0 then
+    Exit;
+
+  LogInfo('Keyboard hook restart requested');
+  UnhookWindowsHookEx(KBHook);
+  KBHook := 0;
+  gHookHeartbeat := GetTickCount;
+  InstallKeyboardHook;
+end;
+
+{ --------------------------------------------------
   Low-level keyboard hook procedure (thin Win32 adapter)
 -------------------------------------------------- }
 function LowLevelKeyboardProc(
@@ -636,6 +766,10 @@ var
   KBD: PKBDLLHookStruct;
   Key: TKeyContext;
 begin
+  // Item 3a: the watchdog's liveness signal - one tick store per callback,
+  // before any decision work. Allocation-free.
+  TouchHookHeartbeat;
+
   // If Windows says ignore, pass it on
   if nCode <> HC_ACTION then
     Exit(CallNextHookEx(KBHook, nCode, wParam, lParam));
@@ -775,6 +909,11 @@ begin
     LogError('Keyboard hook installation failed');
     RaiseLastOSError;
   end;
+
+  // Item 3a: a fresh install counts as alive; the watchdog compares against
+  // this tick, so it must never see a zero heartbeat right after install.
+  gHookHeartbeat := GetTickCount;
+  gHookEverInstalled := True;
 
   // Foreground-window changes cancel pending engine state (item 3). Installed
   // and removed together with the keyboard hook; failures are logged, not

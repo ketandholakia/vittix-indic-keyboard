@@ -94,12 +94,18 @@ type
     // injection-status callback, which fires once per latch trip.
     FInjectionBlocked: Boolean;
 
+    // Item 3a (watchdog): periodic liveness check of the LL keyboard hook.
+    // Windows silently removes hooks whose callback exceeds its timeout, so a
+    // UI stall can kill system-wide typing; this timer re-installs.
+    FHookWatchdog: TTimer;
+
     // The layout and allowed-app submenus are destroyed and rebuilt item by item.
     // Doing that on every popup is a visible hitch with a large layout set, so
     // they are rebuilt only when something they show has actually changed.
     FMenusDirty: Boolean;
     procedure InvalidateTrayMenus;
 
+    procedure HookWatchdogTick(Sender: TObject);
     function HandleRawKey(const AChar: string): TInjectionOutcome;
     // Item (injection latch): SendInputHelper's status callback. Fires on
     // transitions only, so the balloon is rate-limited to once per latch trip.
@@ -137,6 +143,10 @@ type
     procedure ToggleAppWhitelistItem(Sender: TObject);
   protected
     procedure WMHotKey(var Msg: TWMHotKey); message WM_HOTKEY;
+    // Item 3a (watchdog): session unlock and resume-from-sleep can leave the
+    // LL keyboard hook silently dead; both transitions restart it.
+    procedure WMWtsSessionChange(var Msg: TMessage); message WM_WTSSESSION_CHANGE;
+    procedure WMPowerBroadcast(var Msg: TMessage); message WM_POWERBROADCAST;
   end;
 
 var
@@ -344,8 +354,66 @@ begin
 
   RegisterConfiguredHotkeys;
 
+  // Item 3a (watchdog): every 30 s verify the LL hook is still installed AND
+  // alive (heartbeat vs system input), re-install when it is not. Created in
+  // code so the DFM stays untouched.
+  FHookWatchdog := TTimer.Create(Self);
+  FHookWatchdog.Interval := 30000;
+  FHookWatchdog.OnTimer := HookWatchdogTick;
+  FHookWatchdog.Enabled := True;
+
+  // Item 3a: session unlock re-arms the hook. Only registered so the WTS
+  // message arrives; failures are non-fatal (the watchdog still runs).
+  if not WTSRegisterSessionNotification(Handle, NOTIFY_FOR_THIS_SESSION) then
+    LogError('WTS session notification registration failed; unlock will not restart the hook');
+
   TrayIcon.Visible := True;
   FlushStartupNotices;
+end;
+
+{ Item 3a: the watchdog tick. Two failure shapes, both handled by
+  EnsureKeyboardHookInstalled's no-op-when-alive contract:
+  1. The hook handle is gone entirely (something unhooked us).
+  2. The handle is still set but Windows stopped dispatching to it (the
+     classic silent removal after a slow callback) - detected by a stale
+     heartbeat while GetLastInputInfo reports input the hook never saw. }
+procedure TfrmTray.HookWatchdogTick(Sender: TObject);
+var
+  NowTick, LastInput: DWORD;
+begin
+  if not KeyboardHookInstalled then
+  begin
+    EnsureKeyboardHookInstalled('watchdog: hook handle missing');
+    Exit;
+  end;
+
+  NowTick := GetTickCount;
+  LastInput := LastSystemInputTick;
+  // LastSystemInputTick = 0 means GetLastInputInfo failed: unable to judge,
+  // so leave the hook alone (fail-open, never thrash re-installs).
+  if (LastInput <> 0) and
+     HookHeartbeatIsStale(NowTick, HookHeartbeatTick, LastInput) then
+    EnsureKeyboardHookInstalled('watchdog: stale heartbeat, input missed');
+end;
+
+procedure TfrmTray.WMWtsSessionChange(var Msg: TMessage);
+begin
+  inherited;
+  // WTS_SESSION_UNLOCK: the transition out of a locked session is a known
+  // point where LL hooks can end up silently dead. Restart unconditionally.
+  if Msg.WParam = WTS_SESSION_UNLOCK then
+    RestartKeyboardHook;
+end;
+
+procedure TfrmTray.WMPowerBroadcast(var Msg: TMessage);
+begin
+  inherited;
+  // Resume from sleep/hibernate: restart the hook rather than trusting it.
+  // PBT_APMRESUMEAUTOMATIC fires on every resume; PBT_APMRESUMESUSPEND only
+  // when the resume was user-triggered - handling either covers the case.
+  if (Msg.WParam = PBT_APMRESUMEAUTOMATIC) or
+     (Msg.WParam = PBT_APMRESUMESUSPEND) then
+    RestartKeyboardHook;
 end;
 
 
@@ -451,6 +519,9 @@ end;
 
 procedure TfrmTray.FormDestroy(Sender: TObject);
 begin
+  // Item 3a: release the WTS registration before the window handle dies.
+  WTSUnRegisterSessionNotification(Handle);
+  FreeAndNil(FHookWatchdog);
   SetInjectionStatusCallback(nil);
   UnregisterConfiguredHotkeys;
   FreeAndNil(FOSK);

@@ -553,8 +553,88 @@ begin
     'after invalidation the same window must resolve to the same name');
 end;
 
+// Item 3a (watchdog): Windows silently removes WH_KEYBOARD_LL hooks whose
+// callback exceeds the timeout. The liveness decision is a pure function
+// (heartbeat vs GetLastInputInfo) and is pinned here; the Win32 re-install
+// itself stays untested (no real global hook may be installed in tests), and
+// both restart entries are guarded no-ops while no hook is installed, which
+// the no-op tests below also pin.
+type
+  [TestFixture]
+  THookWatchdogTests = class
+public
+  [Test]
+  procedure HeartbeatStale_InputNewerThanHeartbeat_BeyondWindow;
+  [Test]
+  procedure HeartbeatFresh_IsNotStale;
+  [Test]
+  procedure HeartbeatOlderButNoNewerInput_IsNotStale;
+  [Test]
+  procedure HeartbeatStale_TickWrapAround;
+  [Test]
+  procedure HeartbeatTouch_RoundTrip;
+  [Test]
+  procedure NoHookInstalled_RestartEntriesAreSafeNoOps;
+end;
+
+procedure THookWatchdogTests.HeartbeatStale_InputNewerThanHeartbeat_BeyondWindow;
+begin
+  // System input at t=130000, heartbeat last refreshed at t=1000 (never ran
+  // again): the hook missed input and is beyond the stale window -> dead.
+  Assert.IsTrue(HookHeartbeatIsStale(200000, 1000, 130000));
+end;
+
+procedure THookWatchdogTests.HeartbeatFresh_IsNotStale;
+begin
+  // The hook saw input 5 s ago (a normal typing pause): alive.
+  Assert.IsFalse(HookHeartbeatIsStale(200000, 195000, 199000));
+end;
+
+procedure THookWatchdogTests.HeartbeatOlderButNoNewerInput_IsNotStale;
+begin
+  // No system input at all since the heartbeat (idle machine, no mouse,
+  // no keyboard): absence of keystrokes proves nothing -> alive.
+  Assert.IsFalse(HookHeartbeatIsStale(200000, 1000, 500));
+end;
+
+procedure THookWatchdogTests.HeartbeatStale_TickWrapAround;
+begin
+  // GetTickCount wraps after ~49.7 days; Integer subtraction keeps the
+  // comparison correct across the wrap. Heartbeat $FFFF0000 (just before the
+  // wrap), "now" $20000 (196.6 s after it, past the 120 s window):
+  // input 32.8 s after the heartbeat (newer than it) means dead;
+  // input 8.2 s BEFORE the heartbeat (no missed input) means alive.
+  Assert.IsFalse(HookHeartbeatIsStale(DWORD($20000), DWORD($FFFF0000),
+    DWORD($FFFEE000)), 'no input newer than the heartbeat: alive across the wrap');
+  Assert.IsTrue(HookHeartbeatIsStale(DWORD($20000), DWORD($FFFF0000),
+    DWORD($FFFF8000)), 'input newer than a heartbeat 196 s behind now: dead');
+end;
+
+procedure THookWatchdogTests.HeartbeatTouch_RoundTrip;
+begin
+  TouchHookHeartbeat;
+  Assert.AreEqual(GetTickCount, HookHeartbeatTick,
+    'TouchHookHeartbeat must stamp the current tick');
+end;
+
+// No real global hook may be installed in tests (working rule #4), so both
+// restart entries must be no-ops while KBHook = 0: they must not install a
+// hook, not raise, and leave the "installed" answer False.
+procedure THookWatchdogTests.NoHookInstalled_RestartEntriesAreSafeNoOps;
+begin
+  Assert.IsFalse(KeyboardHookInstalled,
+    'tests never install a real global hook');
+  EnsureKeyboardHookInstalled('watchdog: hook handle missing');
+  Assert.IsFalse(KeyboardHookInstalled,
+    'EnsureKeyboardHookInstalled must no-op in a test host (no real hook)');
+  RestartKeyboardHook;
+  Assert.IsFalse(KeyboardHookInstalled,
+    'RestartKeyboardHook must no-op when nothing is installed');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(THookPolicyTests);
   TDUnitX.RegisterTestFixture(TForegroundCacheTests);
+  TDUnitX.RegisterTestFixture(THookWatchdogTests);
 
 end.
