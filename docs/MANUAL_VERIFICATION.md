@@ -26,6 +26,8 @@ Setup: engine enabled, a layout with a prebase matra active (e.g. Kruti Dev
 4. **Shift+Tab with a pending matra:** hold Shift, consonant + prebase key,
    then Shift+Tab. Expected: the matra is committed in the current field AND
    focus moves BACKWARDS (Tab must not act as a forward Tab).
+   Keep Shift held and type another character or use Shift+Arrow. Expected:
+   capitalization/selection still works until the physical Shift release.
 5. **Nothing pending:** plain Tab / Enter with no uncommitted state must
    behave exactly like native typing (no duplicated Tab/Enter, no lag).
 

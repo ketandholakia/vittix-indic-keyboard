@@ -73,6 +73,14 @@ type
   // Injection status: production reuses the M1.2 SendInputHelper status.
   TIsInjectionHealthy = function: Boolean;
 
+  // Narrow OS boundary for lifecycle tests; nil fields use the Windows API.
+  TInstallHook = function: THandle;
+  TRemoveHook = procedure(AHandle: THandle);
+  THookLifecycleDependencies = record
+    InstallKeyboard, InstallMouse, InstallForeground: TInstallHook;
+    RemoveInput, RemoveForeground: TRemoveHook;
+  end;
+
   THookPolicyDependencies = record
     GetForegroundProcessName: TGetForegroundProcessName;
     GetModifierState: TGetModifierState;
@@ -99,6 +107,7 @@ procedure SetTargetProcessName(const AProcessName: string);
 procedure SetAllowedProcessNames(const AProcessNames: string);
 procedure SetHookPolicyDependencies(
   const ADependencies: THookPolicyDependencies);
+procedure SetHookLifecycleDependencies(const ADependencies: THookLifecycleDependencies);
 // Item 7: whether events injected by OTHER tools (on-screen keyboards, remote
 // desktop) are translated. Default True = the historical behavior (all
 // injected input passes through). Our own tagged events are always ignored,
@@ -144,7 +153,8 @@ function ProductionVKToUnicode(VKCode: DWORD; ScanCode: DWORD;
 //                             reached the system that the hook never saw,
 //                             i.e. Windows silently removed the hook.
 //   KeyboardHookInstalled   - True while the LL hook is installed.
-//   EnsureKeyboardHookInstalled - re-installs when missing; no-op when alive.
+//   EnsureKeyboardHookInstalled - re-installs when missing; AForceRestart
+//                             replaces stale nonzero handles too.
 //   RestartKeyboardHook     - unconditional unhook+install (session unlock,
 //                             resume from sleep); no-op when nothing is
 //                             installed (first install stays with
@@ -155,7 +165,8 @@ function LastSystemInputTick: DWORD;
 function HookHeartbeatIsStale(const ANowTick, AHeartbeatTick,
   ALastInputTick: DWORD): Boolean;
 function KeyboardHookInstalled: Boolean;
-function EnsureKeyboardHookInstalled(const AReason: string): Boolean;
+function EnsureKeyboardHookInstalled(const AReason: string;
+  AForceRestart: Boolean = False): Boolean;
 procedure RestartKeyboardHook;
 
 // Item 9.2 production scan-to-VK resolution, exported for tests: derives the
@@ -209,7 +220,7 @@ var
   // Item 3a: GetTickCount of the most recent LL hook callback, the watchdog's
   // liveness heartbeat.
   gHookHeartbeat: DWORD = 0;
-  // Item 3a: True once this process successfully installed a keyboard hook.
+  // Item 3a: True while recovery of this process's hook is wanted.
   // The watchdog re-installs only hooks this process owned and lost; hosts
   // that deliberately run hook-less (tests) are never touched.
   gHookEverInstalled: Boolean = False;
@@ -221,6 +232,7 @@ var
   // non-empty; matching below is a plain iteration over this cache.
   AllowedProcessList: TArray<string> = [];
   Policy: THookPolicyDependencies;
+  Lifecycle: THookLifecycleDependencies;
   // Item 7: default True preserves the historical fail-open behavior (ignore
   // ALL injected input). Flipping it lets other tools' injected keys reach the
   // translation pipeline; our own tagged events are always excluded.
@@ -619,6 +631,9 @@ end;
   matching key-up and on foreground changes. }
 procedure TrackConsumedKeyDown(AVKCode: DWORD);
 begin
+  // Auto-repeat generates multiple downs followed by a single up.
+  if IsConsumedKeyDown(AVKCode) then
+    Exit;
   if gConsumedVKCount < Length(gConsumedVKs) then
   begin
     gConsumedVKs[gConsumedVKCount] := AVKCode;
@@ -782,8 +797,15 @@ begin
     // emit text for — fail-open, never eating a key it cannot replace.
     if Outcome = ioSuccess then
     begin
-      SendVirtualKeyWithShift(AKey.VKCode, Modifiers.ShiftDown);
-      TrackConsumedKeyDown(AKey.VKCode);   // item 8a: consume its key-up too
+      // Shift's physical down already reached the target. Do not inject a
+      // Shift-up: that would release a modifier the user is still holding.
+      Outcome := SendVirtualKey(AKey.VKCode);
+      if Outcome = ioZeroAccepted then
+        Exit(False);  // no replacement control key exists: retain the native key
+      // A fully injected down/up pair needs no physical up. If only the
+      // replacement down was accepted, let the physical up release it.
+      if Outcome = ioSuccess then
+        TrackConsumedKeyDown(AKey.VKCode);
       Result := True;
       Exit;
     end;
@@ -887,21 +909,26 @@ end;
 { Re-install when the hook vanished. Returns True when the hook is (now)
   installed. A reinstall failure is logged and retried on the next watchdog
   tick - fail-open, never fatal.
-  NO-OP when a hook is already installed, and ALSO no-op when this process
+  NO-OP when a hook is already installed unless AForceRestart is requested,
+  and ALSO no-op when this process
   never had a hook at all (gHookEverInstalled=False): the watchdog's job is
   to restore a hook WE owned and lost, not to install one in a host that
   deliberately runs without one (test executables). }
-function EnsureKeyboardHookInstalled(const AReason: string): Boolean;
+function EnsureKeyboardHookInstalled(const AReason: string;
+  AForceRestart: Boolean): Boolean;
 begin
-  if KBHook <> 0 then
+  if (KBHook <> 0) and not AForceRestart then
     Exit(True);
   if not gHookEverInstalled then
     Exit(False);
 
-  LogError('Keyboard hook watchdog: hook is gone (' + AReason +
+  LogError('Keyboard hook watchdog: recovery requested (' + AReason +
     '); re-installing');
   try
-    InstallKeyboardHook;
+    if (KBHook <> 0) and AForceRestart then
+      RestartKeyboardHook
+    else
+      InstallKeyboardHook;
     Result := KBHook <> 0;
   except
     on E: Exception do
@@ -923,17 +950,11 @@ begin
     Exit;
 
   LogInfo('Keyboard hook restart requested');
-  UnhookWindowsHookEx(KBHook);
-  KBHook := 0;
-  // Item (mouse click reset): the mouse hook is a member of the same hook
-  // family - restart it with the keyboard hook so both are known-fresh.
-  if MouseHook <> 0 then
-  begin
-    UnhookWindowsHookEx(MouseHook);
-    MouseHook := 0;
-  end;
-  gHookHeartbeat := GetTickCount;
-  InstallKeyboardHook;
+  // Release the foreground subscription too; replacing its handle without
+  // unhooking leaks a callback on every unlock/resume/watchdog restart.
+  RemoveKeyboardHook;
+  gHookEverInstalled := True;
+  EnsureKeyboardHookInstalled('restart');
 end;
 
 { --------------------------------------------------
@@ -1029,6 +1050,11 @@ begin
   Policy := ADependencies;
 end;
 
+procedure SetHookLifecycleDependencies(const ADependencies: THookLifecycleDependencies);
+begin
+  Lifecycle := ADependencies;
+end;
+
 procedure HandleForegroundChanged;
 begin
   // The typing flow does not survive a foreground switch: whatever was
@@ -1118,12 +1144,15 @@ begin
   PreloadUSLayout;
 
   LogInfo('Installing keyboard hook');
-  KBHook := SetWindowsHookEx(
-    WH_KEYBOARD_LL,
-    @LowLevelKeyboardProc,
-    HInstance,
-    0
-  );
+  if Assigned(Lifecycle.InstallKeyboard) then
+    KBHook := Lifecycle.InstallKeyboard()
+  else
+    KBHook := SetWindowsHookEx(
+      WH_KEYBOARD_LL,
+      @LowLevelKeyboardProc,
+      HInstance,
+      0
+    );
 
   if KBHook = 0 then
   begin
@@ -1139,15 +1168,18 @@ begin
   // Foreground-window changes cancel pending engine state (item 3). Installed
   // and removed together with the keyboard hook; failures are logged, not
   // fatal — the stale-state reset is an extra guard, not a safety requirement.
-  ForegroundEventHook := SetWinEventHook(
-    EVENT_SYSTEM_FOREGROUND,
-    EVENT_SYSTEM_FOREGROUND,
-    0,
-    @ForegroundWinEventProc,
-    0,
-    0,
-    WINEVENT_OUTOFCONTEXT
-  );
+  if Assigned(Lifecycle.InstallForeground) then
+    ForegroundEventHook := Lifecycle.InstallForeground()
+  else
+    ForegroundEventHook := SetWinEventHook(
+      EVENT_SYSTEM_FOREGROUND,
+      EVENT_SYSTEM_FOREGROUND,
+      0,
+      @ForegroundWinEventProc,
+      0,
+      0,
+      WINEVENT_OUTOFCONTEXT
+    );
   if ForegroundEventHook = 0 then
     LogError('Foreground event hook installation failed');
 
@@ -1158,12 +1190,15 @@ begin
   // (which only re-installs the keyboard hook) cannot double-install.
   if MouseHook = 0 then
   begin
-    MouseHook := SetWindowsHookEx(
-      WH_MOUSE_LL,
-      @LowLevelMouseProc,
-      HInstance,
-      0
-    );
+    if Assigned(Lifecycle.InstallMouse) then
+      MouseHook := Lifecycle.InstallMouse()
+    else
+      MouseHook := SetWindowsHookEx(
+        WH_MOUSE_LL,
+        @LowLevelMouseProc,
+        HInstance,
+        0
+      );
     if MouseHook = 0 then
       LogError('Mouse click hook installation failed');
   end;
@@ -1171,22 +1206,33 @@ end;
 
 procedure RemoveKeyboardHook;
 begin
+  gHookEverInstalled := False;
+  ClearConsumedKeySet;
   if ForegroundEventHook <> 0 then
   begin
-    UnhookWinEvent(ForegroundEventHook);
+    if Assigned(Lifecycle.RemoveForeground) then
+      Lifecycle.RemoveForeground(ForegroundEventHook)
+    else
+      UnhookWinEvent(ForegroundEventHook);
     ForegroundEventHook := 0;
   end;
 
   if MouseHook <> 0 then
   begin
-    UnhookWindowsHookEx(MouseHook);
+    if Assigned(Lifecycle.RemoveInput) then
+      Lifecycle.RemoveInput(MouseHook)
+    else
+      UnhookWindowsHookEx(MouseHook);
     MouseHook := 0;
   end;
 
   if KBHook <> 0 then
   begin
     LogInfo('Removing keyboard hook');
-    UnhookWindowsHookEx(KBHook);
+    if Assigned(Lifecycle.RemoveInput) then
+      Lifecycle.RemoveInput(KBHook)
+    else
+      UnhookWindowsHookEx(KBHook);
     KBHook := 0;
   end;
 end;

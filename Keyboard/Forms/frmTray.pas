@@ -4,6 +4,7 @@ interface
 
 uses
   Winapi.Windows,
+  Winapi.WTSApi32,
   Winapi.Messages,
   Winapi.ShellAPI,
   System.SysUtils,
@@ -402,8 +403,8 @@ begin
   FlushStartupNotices;
 end;
 
-{ Item 3a: the watchdog tick. Two failure shapes, both handled by
-  EnsureKeyboardHookInstalled's no-op-when-alive contract:
+{ Item 3a: the watchdog tick. Recover a missing handle or explicitly force
+  replacement of a stale nonzero handle:
   1. The hook handle is gone entirely (something unhooked us).
   2. The handle is still set but Windows stopped dispatching to it (the
      classic silent removal after a slow callback) - detected by a stale
@@ -424,7 +425,7 @@ begin
   // so leave the hook alone (fail-open, never thrash re-installs).
   if (LastInput <> 0) and
      HookHeartbeatIsStale(NowTick, HookHeartbeatTick, LastInput) then
-    EnsureKeyboardHookInstalled('watchdog: stale heartbeat, input missed');
+    EnsureKeyboardHookInstalled('watchdog: stale heartbeat, input missed', True);
 end;
 
 procedure TfrmTray.WMWtsSessionChange(var Msg: TMessage);

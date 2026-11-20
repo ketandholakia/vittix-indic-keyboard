@@ -48,7 +48,9 @@ type
     [Test]
     procedure StatusCallback_ResetFromTrippedFiresHealthy_ResetWhileHealthyIsSilent;
     [Test]
-    procedure SendVirtualKeyWithShift_BatchShape;
+    procedure StatusCallback_ObservesCommittedState;
+    [Test]
+    procedure StatusCallback_ExceptionCannotChangeInjectionOutcome;
   end;
 
 implementation
@@ -244,21 +246,35 @@ begin
     'a re-arm notify must fire only when the latch was actually tripped');
 end;
 
-// Item (Tab/Enter ordering): the Shift-preserving variant submits the whole
-// [Shift down][VK down][VK up][Shift up] sequence as ONE batch; without Shift
-// it degenerates to the plain down/up pair. Full record-order coverage lives
-// in Tests.Keyboard.ControlKeyOrdering.
-procedure TSendInputHelperTests.SendVirtualKeyWithShift_BatchShape;
+procedure TSendInputHelperTests.StatusCallback_ObservesCommittedState;
+var
+  Observed: Boolean;
 begin
-  GReturn := 4;
-  SendVirtualKeyWithShift(VK_TAB, True);
-  Assert.IsTrue(InjectionOK);
-  Assert.AreEqual(4, GLastRequested,
-    'with Shift: Shift down + Tab down/up + Shift up = 4 records');
+  Observed := True;
+  SetInjectionStatusCallback(
+    procedure(AHealthy: Boolean)
+    begin
+      Observed := InjectionOK;
+    end);
+  GReturn := 0;
+  SendUnicodeText('A');
+  Assert.IsFalse(Observed, 'failure must be latched before notifying');
+  ResetInjectionStatus;
+  Assert.IsTrue(Observed, 're-arm must be committed before notifying');
+end;
 
-  SendVirtualKeyWithShift(VK_RETURN, False);
-  Assert.AreEqual(2, GLastRequested,
-    'without Shift: a plain down/up pair = 2 records');
+procedure TSendInputHelperTests.StatusCallback_ExceptionCannotChangeInjectionOutcome;
+begin
+  SetInjectionStatusCallback(
+    procedure(AHealthy: Boolean)
+    begin
+      raise Exception.Create('simulated UI failure');
+    end);
+  GReturn := 1;
+  Assert.AreEqual(ioPartialAccepted, SendUnicodeText('A'));
+  Assert.IsFalse(InjectionOK);
+  ResetInjectionStatus;
+  Assert.IsTrue(InjectionOK);
 end;
 
 initialization

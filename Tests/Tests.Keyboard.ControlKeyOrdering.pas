@@ -38,6 +38,10 @@ type
     procedure PendingPrebase_ShiftTab_ReinjectionKeepsShiftAroundTab;
     [Test]
     procedure NoPending_Tab_PassesThroughNatively_NothingReinjected;
+    [Test]
+    procedure RejectedReplacementEnter_PassesThroughNatively;
+    [Test]
+    procedure PartialReplacementEnter_PhysicalKeyUpReleasesInjectedDown;
   end;
 
 implementation
@@ -51,10 +55,12 @@ const
 var
   // One human-readable line per submitted INPUT record, in submission order:
   // 'U:0049' (Unicode char $0049 down), 'U:0049/up', 'VK:0d' (VK_RETURN down),
-  // 'VK:0d/up', 'VK:10' (VK_SHIFT down)...
+  // 'VK:0d/up'. Modifier keys must not be synthesized by control reinjection.
   GRecords: TStringList = nil;
   // The physical modifier snapshot the hook reads (settable per test).
   GFakeMods: TKeyModifierState;
+  GRejectControlKeys: Boolean;
+  GPartialControlKeys: Boolean;
 
 function RecordingSendInput(cInputs: UINT; pInputs: PInput;
   cbSize: Integer): UINT; stdcall;
@@ -63,6 +69,8 @@ var
   Flags: DWORD;
   S: string;
 begin
+  if GRejectControlKeys and ((pInputs^.ki.dwFlags and KEYEVENTF_UNICODE) = 0) then
+    Exit(0);
   for I := 0 to Integer(cInputs) - 1 do
   begin
     Flags := PInput(PByte(pInputs) + I * SizeOf(TInput))^.ki.dwFlags;
@@ -73,6 +81,8 @@ begin
     if (Flags and KEYEVENTF_KEYUP) <> 0 then
       S := S + '/up';
     GRecords.Add(S);
+    if GPartialControlKeys and ((Flags and KEYEVENTF_UNICODE) = 0) then
+      Exit(1);
   end;
   // Accept the exact requested count (healthy injection).
   Result := cInputs;
@@ -126,6 +136,8 @@ begin
   ClearConsumedKeySet;   // item 8a state is process-global: fresh per test
 
   GFakeMods := Default(TKeyModifierState);
+  GRejectControlKeys := False;
+  GPartialControlKeys := False;
   GRecords := TStringList.Create;
   SetSendInputHook(RecordingSendInput);
   SetEngineOutputHandler(nil);
@@ -201,14 +213,38 @@ begin
   Assert.IsTrue(HandleKeyEvent(MakeKey(VK_TAB, True)),
     'Shift+Tab with a committed flush must be consumed and re-injected');
 
-  Assert.AreEqual(6, GRecords.Count,
-    'matra down/up + Shift down + Tab down/up + Shift up');
+  Assert.AreEqual(4, GRecords.Count,
+    'matra down/up + Tab down/up; held modifiers must remain untouched');
   Assert.AreEqual('U:0049', GRecords[0], 'the matra goes out FIRST');
   Assert.AreEqual('U:0049/up', GRecords[1]);
-  Assert.AreEqual('VK:10', GRecords[2], 'Shift down wraps the re-injected Tab');
-  Assert.AreEqual('VK:09', GRecords[3], 'the re-injected Tab follows the matra');
-  Assert.AreEqual('VK:09/up', GRecords[4]);
-  Assert.AreEqual('VK:10/up', GRecords[5], 'Shift up restores the modifier');
+  Assert.AreEqual('VK:09', GRecords[2], 'the re-injected Tab follows the matra');
+  Assert.AreEqual('VK:09/up', GRecords[3]);
+end;
+
+procedure TControlKeyOrderingTests.RejectedReplacementEnter_PassesThroughNatively;
+begin
+  Assert.IsTrue(HandleKeyEvent(MakeKey($4B, True)));
+  Assert.IsTrue(HandleKeyEvent(MakeKey($49, True)));
+  GRecords.Clear;
+  GRejectControlKeys := True;
+  Assert.IsFalse(HandleKeyEvent(MakeKey(VK_RETURN, True)),
+    'a rejected replacement must not swallow the physical Enter');
+  Assert.IsFalse(IsConsumedKeyDown(VK_RETURN));
+  Assert.IsFalse(InjectionOK);
+  Assert.AreEqual(2, GRecords.Count, 'only the committed matra was accepted');
+end;
+
+procedure TControlKeyOrderingTests.PartialReplacementEnter_PhysicalKeyUpReleasesInjectedDown;
+begin
+  Assert.IsTrue(HandleKeyEvent(MakeKey($4B, True)));
+  Assert.IsTrue(HandleKeyEvent(MakeKey($49, True)));
+  GRecords.Clear;
+  GPartialControlKeys := True;
+  Assert.IsTrue(HandleKeyEvent(MakeKey(VK_RETURN, True)));
+  Assert.IsFalse(HandleKeyEvent(MakeKey(VK_RETURN, False)),
+    'the physical release must reach the target after only an injected down');
+  Assert.IsFalse(InjectionOK);
+  Assert.AreEqual(3, GRecords.Count, 'matra pair plus accepted Enter down');
 end;
 
 procedure TControlKeyOrderingTests.NoPending_Tab_PassesThroughNatively_NothingReinjected;

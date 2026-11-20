@@ -75,6 +75,8 @@ type
     [Test]
     procedure ConsumedKeyDown_ItsKeyUp_IsConsumed_Too;
     [Test]
+    procedure RepeatedKeyDown_TracksOneEntry_AndLeavesRoomForOtherKeys;
+    [Test]
     procedure PassedThroughKeyDown_ItsKeyUp_StaysUntouched;
     [Test]
     procedure ForegroundChange_ClearsTheConsumedKeySet;
@@ -447,6 +449,18 @@ end;
 // act on a key-up whose down never reached them); pass-through key-ups stay
 // untouched. In this fixture the capture handler emits via SendUnicodeText,
 // so a translated letter returns ioSuccess and IS consumed.
+procedure THookPolicyTests.RepeatedKeyDown_TracksOneEntry_AndLeavesRoomForOtherKeys;
+var
+  I: Integer;
+begin
+  for I := 1 to 40 do
+    Assert.IsTrue(HandleKeyEvent(MakeKey($41, True)));
+  Assert.IsTrue(HandleKeyEvent(MakeKey($42, True)));
+  Assert.IsTrue(HandleKeyEvent(MakeKey($41, False)));
+  Assert.IsFalse(IsConsumedKeyDown($41), 'one release clears all auto-repeat downs');
+  Assert.IsTrue(HandleKeyEvent(MakeKey($42, False)), 'repeat must not exhaust capacity');
+end;
+
 procedure THookPolicyTests.ConsumedKeyDown_ItsKeyUp_IsConsumed_Too;
 begin
   Assert.IsTrue(HandleKeyEvent(MakeKey($41, True)),
@@ -630,6 +644,91 @@ public
   procedure HeartbeatTouch_RoundTrip;
   [Test]
   procedure NoHookInstalled_RestartEntriesAreSafeNoOps;
+  [Test]
+  procedure StaleHandle_ReinstallsAndReleasesAllSubscriptions;
+  [Test]
+  procedure RestartFailure_IsRetried_AndRemovalStopsRecovery;
+end;
+
+var
+  LifecycleInstalls, LifecycleInputRemovals, LifecycleForegroundRemovals: Integer;
+  LifecycleInstallFails: Boolean;
+
+function FakeInstallKeyboardHook: THandle;
+begin
+  Inc(LifecycleInstalls);
+  if LifecycleInstallFails then
+    raise Exception.Create('simulated hook installation failure');
+  Result := 101;
+end;
+
+function FakeInstallAuxiliaryHook: THandle;
+begin
+  Result := 102;
+end;
+
+procedure FakeRemoveInputHook(AHandle: THandle);
+begin
+  Inc(LifecycleInputRemovals);
+end;
+
+procedure FakeRemoveForegroundHook(AHandle: THandle);
+begin
+  Inc(LifecycleForegroundRemovals);
+end;
+
+procedure ConfigureFakeLifecycle;
+var
+  Deps: THookLifecycleDependencies;
+begin
+  LifecycleInstalls := 0;
+  LifecycleInputRemovals := 0;
+  LifecycleForegroundRemovals := 0;
+  LifecycleInstallFails := False;
+  Deps := Default(THookLifecycleDependencies);
+  Deps.InstallKeyboard := FakeInstallKeyboardHook;
+  Deps.InstallMouse := FakeInstallAuxiliaryHook;
+  Deps.InstallForeground := FakeInstallAuxiliaryHook;
+  Deps.RemoveInput := FakeRemoveInputHook;
+  Deps.RemoveForeground := FakeRemoveForegroundHook;
+  SetHookLifecycleDependencies(Deps);
+end;
+
+procedure THookWatchdogTests.StaleHandle_ReinstallsAndReleasesAllSubscriptions;
+begin
+  ConfigureFakeLifecycle;
+  try
+    InstallKeyboardHook;
+    Assert.IsTrue(EnsureKeyboardHookInstalled('healthy'));
+    Assert.AreEqual(1, LifecycleInstalls, 'healthy handle is left alone');
+    Assert.IsTrue(EnsureKeyboardHookInstalled('stale', True));
+    Assert.AreEqual(2, LifecycleInstalls, 'stale nonzero handle must be replaced');
+    Assert.AreEqual(2, LifecycleInputRemovals, 'both input hooks must be released');
+    Assert.AreEqual(1, LifecycleForegroundRemovals, 'old foreground subscription must be released');
+  finally
+    RemoveKeyboardHook;
+    SetHookLifecycleDependencies(Default(THookLifecycleDependencies));
+  end;
+end;
+
+procedure THookWatchdogTests.RestartFailure_IsRetried_AndRemovalStopsRecovery;
+begin
+  ConfigureFakeLifecycle;
+  try
+    InstallKeyboardHook;
+    LifecycleInstallFails := True;
+    Assert.IsFalse(EnsureKeyboardHookInstalled('stale', True));
+    Assert.IsFalse(KeyboardHookInstalled);
+    LifecycleInstallFails := False;
+    Assert.IsTrue(EnsureKeyboardHookInstalled('retry'));
+    Assert.AreEqual(3, LifecycleInstalls);
+    RemoveKeyboardHook;
+    Assert.IsFalse(EnsureKeyboardHookInstalled('deliberately removed'));
+    Assert.AreEqual(3, LifecycleInstalls, 'intentional removal must not resurrect hooks');
+  finally
+    RemoveKeyboardHook;
+    SetHookLifecycleDependencies(Default(THookLifecycleDependencies));
+  end;
 end;
 
 procedure THookWatchdogTests.HeartbeatStale_InputNewerThanHeartbeat_BeyondWindow;
