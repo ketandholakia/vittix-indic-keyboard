@@ -162,7 +162,7 @@ implementation
 
 const
   HOTKEY_ID_TOGGLE = 1; // ID for the global hotkey to toggle the engine
-  HOTKEY_ID_ACTION = 2;
+  // Item 8c: HOTKEY_ID_ACTION (2) removed with the action hotkey itself.
   HOTKEY_ID_CYCLE = 3;  // C.2: global hotkey that cycles to the next layout
   APP_RUN_NAME = 'Vittix Indic Keyboard';
   APP_WHITELIST_ITEM_BASE = 200;
@@ -309,7 +309,16 @@ begin
   // unchecked "ignore injected keystrokes" silently got the default (True)
   // until the first Settings-OK.
   SetIgnoreInjectedInput(GAppSettings.IgnoreInjectedInput);
-  if Trim(GAppSettings.AllowedProcessesText) = '' then
+  // Item 8d: with the neutral defaults (no target, no allowed apps), the
+  // first-run notice must teach HOW to enable interception, not just that it
+  // is off.
+  if (Trim(GAppSettings.AllowedProcessesText) = '') and
+     (Trim(GAppSettings.TargetProcessName) = '') then
+    AddStartupNotice('No target app is configured yet, so keystrokes are not '
+      + 'translated anywhere. Right-click the tray icon and use "Allowed apps '
+      + '> Add application...", or open Settings to set a primary app process '
+      + 'and an allowed-apps list.')
+  else if Trim(GAppSettings.AllowedProcessesText) = '' then
     AddStartupNotice('No allowed apps are configured. Interception stays disabled except for the primary target process.');
   // Load layouts from the resolved folder (see above).
 
@@ -563,12 +572,6 @@ begin
   if Msg.HotKey = HOTKEY_ID_TOGGLE then
   begin
     miEnableClick(nil); // Reuse the menu click logic to toggle the engine
-  end
-  else if Msg.HotKey = HOTKEY_ID_ACTION then
-  begin
-    // Special action hotkey pressed
-    MessageBox(Handle, 'Special action hotkey triggered!', 'Vittix Indic Keyboard', MB_OK or MB_ICONINFORMATION);
-    // TODO: Implement custom action here
   end
   else if Msg.HotKey = HOTKEY_ID_CYCLE then
   begin
@@ -1068,7 +1071,6 @@ begin
   Result.TargetProcessName := GAppSettings.TargetProcessName;
   Result.AllowedProcessesText := GAppSettings.AllowedProcessesText;
   Result.ToggleHotkeyText := GAppSettings.ToggleHotkeyText;
-  Result.ActionHotkeyText := GAppSettings.ActionHotkeyText;
   Result.CycleHotkeyText := GAppSettings.CycleHotkeyText;
   Result.FallbackFont := GAppSettings.FallbackFont;
   Result.PreviewFontSize := GAppSettings.PreviewFontSize;
@@ -1092,7 +1094,8 @@ end;
 procedure TfrmTray.UnregisterConfiguredHotkeys;
 begin
   UnregisterHotKey(Handle, HOTKEY_ID_TOGGLE);
-  UnregisterHotKey(Handle, HOTKEY_ID_ACTION);
+  // Item 8c: HOTKEY_ID_ACTION is gone with the removed action hotkey; the
+  // unregister of a never-registered ID is a harmless no-op anyway.
   UnregisterHotKey(Handle, HOTKEY_ID_CYCLE);
 end;
 
@@ -1100,7 +1103,6 @@ procedure TfrmTray.RegisterConfiguredHotkeys;
 var
   Mods: UINT;
   VK: UINT;
-  ActionHotkey: string;
   ToggleHotkey: string;
   CycleHotkey: string;
 begin
@@ -1113,18 +1115,6 @@ begin
       Notify('Invalid toggle hotkey in settings: ' + ToggleHotkey)
     else if not RegisterHotKey(Handle, HOTKEY_ID_TOGGLE, Mods or MOD_NOREPEAT, VK) then
       Notify('Toggle hotkey is already in use by another app: ' + ToggleHotkey);
-  end;
-
-  ActionHotkey := Trim(GAppSettings.ActionHotkeyText);
-  if (ActionHotkey = '') and Assigned(gLayoutManager.ActiveLayout) then
-    gLayoutManager.ActiveLayout.Properties.TryGetValue('HotkeyAction', ActionHotkey);
-
-  if ActionHotkey <> '' then
-  begin
-    if not GAppSettings.ParseHotkey(ActionHotkey, Mods, VK) then
-      Notify('Invalid action hotkey in settings: ' + ActionHotkey)
-    else if not RegisterHotKey(Handle, HOTKEY_ID_ACTION, Mods or MOD_NOREPEAT, VK) then
-      Notify('Action hotkey is already in use by another app: ' + ActionHotkey);
   end;
 
   // C.2: empty default keeps the cycle hotkey unbound until the user opts in.
@@ -1157,7 +1147,6 @@ begin
   GAppSettings.TargetProcessName := Trim(Settings.TargetProcessName);
   GAppSettings.AllowedProcessesText := Trim(Settings.AllowedProcessesText);
   GAppSettings.ToggleHotkeyText := Settings.ToggleHotkeyText;
-  GAppSettings.ActionHotkeyText := Settings.ActionHotkeyText;
   GAppSettings.CycleHotkeyText := Settings.CycleHotkeyText;
   GAppSettings.FallbackFont := Settings.FallbackFont;
   GAppSettings.PreviewFontSize := Settings.PreviewFontSize;

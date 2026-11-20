@@ -73,6 +73,12 @@ type
     [Test]
     procedure ShiftTab_WithPendingFlush_FocusesBackwards;
     [Test]
+    procedure ConsumedKeyDown_ItsKeyUp_IsConsumed_Too;
+    [Test]
+    procedure PassedThroughKeyDown_ItsKeyUp_StaysUntouched;
+    [Test]
+    procedure ForegroundChange_ClearsTheConsumedKeySet;
+    [Test]
     procedure Backspace_KeyDown_Consumed_NotifiesEngine;
     [Test]
     procedure ZeroAcceptance_PassesThroughCurrentAndNextEvent;
@@ -155,6 +161,7 @@ begin
   InitEngineState;
   SetEngineEnabled(True);
   SetEngineHasActiveLayout(True);
+  ClearConsumedKeySet;   // item 8a state is process-global: fresh per test
 
   FKeys := TStringList.Create;
   GCaptured := FKeys;
@@ -188,6 +195,7 @@ begin
   SetHookPolicyDependencies(FDeps);   // restore production implementations
   SetSendInputHook(nil);
   SetKeyHandler(nil);
+  ClearConsumedKeySet;
   ResetEngineState;
   ResetInjectionStatus;
   GCaptured := nil;
@@ -435,6 +443,44 @@ begin
   end;
 end;
 
+// Item 8a: the key-up of a consumed key-down is consumed as well (some apps
+// act on a key-up whose down never reached them); pass-through key-ups stay
+// untouched. In this fixture the capture handler emits via SendUnicodeText,
+// so a translated letter returns ioSuccess and IS consumed.
+procedure THookPolicyTests.ConsumedKeyDown_ItsKeyUp_IsConsumed_Too;
+begin
+  Assert.IsTrue(HandleKeyEvent(MakeKey($41, True)),
+    'precondition: the key-down is consumed');
+  Assert.IsTrue(HandleKeyEvent(MakeKey($41, False)),
+    'the key-up of a consumed key-down must be consumed too');
+  // The pair is cleared: a second (unsolicited) key-up passes through.
+  Assert.IsFalse(HandleKeyEvent(MakeKey($41, False)),
+    'the tracked key-up is cleared after its first use');
+end;
+
+procedure THookPolicyTests.PassedThroughKeyDown_ItsKeyUp_StaysUntouched;
+begin
+  // ioZeroAccepted (fake SendInput accepts nothing) passes the key down
+  // through natively - its key-up must not be eaten either.
+  FDeps.IsInjectionHealthy := nil;
+  SetHookPolicyDependencies(FDeps);
+  GFakeSendReturn := 0;
+  Assert.IsFalse(HandleKeyEvent(MakeKey($41, True)),
+    'precondition: zero-accepted output passes the key down through');
+  Assert.IsFalse(HandleKeyEvent(MakeKey($41, False)),
+    'a pass-through key-down keeps its key-up untouched');
+end;
+
+procedure THookPolicyTests.ForegroundChange_ClearsTheConsumedKeySet;
+begin
+  Assert.IsTrue(HandleKeyEvent(MakeKey($41, True)),
+    'the key-down is consumed');
+  HandleForegroundChanged;
+  Assert.IsFalse(HandleKeyEvent(MakeKey($41, False)),
+    'a foreground change must drop tracked key-downs: the key-up belongs to '
+    + 'the new window''s input flow');
+end;
+
 procedure THookPolicyTests.EmptyKeyConversion_PassesThrough;
 begin
   GFakeVKChar := '';
@@ -537,6 +583,8 @@ type
   public
     [Test]
     procedure ForegroundName_StableAcrossCalls_AndValidAfterInvalidation;
+    [Test]
+    procedure UWPChildCandidate_SamePidChildren_AreSkipped;
   end;
 
 procedure TForegroundCacheTests.ForegroundName_StableAcrossCalls_AndValidAfterInvalidation;
@@ -637,6 +685,31 @@ begin
   RestartKeyboardHook;
   Assert.IsFalse(KeyboardHookInstalled,
     'RestartKeyboardHook must no-op when nothing is installed');
+end;
+
+// Item 8e: a real ApplicationFrameHost.exe fronts a UWP app whose windows
+// belong to OTHER processes; a test process cannot spawn such a process
+// cheaply, so the testable half of the contract is pinned with real windows:
+// children owned by the SAME PID (everything a test can create) must be
+// skipped, and a frame with only same-PID children yields no candidate.
+procedure TForegroundCacheTests.UWPChildCandidate_SamePidChildren_AreSkipped;
+var
+  FrameWnd, ChildWnd, Found: HWND;
+begin
+  FrameWnd := CreateWindowEx(0, 'STATIC', 'vittix-frame-test',
+    WS_POPUP, 0, 0, 10, 10, 0, 0, HInstance, nil);
+  Assert.IsTrue(FrameWnd <> 0, 'test frame window must be creatable');
+  try
+    ChildWnd := CreateWindowEx(0, 'STATIC', 'vittix-child-test',
+      WS_CHILD, 0, 0, 5, 5, FrameWnd, 0, HInstance, nil);
+    Assert.IsTrue(ChildWnd <> 0, 'test child window must be creatable');
+
+    Found := UWPChildCandidate(FrameWnd, GetCurrentProcessId);
+    Assert.IsTrue(Found = 0,
+      'same-PID children must be skipped: no different-PID child exists here');
+  finally
+    DestroyWindow(FrameWnd);   // destroys the child with it
+  end;
 end;
 
 initialization

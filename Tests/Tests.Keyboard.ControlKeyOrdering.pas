@@ -123,6 +123,7 @@ var
 begin
   InitEngineState;
   SetEngineEnabled(True);
+  ClearConsumedKeySet;   // item 8a state is process-global: fresh per test
 
   GFakeMods := Default(TKeyModifierState);
   GRecords := TStringList.Create;
@@ -160,6 +161,7 @@ begin
   SetEngineOutputHandler(nil);
   SetSendInputHook(nil);
   SetActiveLayout(nil);
+  ClearConsumedKeySet;   // item 8a
   ResetEngineState;
   ResetInjectionStatus;
   FreeAndNil(GRecords);

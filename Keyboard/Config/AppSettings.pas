@@ -22,7 +22,6 @@ type
     TargetProcessName: string;
     AllowedProcessesText: string;
     ToggleHotkeyText: string;
-    ActionHotkeyText: string;
     CycleHotkeyText: string;
     FallbackFont: string;
     PreviewFontSize: Integer;
@@ -46,7 +45,6 @@ type
     TargetProcessName: string;
     AllowedProcessesText: string;
     ToggleHotkeyText: string;
-    ActionHotkeyText: string;
     // C.2: cycles to the next loaded layout; '' disables it (no surprise
     // global binding by default).
     CycleHotkeyText: string;
@@ -212,11 +210,18 @@ begin
   // [Layouts]
   LayoutsPath := FIni.ReadString('Layouts', 'Path', 'layouts');
   DefaultLayoutID := FIni.ReadString('Layouts', 'DefaultLayout', '');
-  TargetProcessName := FIni.ReadString('General', 'TargetProcessName', 'CorelDRW.exe');
-  AllowedProcessesText := FIni.ReadString('General', 'AllowedProcesses',
-    'CorelDRW.exe');
+  // Item 8d: neutral defaults. Shipping 'CorelDRW.exe' silently pointed a
+  // fresh install at an app the user may not own. An empty target and an
+  // empty allowed list fail CLOSED: nothing is intercepted until the user
+  // adds apps (tray menu or Settings), and every existing user who saved
+  // values keeps them - the default only applies when the INI has no value.
+  TargetProcessName := FIni.ReadString('General', 'TargetProcessName', '');
+  AllowedProcessesText := FIni.ReadString('General', 'AllowedProcesses', '');
   ToggleHotkeyText := FIni.ReadString('Hotkey', 'Toggle', 'Ctrl+Alt+K');
-  ActionHotkeyText := FIni.ReadString('Hotkey', 'Action', '');
+  // Item 8c: the action hotkey was removed (its handler was a MessageBox
+  // TODO). A stored [Hotkey] Action key in an older settings.ini is now
+  // simply IGNORED - backward compatible, the value is left untouched on
+  // disk and never deleted.
   CycleHotkeyText := FIni.ReadString('Hotkey', 'Cycle', '');
 
   // [Font]
@@ -247,7 +252,8 @@ begin
   FIni.WriteString('Layouts', 'Path', StoredLayoutsPath);
   FIni.WriteString('Layouts', 'DefaultLayout', DefaultLayoutID);
   FIni.WriteString('Hotkey', 'Toggle', ToggleHotkeyText);
-  FIni.WriteString('Hotkey', 'Action', ActionHotkeyText);
+  // Item 8c: no [Hotkey] Action write - the action hotkey no longer exists;
+  // any legacy value in an existing INI stays there, ignored.
   FIni.WriteString('Hotkey', 'Cycle', CycleHotkeyText);
   FIni.WriteString('Font', 'FallbackFont', FallbackFont);
   FIni.WriteInteger('Font', 'PreviewSize', PreviewFontSize);

@@ -147,6 +147,7 @@ var
 begin
   InitEngineState;
   SetEngineEnabled(True);
+  ClearConsumedKeySet;   // item 8a state is process-global: fresh per test
 
   // ASCII layout: 'i' is the prebase matra (pending 'I'), 'k' the direct
   // consonant 'K', 'a' the postbase matra 'A'.
@@ -193,6 +194,7 @@ begin
   SetEngineOutputHandler(nil);
   SetKeyHandler(nil);
   SetSendInputHook(nil);
+  ClearConsumedKeySet;   // item 8a
   SetHookPolicyDependencies(Default(THookPolicyDependencies));
   GEvents := nil;
   FEvents.Free;
@@ -258,9 +260,11 @@ begin
   GFakeVKChar := 'i';
   HandleKeyEvent(MakeKey($49, True));
 
-  GFakeVKChar := '';
-  Assert.IsFalse(HandleKeyEvent(MakeKey($49, False)),
-    'the key-up passes through');
+  // Item 8a: the key-up of a CONSUMED key-down is consumed too (was: passed
+  // through natively). The reset intent of this test is unchanged: a key-up
+  // must not clear the pending prebase either way.
+  Assert.IsTrue(HandleKeyEvent(MakeKey($49, False)),
+    'the key-up of the consumed prebase key is consumed (8a)');
 
   // Tab commits whatever is pending: if the key-up had wrongly cleared the
   // pending prebase, nothing would be flushed here.

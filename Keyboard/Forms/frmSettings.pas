@@ -11,8 +11,6 @@ type
   TfrmSettings = class(TForm)
     lblToggleHotkey: TLabel;
     edtToggleHotkey: TEdit;
-    lblActionHotkey: TLabel;
-    edtActionHotkey: TEdit;
     lblTargetProcess: TLabel;
     edtTargetProcess: TEdit;
     lblAllowedApps: TLabel;
@@ -28,8 +26,6 @@ type
     btnCancel: TButton;
     procedure btnOKClick(Sender: TObject);
     procedure btnBrowseLayoutsClick(Sender: TObject);
-    procedure edtActionHotkeyKeyDown(Sender: TObject; var Key: Word;
-      Shift: TShiftState);
     procedure edtCycleHotkeyKeyDown(Sender: TObject; var Key: Word;
       Shift: TShiftState);
     procedure edtToggleHotkeyKeyDown(Sender: TObject; var Key: Word;
@@ -90,7 +86,6 @@ end;
 procedure TfrmSettings.btnOKClick(Sender: TObject);
 var
   NormalizedToggle: string;
-  NormalizedAction: string;
   NormalizedCycle: string;
 begin
   if not NormalizeHotkeyInput(edtToggleHotkey.Text, False, NormalizedToggle) then
@@ -100,16 +95,6 @@ begin
       mtError, [mbOK], 0
     );
     edtToggleHotkey.SetFocus;
-    Exit;
-  end;
-
-  if not NormalizeHotkeyInput(edtActionHotkey.Text, True, NormalizedAction) then
-  begin
-    MessageDlg(
-      'Action hotkey must be blank or use keys like Ctrl+Alt+K, Ctrl+Shift+F2, or Alt+Space.',
-      mtError, [mbOK], 0
-    );
-    edtActionHotkey.SetFocus;
     Exit;
   end;
 
@@ -133,7 +118,6 @@ begin
   end;
 
   edtToggleHotkey.Text := NormalizedToggle;
-  edtActionHotkey.Text := NormalizedAction;
   edtCycleHotkey.Text := NormalizedCycle;
   ModalResult := mrOk;
 end;
@@ -163,12 +147,6 @@ begin
   Key := 0;
 end;
 
-procedure TfrmSettings.edtActionHotkeyKeyDown(Sender: TObject; var Key: Word;
-  Shift: TShiftState);
-begin
-  CaptureHotkey(edtActionHotkey, Key, Shift, True);
-end;
-
 procedure TfrmSettings.edtCycleHotkeyKeyDown(Sender: TObject; var Key: Word;
   Shift: TShiftState);
 begin
@@ -189,7 +167,6 @@ begin
   Form := TfrmSettings.Create(nil);
   try
     Form.edtToggleHotkey.Text := Settings.ToggleHotkeyText;
-    Form.edtActionHotkey.Text := Settings.ActionHotkeyText;
     Form.edtCycleHotkey.Text := Settings.CycleHotkeyText;
     Form.edtTargetProcess.Text := Settings.TargetProcessName;
     Form.memAllowedApps.Lines.Text := Settings.AllowedProcessesText;
@@ -201,7 +178,6 @@ begin
     if Result then
     begin
       Settings.ToggleHotkeyText := Trim(Form.edtToggleHotkey.Text);
-      Settings.ActionHotkeyText := Trim(Form.edtActionHotkey.Text);
       Settings.CycleHotkeyText := Trim(Form.edtCycleHotkey.Text);
       Settings.TargetProcessName := Trim(Form.edtTargetProcess.Text);
       Settings.AllowedProcessesText := Trim(Form.memAllowedApps.Lines.Text);

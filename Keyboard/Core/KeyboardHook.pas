@@ -117,6 +117,15 @@ procedure HandleForegroundChanged;
 // messages; exposed so tests can pin which messages reset and which do not.
 procedure HandleMouseClickReset(AWParam: WPARAM);
 
+// Item 8a (key-up symmetry): the VIRTUAL KEYS whose key-down this hook
+// consumed. Their key-up must be consumed too (pass-through key-ups stay
+// untouched), because some applications act on a key-up whose down never
+// reached them. Fixed-size, allocation-free; cleared on the matching key-up
+// and on foreground changes.
+function IsConsumedKeyDown(AVKCode: DWORD): Boolean;
+procedure ClearConsumedKeyDown(AVKCode: DWORD);
+procedure ClearConsumedKeySet;
+
 // The production VK-to-character conversion, mapping through a fixed US
 // layout (item 5). Exported so tests can pin the deterministic mapping; the
 // hook policy still overrides it via THookPolicyDependencies.VKToUnicode.
@@ -171,6 +180,10 @@ function GetUSLayoutHKL: HKL;
 function ProductionForegroundProcessName: string;
 procedure InvalidateForegroundCache;
 
+// Item 8e: the first child window of AFrameWnd owned by a different PID
+// (0 = none). Exported for tests only.
+function UWPChildCandidate(AFrameWnd: HWND; AFramePid: DWORD): HWND;
+
 // The consume/pass-through decision for one key event, kept separate from
 // CallNextHookEx so it can be unit tested (M2.2). Returns True when the event
 // has been consumed (the hook reports it handled); False when it must be
@@ -212,6 +225,11 @@ var
   // ALL injected input). Flipping it lets other tools' injected keys reach the
   // translation pipeline; our own tagged events are always excluded.
   IgnoreInjectedInput: Boolean = True;
+  // Item 8a: the consumed key-down set. Small fixed capacity - the user can
+  // only hold so many keys; overflow silently ignores further tracking (the
+  // next key-up pass-through asymmetry is bounded to one event).
+  gConsumedVKs: array[0..15] of DWORD;
+  gConsumedVKCount: Integer = 0;
 
 const
   PROCESS_QUERY_LIMITED_INFORMATION = $1000;
@@ -271,13 +289,70 @@ begin
   CachedForegroundName := '';
 end;
 
-function ProductionForegroundProcessName: string;
+{ Item 8e (UWP): UML-hosted apps (Calculator, Photos, ...) all run inside
+  ApplicationFrameHost.exe, so the allow-list would have to match the host
+  instead of the app. The real app lives in a CHILD window owned by a
+  different PID; EnumChildWindows finds the first such child and the
+  process name is resolved from it. Scratch state is unit-level so the
+  stdcall callback needs no closure; the result is cached by the frame
+  HWND/PID exactly like a normal foreground name. }
 var
-  ForegroundWnd: HWND;
-  ProcessId: DWORD;
+  gEnumFramePid: DWORD;
+  gEnumChildWnd: HWND;
+
+function EnumUWPChildProc(Wnd: HWND; LParam: LPARAM): BOOL; stdcall;
+var
+  Pid: DWORD;
+begin
+  GetWindowThreadProcessId(Wnd, Pid);
+  if (Pid <> 0) and (Pid <> gEnumFramePid) then
+  begin
+    gEnumChildWnd := Wnd;
+    Result := False;   // first different-PID child wins; stop enumerating
+  end
+  else
+    Result := True;
+end;
+
+// The first child window of AFrameWnd owned by a PID different from AFramePid
+// (0 when there is none). Exported so tests can pin the same-PID-skip
+// behavior with real windows; production callers go through
+// ProductionForegroundProcessName.
+function UWPChildCandidate(AFrameWnd: HWND; AFramePid: DWORD): HWND;
+begin
+  gEnumFramePid := AFramePid;
+  gEnumChildWnd := 0;
+  EnumChildWindows(AFrameWnd, @EnumUWPChildProc, 0);
+  Result := gEnumChildWnd;
+end;
+
+function ProcessNameFromPid(APid: DWORD): string;
+var
   ProcessHandle: THandle;
   Buffer: array[0..1023] of Char;
   Len: DWORD;
+begin
+  Result := '';
+  if APid = 0 then
+    Exit;
+  ProcessHandle := OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, APid);
+  if ProcessHandle = 0 then
+    Exit;
+  try
+    Len := Length(Buffer);
+    if QueryFullProcessImageNameW(ProcessHandle, 0, Buffer, Len) and (Len > 0) then
+      Result := ExtractFileName(Buffer);
+  finally
+    CloseHandle(ProcessHandle);
+  end;
+end;
+
+function ProductionForegroundProcessName: string;
+var
+  ForegroundWnd: HWND;
+  ProcessId, ChildPid: DWORD;
+  ChildWnd: HWND;
+  ResolvedName: string;
 begin
   ForegroundWnd := GetForegroundWindow;
   if ForegroundWnd = 0 then
@@ -292,24 +367,32 @@ begin
      (CachedForegroundName <> '') then
     Exit(CachedForegroundName);
 
-  ProcessHandle := OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, ProcessId);
-  if ProcessHandle = 0 then
-    Exit('');
+  ResolvedName := ProcessNameFromPid(ProcessId);
+  if ResolvedName = '' then
+    Exit('');   // fail open: unresolvable name -> pass keys through
 
-  try
-    Len := Length(Buffer);
-    if QueryFullProcessImageNameW(ProcessHandle, 0, Buffer, Len) and (Len > 0) then
+  // Item 8e: resolve through the app's own child window when the frame host
+  // is fronting a UWP app. Failure to find one (or to open it) keeps the
+  // host name - fail-open, same as today.
+  if SameText(ResolvedName, 'ApplicationFrameHost.exe') then
+  begin
+    ChildWnd := UWPChildCandidate(ForegroundWnd, ProcessId);
+    if ChildWnd <> 0 then
     begin
-      CachedForegroundWnd := ForegroundWnd;
-      CachedForegroundPid := ProcessId;
-      CachedForegroundName := ExtractFileName(Buffer);
-      Result := CachedForegroundName;
-    end
-    else
-      Result := '';   // fail open: unresolvable name -> pass keys through
-  finally
-    CloseHandle(ProcessHandle);
+      GetWindowThreadProcessId(ChildWnd, ChildPid);
+      if (ChildPid <> 0) and (ChildPid <> ProcessId) then
+      begin
+        var AppName := ProcessNameFromPid(ChildPid);
+        if AppName <> '' then
+          ResolvedName := AppName;
+      end;
+    end;
   end;
+
+  CachedForegroundWnd := ForegroundWnd;
+  CachedForegroundPid := ProcessId;
+  CachedForegroundName := ResolvedName;
+  Result := CachedForegroundName;
 end;
 
 function GetForegroundWindowTitle: string;
@@ -430,17 +513,18 @@ begin
   // Map through the fixed US layout so results are deterministic regardless
   // of the user's default input language. Flag $4 leaves the dead-key state
   // untouched, so no throwaway second call is needed.
-  // Review fix (issue 4): the scan code is passed through UN-truncated — the
-  // $E0 extended prefix that HandleKeyEvent embeds for extended keys (and
-  // that KBDLLHOOKSTRUCT.scanCode may already carry) reaches ToUnicodeEx
-  // just as it reaches MapVirtualKeyEx above, instead of being stripped by
-  // an "and $FF" mask.
+  // Item 8b: MapVirtualKeyEx above keeps the FULL scan (the $E0 extended-key
+  // prefix selects the extended mapping), but ToUnicodeEx must receive the
+  // LOW BYTE only: in its wScan parameter bit 15 means "key is released",
+  // and the $E0 prefix sits in the high byte - passing it through made every
+  // extended key (arrows, numpad /, numpad Enter) convert as if it were a
+  // key-UP, yielding no text where the US layout has one (numpad '/').
   LayoutHKL := GetUSLayoutHKL;
   if LayoutHKL <> 0 then
-    Len := ToUnicodeEx(EffectiveVK, ScanCode, KeyboardState, WideBuf,
+    Len := ToUnicodeEx(EffectiveVK, ScanCode and $FF, KeyboardState, WideBuf,
       Length(WideBuf), $4, LayoutHKL)
   else
-    Len := ToUnicode(EffectiveVK, ScanCode, KeyboardState, WideBuf,
+    Len := ToUnicode(EffectiveVK, ScanCode and $FF, KeyboardState, WideBuf,
       Length(WideBuf), $4);
 
   // Handle surrogate pairs (Len can be 2 for SMP characters)
@@ -529,6 +613,48 @@ begin
       Exit(True);
 end;
 
+{ Item 8a: the consumed key-down set. A key whose DOWN the hook consumed
+  must have its UP consumed as well - some applications act on a key-up
+  whose down never reached them. Fixed-size, allocation-free, cleared on the
+  matching key-up and on foreground changes. }
+procedure TrackConsumedKeyDown(AVKCode: DWORD);
+begin
+  if gConsumedVKCount < Length(gConsumedVKs) then
+  begin
+    gConsumedVKs[gConsumedVKCount] := AVKCode;
+    Inc(gConsumedVKCount);
+  end;
+end;
+
+function IsConsumedKeyDown(AVKCode: DWORD): Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  for I := 0 to gConsumedVKCount - 1 do
+    if gConsumedVKs[I] = AVKCode then
+      Exit(True);
+end;
+
+procedure ClearConsumedKeyDown(AVKCode: DWORD);
+var
+  I, J: Integer;
+begin
+  for I := 0 to gConsumedVKCount - 1 do
+    if gConsumedVKs[I] = AVKCode then
+    begin
+      for J := I to gConsumedVKCount - 2 do
+        gConsumedVKs[J] := gConsumedVKs[J + 1];
+      Dec(gConsumedVKCount);
+      Exit;
+    end;
+end;
+
+procedure ClearConsumedKeySet;
+begin
+  gConsumedVKCount := 0;
+end;
+
 function IsTargetAppActive: Boolean;
 var
   ActiveProcessName: string;
@@ -574,6 +700,19 @@ begin
   if AKey.IsInjected and IgnoreInjectedInput then
     Exit;
 
+  // Item 8a: the key-up of a key-down this hook consumed is consumed too.
+  // Checked BEFORE the engine state: the down may have been consumed while
+  // the engine was enabled, and the pair must stay symmetric regardless of
+  // what happened between (disable, latch trip, process switch). Key-ups of
+  // never-consumed keys still pass through untouched.
+  if not AKey.IsKeyDown then
+  begin
+    Result := IsConsumedKeyDown(AKey.VKCode);
+    if Result then
+      ClearConsumedKeyDown(AKey.VKCode);
+    Exit;
+  end;
+
   if not EngineEnabled then
     Exit;
 
@@ -590,11 +729,6 @@ begin
   // typing is not silently eaten.
   if not InjectionHealthy then
     Exit;
-
-  if not AKey.IsKeyDown then
-    Exit;   // key-up: no reset. Its own key-down was consumed a moment ago and
-            // the pending matra belongs to the typing flow that continues with
-            // the NEXT key; resetting here would lose it.
 
   // Ignore modifier & control keys. Plain modifier presses (Shift/Ctrl/Alt/
   // Win/Caps alone) must NOT reset pending state: Shift happens between every
@@ -649,6 +783,7 @@ begin
     if Outcome = ioSuccess then
     begin
       SendVirtualKeyWithShift(AKey.VKCode, Modifiers.ShiftDown);
+      TrackConsumedKeyDown(AKey.VKCode);   // item 8a: consume its key-up too
       Result := True;
       Exit;
     end;
@@ -664,6 +799,8 @@ begin
     begin
       Outcome := KeyHandler(#8);  // ASCII Backspace
       Result := (Outcome <> ioZeroAccepted) and (Outcome <> ioPassThrough);
+      if Result then
+        TrackConsumedKeyDown(AKey.VKCode);   // item 8a
       Exit;
     end;
   end;
@@ -694,6 +831,8 @@ begin
     // nothing, so the original key goes through natively). Partial acceptance
     // is deliberately consumed because some synthetic input may already exist.
     Result := (Outcome <> ioZeroAccepted) and (Outcome <> ioPassThrough);
+    if Result then
+      TrackConsumedKeyDown(AKey.VKCode);   // item 8a: its key-up is consumed too
     Exit;
   end;
 
@@ -898,6 +1037,9 @@ begin
   // which belongs to the old foreground window. Both operations clear state
   // with no I/O or allocation, keeping the callback fast.
   InvalidateForegroundCache;
+  // Item 8a: tracked consumed key-downs belong to the old window's typing
+  // flow; their key-ups must not be eaten in the new one.
+  ClearConsumedKeySet;
   // Item (injection latch): the SendInput-failure latch is PER FOREGROUND
   // WINDOW. A UIPI block against an elevated app must not poison typing in
   // every other app: a foreground change re-arms the latch, so the next key

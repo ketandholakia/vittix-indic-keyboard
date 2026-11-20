@@ -42,6 +42,10 @@ type
     [Test]
     procedure FreshTempLocation_YieldsDocumentedDefaults;
     [Test]
+    procedure LegacyActionHotkeyKey_IsIgnoredAndKept;
+    [Test]
+    procedure SavedProcessValues_AreKeptAcrossUpgrade;
+    [Test]
     procedure ParseHotkey_UnmodifiedKey_RemainsRejected;
   end;
 
@@ -206,16 +210,77 @@ begin
   Assert.IsFalse(FSettings.StartWithWindows);
   Assert.IsTrue(FSettings.IgnoreInjectedInput,
     'QW3: default must preserve the hook behavior of ignoring injected input');
-  Assert.AreEqual('CorelDRW.exe', FSettings.TargetProcessName);
-  Assert.AreEqual('CorelDRW.exe', FSettings.AllowedProcessesText);
+  // Item 8d: neutral defaults - a fresh install points at NO app (fail
+  // closed) instead of shipping a hardcoded CorelDRW.exe target.
+  Assert.AreEqual('', FSettings.TargetProcessName);
+  Assert.AreEqual('', FSettings.AllowedProcessesText);
   Assert.AreEqual('Ctrl+Alt+K', FSettings.ToggleHotkeyText);
-  Assert.AreEqual('', FSettings.ActionHotkeyText);
+  // Item 8c: the action hotkey no longer exists as a setting.
   Assert.AreEqual('', FSettings.CycleHotkeyText,
     'C.2: the layout-cycle hotkey defaults to disabled (no surprise global binding)');
   Assert.AreEqual('', FSettings.DefaultLayoutID);
   Assert.AreEqual('Segoe UI', FSettings.FallbackFont);
   Assert.AreEqual(16, FSettings.PreviewFontSize);
   Assert.IsFalse(TFile.Exists(FIniPath), 'Load must remain read-only');
+end;
+
+// Item 8c (INI backward compatibility): an older settings.ini carrying the
+// removed [Hotkey] Action key loads fine; the value is ignored, never
+// deleted, and not rewritten.
+procedure TAppSettingsTests.LegacyActionHotkeyKey_IsIgnoredAndKept;
+var
+  Ini: TIniFile;
+begin
+  // Write a legacy-shaped INI by hand (the current Save no longer writes it).
+  FSettings := NewSettings;
+  FSettings.ToggleHotkeyText := 'Ctrl+Alt+K';
+  FSettings.CycleHotkeyText := '';
+  FSettings.Save;
+  FreeAndNil(FSettings);
+  Ini := TIniFile.Create(FIniPath);
+  try
+    Ini.WriteString('Hotkey', 'Action', 'Ctrl+Alt+Z');
+  finally
+    Ini.Free;
+  end;
+
+  FSettings := TAppSettings.Create(FIniPath);
+  FSettings.Load;
+  FreeAndNil(FSettings);
+
+  Assert.IsTrue(TFile.Exists(FIniPath));
+  Ini := TIniFile.Create(FIniPath);
+  try
+    Assert.AreEqual('Ctrl+Alt+Z', Ini.ReadString('Hotkey', 'Action', ''),
+      'the legacy key must be kept on disk (ignored, not deleted)');
+  finally
+    Ini.Free;
+  end;
+end;
+
+// Item 8d (existing users keep their saved values): an INI with a stored
+// process list loads it as-is; the new empty defaults only apply when the
+// keys are absent.
+procedure TAppSettingsTests.SavedProcessValues_AreKeptAcrossUpgrade;
+var
+  Second: TAppSettings;
+begin
+  FSettings := NewSettings;
+  FSettings.TargetProcessName := 'CorelDRW.exe';
+  FSettings.AllowedProcessesText := 'CorelDRW.exe, notepad.exe';
+  FSettings.Save;
+  FreeAndNil(FSettings);
+
+  Second := TAppSettings.Create(FIniPath);
+  try
+    Second.Load;
+    Assert.AreEqual('CorelDRW.exe', Second.TargetProcessName,
+      'a saved target process must survive the neutral-defaults change');
+    Assert.AreEqual('CorelDRW.exe, notepad.exe', Second.AllowedProcessesText,
+      'a saved allowed list must survive the neutral-defaults change');
+  finally
+    Second.Free;
+  end;
 end;
 
 procedure TAppSettingsTests.ParseHotkey_UnmodifiedKey_RemainsRejected;

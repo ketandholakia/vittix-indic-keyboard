@@ -206,21 +206,21 @@ begin
   Assert.AreEqual(First, Second, 'the cached handle must be stable');
 end;
 
-// Review fix (issue 4): the FULL scan code — including the $E0 extended
-// prefix — flows through the entire production conversion pipeline
-// (scan-to-VK AND ToUnicodeEx) instead of being truncated to its low byte
-// before ToUnicodeEx. The conversion result for an extended navigation key
-// is empty either way, so the argument-level pin for what the conversion
-// receives lives at the seam
-// (THookPolicyTests.ExtendedKey_PassesEmbeddedScanPrefix asserts $E026);
-// this test pins the production path accepting a prefixed scan unchanged
-// and the plain-letter path being unaffected.
+// Item 8b (supersedes the review-fix-4 pinning): MapVirtualKeyEx keeps the
+// FULL scan (the $E0 prefix selects the extended mapping), but ToUnicodeEx
+// must receive the LOW BYTE - in its wScan parameter bit 15 means "key is
+// released", and the $E0 prefix sits in the high byte, so every extended key
+// converted as if it were a key-up (numpad '/' yielded no text). The seam
+// (THookPolicyTests.ExtendedKey_PassesEmbeddedScanPrefix) still receives the
+// prefixed scan; only the ToUnicodeEx argument is masked now.
 procedure TVKMappingTests.ProductionVKToUnicode_AcceptsFullExtendedScan;
 begin
   Assert.AreEqual(DWORD($26), ProductionScanToVK($E048, 0),
-    'the prefixed extended scan still resolves positionally');
+    'the FULL prefixed scan still drives the positional scan-to-VK');
   Assert.AreEqual('', ProductionVKToUnicode($26, $E048, NoShift),
     'an extended navigation key converts to no text');
+  Assert.AreEqual('/', ProductionVKToUnicode(VK_DIVIDE, $E035, NoShift),
+    'the numpad slash must convert with the high byte masked off (bit 15 gone)');
   Assert.AreEqual('z', ProductionVKToUnicode($5A, $2C, NoShift),
     'plain (non-prefixed) scans are unaffected');
 end;
