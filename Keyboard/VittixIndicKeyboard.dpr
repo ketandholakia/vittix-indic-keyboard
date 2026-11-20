@@ -14,6 +14,7 @@ uses
   OSKInput in 'Core\OSKInput.pas',
   LayoutLoader in 'Layout\LayoutLoader.pas',
   LayoutManager in 'Layout\LayoutManager.pas',
+  BackupManager in '..\LayoutEditor\Utils\BackupManager.pas',
   LayoutReload in 'Layout\LayoutReload.pas',
   LayoutModel in '..\Shared\LayoutModel.pas',
   LayoutJson in '..\Shared\LayoutJson.pas',

@@ -9,6 +9,7 @@ uses
   System.Generics.Collections,
   LayoutModel,
   LayoutLoader,
+  BackupManager,
   Logger;
 
 type
@@ -60,6 +61,14 @@ end;
   Initialize & load all layouts
 -------------------------------------------------- }
 
+// Item: a stale editor backup (<layoutdir>\_backup\<name>_<timestamp>.json)
+// carries the SAME layout_id as the live file it was copied from, and sorted
+// order puts the '_backup' folder before lowercase file names - so without
+// this check the stale copy could win the duplicate-ID race and replace the
+// real layout. The one shared matcher lives in BackupManager
+// (PathInBackupFolder); LoadErrors is untouched, a skipped backup is not a
+// load failure.
+
 procedure TLayoutManager.Initialize(const ALayoutsPath: string);
 var
   Files: TArray<string>;
@@ -94,6 +103,12 @@ begin
 
     for FileName in Files do
     begin
+      // Editor backup copies never load as layouts (item: backup files are
+      // loaded as layouts). Checked before the parse so a malformed backup
+      // cannot even reach LoadErrors.
+      if PathInBackupFolder(FileName) then
+        Continue;
+
       try
         Layout := LoadLayoutFromFile(FileName);
         if (Layout.LayoutID <> '') and SeenLayoutIDs.ContainsKey(Layout.LayoutID) then

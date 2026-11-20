@@ -8,11 +8,19 @@ uses
   System.IOUtils,
   System.Generics.Collections; // ✅ REQUIRED for TArray.Sort
 
+const
+  // Item: the backup folder name, defined ONCE here. BackupManager writes
+  // <layoutdir>\_backup\<name>_<timestamp>.json; every layout scanner
+  // (LayoutManager.Initialize, the LayoutsPathResolver seeding copy) skips
+  // this folder so a stale backup with a duplicate layout_id can never win
+  // over the real file.
+  BACKUP_SUBDIR_NAME = '_backup';
+
 type
   TBackupOptions = record
     Enabled: Boolean;
     MaxBackups: Integer;     // keep last N backups (0 = unlimited)
-    BackupSubDir: string;    // default: "_backup"
+    BackupSubDir: string;    // default: BACKUP_SUBDIR_NAME ('_backup')
   end;
 
 procedure EnsureBackup(
@@ -22,13 +30,32 @@ procedure EnsureBackup(
 
 function DefaultBackupOptions: TBackupOptions;
 
+// True when APath points inside a backup folder ('\_<BACKUP_SUBDIR_NAME>\'
+// segment, case-insensitive). Shared by every recursive layout scan so a
+// stale backup can never be picked up as a layout: LayoutManager.Initialize
+// skips such files, and the LayoutsPathResolver seeding copy skips such
+// folders.
+function PathInBackupFolder(const APath: string): Boolean;
+
 implementation
 
 function DefaultBackupOptions: TBackupOptions;
 begin
   Result.Enabled := True;
   Result.MaxBackups := 20;
-  Result.BackupSubDir := '_backup';
+  Result.BackupSubDir := BACKUP_SUBDIR_NAME;
+end;
+
+function PathInBackupFolder(const APath: string): Boolean;
+var
+  P: string;
+begin
+  P := APath.ToLower;
+  // The trailing delimiter makes the match segment-exact: a file named
+  // '_backup_notes.json' is NOT a backup, only a real \_backup\ folder is.
+  // The StartsWith branch covers relative scans ('_backup\x.json' has no
+  // leading delimiter to anchor the segment).
+  Result := (Pos('\_backup\', P) > 0) or P.StartsWith('_backup\');
 end;
 
 function TimeStampStr: string;

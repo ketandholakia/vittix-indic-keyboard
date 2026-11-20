@@ -32,6 +32,8 @@ type
     [Test]
     procedure ConfiguredMissing_SeedsAppDataLayouts;
     [Test]
+    procedure Seeding_SkipsBackupFolders;
+    [Test]
     procedure AppDataAlreadyPresent_IsNotReseeded;
     [Test]
     procedure AppDataCreationFails_FallsBackToFallbackDir;
@@ -104,6 +106,26 @@ begin
     'the shipped defaults must be copied');
   Assert.IsTrue(TFile.Exists(TPath.Combine(Resolved, 'devnagari', 'sub.json')),
     'script subfolders must be copied recursively');
+end;
+
+// Item (backup files are loaded as layouts): the seeding copy must not carry
+// editor _backup folders into the fresh per-user layouts home.
+procedure TLayoutsPathResolverTests.Seeding_SkipsBackupFolders;
+var
+  AppDataRoot, Fallback, Resolved: string;
+begin
+  AppDataRoot := NewTempDir;
+  Fallback := NewTempDir;
+  TFile.WriteAllText(TPath.Combine(Fallback, 'real.json'), '{}');
+  TDirectory.CreateDirectory(TPath.Combine(Fallback, '_backup'));
+  TFile.WriteAllText(TPath.Combine(Fallback, '_backup', 'real_stale.json'), '{}');
+
+  Resolved := ResolveLayoutsPath(TPath.Combine(FDir, 'NotThere'), AppDataRoot, Fallback);
+
+  Assert.IsTrue(TFile.Exists(TPath.Combine(Resolved, 'real.json')),
+    'the shipped layout must be seeded');
+  Assert.IsFalse(TDirectory.Exists(TPath.Combine(Resolved, '_backup')),
+    'a backup folder next to the shipped layouts must not be copied');
 end;
 
 // The per-user copy is created once: an existing appdata layouts folder is

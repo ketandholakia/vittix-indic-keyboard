@@ -42,6 +42,12 @@ type
     procedure Initialize_Success_SwapsInFreshLayouts;
     [Test]
     procedure Initialize_SortsFiles_DeterministicDefault;
+    [Test]
+    procedure Initialize_BackupFileWithSameID_IsSkipped_RealFileWins;
+    [Test]
+    procedure Initialize_BackupFileInSubfolder_IsSkipped;
+    [Test]
+    procedure Initialize_OnlyBackupsPresent_BehavesLikeEmptyDirectory;
   end;
 
   // Item 9.5: the detach / reload / re-attach decision used by the tray,
@@ -260,6 +266,63 @@ begin
     'the default layout must be the alphabetically first file');
   Assert.AreEqual('m', FManager.GetLayout(1).LayoutID);
   Assert.AreEqual('z', FManager.GetLayout(2).LayoutID);
+end;
+
+// Item (backup files are loaded as layouts): a stale editor backup carries
+// the SAME layout_id as the file it was copied from, and sorted order puts
+// the "_backup" folder before lowercase file names - without the exclusion
+// the stale copy would win the duplicate-ID race and replace the real layout.
+// The real file must load, and LoadErrors must stay clean (a backup is not a
+// load failure).
+procedure TLayoutManagerTests.Initialize_BackupFileWithSameID_IsSkipped_RealFileWins;
+begin
+  WriteFile('remington.json',
+    '{"layout_id":"remington","name":"Real","script":"Devanagari","encoding":"UTF-16","layout_type":"typewriter","metadata":{"font_family":"Arial"}}');
+  TDirectory.CreateDirectory(TPath.Combine(FDir, '_backup'));
+  WriteFile('_backup\remington_20261120_120000_000.json',
+    '{"layout_id":"remington","name":"StaleBackup","script":"Devanagari","encoding":"UTF-16","layout_type":"typewriter","metadata":{"font_family":"Arial"}}');
+
+  FManager.Initialize(FDir);
+
+  Assert.AreEqual(1, FManager.LayoutCount, 'the backup must not load as a layout');
+  Assert.AreEqual('Real', FManager.GetLayout(0).Name,
+    'the real file must win, not the stale backup');
+  Assert.AreEqual(0, FManager.LoadErrors.Count,
+    'a skipped backup must not appear in LoadErrors');
+end;
+
+procedure TLayoutManagerTests.Initialize_BackupFileInSubfolder_IsSkipped;
+begin
+  TDirectory.CreateDirectory(TPath.Combine(FDir, 'gujarati'));
+  WriteFile('gujarati\rem.json',
+    '{"layout_id":"rem","name":"Real","script":"Devanagari","encoding":"UTF-16","layout_type":"typewriter","metadata":{"font_family":"Arial"}}');
+  TDirectory.CreateDirectory(TPath.Combine(FDir, 'gujarati\_backup'));
+  WriteFile('gujarati\_backup\rem_20261120_120000_000.json',
+    '{"layout_id":"rem","name":"StaleBackup","script":"Devanagari","encoding":"UTF-16","layout_type":"typewriter","metadata":{"font_family":"Arial"}}');
+
+  FManager.Initialize(FDir);
+
+  Assert.AreEqual(1, FManager.LayoutCount);
+  Assert.AreEqual('Real', FManager.GetLayout(0).Name);
+  Assert.AreEqual(0, FManager.LoadErrors.Count);
+end;
+
+procedure TLayoutManagerTests.Initialize_OnlyBackupsPresent_BehavesLikeEmptyDirectory;
+begin
+  TDirectory.CreateDirectory(TPath.Combine(FDir, '_backup'));
+  WriteFile('_backup\stale_20261120_120000_000.json',
+    '{"layout_id":"stale","name":"Stale","script":"Devanagari","encoding":"UTF-16","layout_type":"typewriter","metadata":{"font_family":"Arial"}}');
+
+  Assert.WillRaise(
+    procedure
+    begin
+      FManager.Initialize(FDir);
+    end,
+    Exception,
+    'a directory holding only backups must behave like an empty one'
+  );
+  Assert.AreEqual(0, FManager.LoadErrors.Count,
+    'skipped backups must not be reported as load errors');
 end;
 
 // ---- Item 9.5: detach / reload / re-attach helper --------------------------

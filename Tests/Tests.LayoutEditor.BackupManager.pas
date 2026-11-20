@@ -36,6 +36,10 @@ type
     procedure EnsureBackup_Disabled_NothingCopied;
     [Test]
     procedure EnsureBackup_Rotation_KeepsOnlyMaxBackups;
+    [Test]
+    procedure PathInBackupFolder_MatchesBackupSegment_CaseInsensitive;
+    [Test]
+    procedure PathInBackupFolder_FileNamedLikeBackup_IsNotABackup;
   end;
 
 implementation
@@ -156,6 +160,27 @@ begin
   Assert.IsTrue(TFile.Exists(TPath.Combine(BackupDir, 'MyLayout_0004.json')),
     'the newest pre-seeded backups must survive');
   Assert.IsTrue(TFile.Exists(TPath.Combine(BackupDir, 'MyLayout_0005.json')));
+end;
+
+// Item (backup files are loaded as layouts): the one shared matcher every
+// recursive layout scan uses. Pinned case-insensitivity and segment exactness.
+procedure TBackupManagerTests.PathInBackupFolder_MatchesBackupSegment_CaseInsensitive;
+begin
+  Assert.IsTrue(PathInBackupFolder('C:\layouts\gujarati\_backup\rem_20261120.json'));
+  Assert.IsTrue(PathInBackupFolder('C:\layouts\GUJARATI\_BACKUP\rem_20261120.json'),
+    'the folder name must match case-insensitively');
+  Assert.IsTrue(PathInBackupFolder('C:\layouts\_backup\inner\deep.json'),
+    'a nested backup folder matches too');
+  Assert.IsTrue(PathInBackupFolder('_backup\rem_20261120.json'),
+    'a relative scan result with no leading delimiter still matches');
+end;
+
+procedure TBackupManagerTests.PathInBackupFolder_FileNamedLikeBackup_IsNotABackup;
+begin
+  Assert.IsFalse(PathInBackupFolder('C:\layouts\_backup_notes.json'),
+    'a file whose NAME starts with "_backup" is not in a backup folder');
+  Assert.IsFalse(PathInBackupFolder('C:\layouts\gujarati\rem.json'),
+    'a plain layout path never matches');
 end;
 
 initialization

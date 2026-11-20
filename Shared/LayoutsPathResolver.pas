@@ -21,7 +21,8 @@ uses
   System.IniFiles,
   System.IOUtils,
   Winapi.Windows,
-  Winapi.ShlObj;
+  Winapi.ShlObj,
+  BackupManager;
 
 // The three-step resolution. Pure with respect to its arguments, so tests
 // can exercise the full order against temporary directories.
@@ -66,6 +67,28 @@ begin
     end;
 end;
 
+{ Item (backup files are loaded as layouts): the seeding copy must not carry
+  editor backup folders into the per-user layouts home. TDirectory.Copy has no
+  filter, so the shipped tree is copied file by file, skipping every
+  \_backup\ folder (BackupManager.PathInBackupFolder). }
+procedure SeedLayoutsCopy(const ASourceDir, ATargetDir: string);
+var
+  Files: TArray<string>;
+  FileName, RelPath, DestPath: string;
+begin
+  Files := TDirectory.GetFiles(ASourceDir, '*.*', TSearchOption.soAllDirectories);
+  for FileName in Files do
+  begin
+    if PathInBackupFolder(FileName) then
+      Continue;
+
+    RelPath := ExtractRelativePath(IncludeTrailingPathDelimiter(ASourceDir), FileName);
+    DestPath := TPath.Combine(ATargetDir, RelPath);
+    ForceDirectories(ExtractFileDir(DestPath));
+    TFile.Copy(FileName, DestPath, False);
+  end;
+end;
+
 function ResolveLayoutsPath(const AConfiguredPath, AAppDataRoot,
   AFallbackLayoutsDir: string): string;
 var
@@ -89,8 +112,10 @@ begin
       begin
         // First run of an installed copy: seed the per-user copy with the
         // shipped defaults (recursive - layouts live in script subfolders).
+        // Backup folders are skipped, so an editor _backup dir next to the
+        // shipped layouts can never leak into the fresh per-user copy.
         ForceDirectories(AppDataLayouts);
-        TDirectory.Copy(AFallbackLayoutsDir, AppDataLayouts);
+        SeedLayoutsCopy(AFallbackLayoutsDir, AppDataLayouts);
       end
       else
         ForceDirectories(AppDataLayouts);
